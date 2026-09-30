@@ -21,7 +21,7 @@ import {
   CFSession,
 } from 'cashfree-pg-api-contract';
 
-const API_BASE_URL = 'http://192.168.0.100:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const USER_STORAGE_KEY = '@user_data';
 
 const COLORS = {

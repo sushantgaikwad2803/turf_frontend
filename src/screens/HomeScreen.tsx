@@ -37,7 +37,7 @@ import OwnerDashboardScreen from './OwnerDashboardScreen';
    API
 ========================================================= */
 
-const FALLBACK_API_BASE_URL = 'http://192.168.0.100:5000/api';
+const FALLBACK_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 const API_PORT = 5000;
 
 /*

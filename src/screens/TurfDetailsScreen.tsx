@@ -18,7 +18,7 @@
 
   import { SafeAreaView } from 'react-native-safe-area-context';
 
-  const API_BASE_URL = 'http://192.168.0.100:5000/api';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
   /* =========================================================
     THEME COLORS
