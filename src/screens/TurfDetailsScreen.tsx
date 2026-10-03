@@ -1118,6 +1118,32 @@ const TurfDetailsScreen: React.FC<
   ] = useState<Record<string, boolean>>({});
 
   /* =======================================================
+     LIVE COURTS FROM BACKEND
+
+     The Owner/Manage Court screen saves
+     fullDayDiscountPercent on the Court document.
+     The turf object passed through navigation can be an
+     older/stale object and may still contain courts without
+     the new percentage field. Therefore this screen fetches
+     the latest courts directly from: GET /api/turfs/:turfId/courts
+
+     This is important because otherwise: 
+       owner enters 8% -> MongoDB has 8% -> this screen receives
+       old court object -> fullDayDiscountPercent is undefined ->
+       the fallback becomes 0%.
+  ======================================================= */
+
+  const [
+    liveCourts,
+    setLiveCourts,
+  ] = useState<TurfCourt[] | null>(null);
+
+  const [
+    courtsLoading,
+    setCourtsLoading,
+  ] = useState(false);
+
+  /* =======================================================
      MOUNT
   ======================================================= */
 
@@ -1163,6 +1189,89 @@ const TurfDetailsScreen: React.FC<
     );
 
   /* =======================================================
+     REFRESH COURTS FROM BACKEND
+  ======================================================= */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLatestCourts = async () => {
+      if (!turfId) {
+        setLiveCourts(null);
+        return;
+      }
+
+      try {
+        setCourtsLoading(true);
+
+        const response = await fetch(
+          getApiUrl(
+            `/api/turfs/${encodeURIComponent(turfId)}/courts`,
+          ),
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+        );
+
+        const text = await response.text();
+
+        let data: any = null;
+
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = null;
+          }
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              data?.message ||
+              `Failed to fetch courts (${response.status}).`,
+          );
+        }
+
+        const courtsFromApi =
+          Array.isArray(data?.courts)
+            ? data.courts
+            : Array.isArray(data?.data?.courts)
+              ? data.data.courts
+              : [];
+
+        if (!cancelled) {
+          setLiveCourts(courtsFromApi);
+        }
+      } catch (error) {
+        console.warn(
+          'Failed to refresh latest courts:',
+          error,
+        );
+
+        // Keep using the courts already included in the
+        // navigation turf object if the refresh fails.
+        if (!cancelled) {
+          setLiveCourts(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setCourtsLoading(false);
+        }
+      }
+    };
+
+    loadLatestCourts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [turfId]);
+
+  /* =======================================================
      IMAGE
   ======================================================= */
 
@@ -1179,9 +1288,12 @@ const TurfDetailsScreen: React.FC<
 
   const activeCourts =
     useMemo(() => {
-      return (
-        turf?.courts ?? []
-      ).filter(
+      const sourceCourts =
+        liveCourts !== null
+          ? liveCourts
+          : turf?.courts ?? [];
+
+      return sourceCourts.filter(
         court => {
           const status =
             String(
@@ -1198,6 +1310,7 @@ const TurfDetailsScreen: React.FC<
         }
       );
     }, [
+      liveCourts,
       turf?.courts,
     ]);
 
