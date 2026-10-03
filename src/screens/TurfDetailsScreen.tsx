@@ -1,1001 +1,3286 @@
-  import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useState,
-  } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-  import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-  } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-  import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+/* =========================================================
+   API CONFIGURATION
+========================================================= */
 
-  /* =========================================================
-    THEME COLORS
-  ========================================================= */
+const RAW_API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL ?? ''
+).trim();
 
-  const COLORS = {
-    primary: '#16A34A',
-    primaryDark: '#15803D',
-    primaryDeep: '#065F46',
-    primaryLight: '#DCFCE7',
-    primarySoft: '#F0FDF4',
-    primaryFaint: '#F7FDF9',
+const API_BASE_URL = (() => {
+  if (!RAW_API_BASE_URL) {
+    return '';
+  }
 
-    accent: '#F97316',
-    accentLight: '#FFEDD5',
-    accentSoft: '#FEF3C7',
-    accentText: '#92400E',
+  let url = RAW_API_BASE_URL.replace(/\/+$/, '');
 
-    night: '#7C3AED',
-    nightLight: '#EDE9FE',
-    nightSoft: '#FAF5FF',
-    nightBorder: '#DDD6FE',
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
 
-    bg: '#FFFFFF',
-    bgSoft: '#F7FDF9',
-    card: '#FFFFFF',
-    cardSoft: '#F9FAFB',
+  return url;
+})();
 
-    border: '#E5E7EB',
-    borderLight: '#D1FAE5',
-    borderSoft: '#BBF7D0',
+const getApiUrl = (path: string): string => {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL is not configured.'
+    );
+  }
 
-    textPrimary: '#111827',
-    textSecondary: '#4B5563',
-    textMuted: '#9CA3AF',
-    placeholder: '#9CA3AF',
+  const cleanPath = path.startsWith('/')
+    ? path
+    : `/${path}`;
 
-    danger: '#EF4444',
-    dangerSoft: '#FEF2F2',
-    dangerBorder: '#FECACA',
-    dangerText: '#DC2626',
+  return `${API_BASE_URL}${cleanPath}`;
+};
 
-    disabled: '#9CA3AF',
-    disabledCard: '#F3F4F6',
+/* =========================================================
+   TYPES
+========================================================= */
 
-    white: '#FFFFFF',
+interface TurfImage {
+  url?: string;
+  isPrimary?: boolean;
+}
+
+interface TurfLocation {
+  type?: string;
+  coordinates?: [number, number];
+}
+
+interface TurfCourt {
+  _id?: string;
+  id?: string;
+
+  name?: string;
+
+  sport?: string;
+  sports?: string[];
+
+  pricePerHour?: number;
+
+  hasNightPricing?: boolean;
+  nightPricePerHour?: number;
+
+  nightStartHour?: number;
+  nightEndHour?: number;
+
+  status?: string;
+}
+
+interface OperatingHour {
+  /*
+    Current backend format
+  */
+  day?: string;
+
+  openingTime?: string;
+  closingTime?: string;
+
+  /*
+    Older frontend format
+  */
+  dayOfWeek?: number;
+
+  openTime?: string;
+  closeTime?: string;
+
+  isClosed?: boolean;
+}
+
+interface Turf {
+  _id?: string;
+  id?: string;
+
+  name?: string;
+  description?: string;
+
+  address?: string;
+  city?: string;
+
+  pricePerHour?: number;
+
+  sports?: string[];
+
+  amenities?: string[];
+
+  images?: TurfImage[];
+
+  courts?: TurfCourt[];
+
+  operatingHours?: OperatingHour[];
+
+  location?: TurfLocation;
+
+  status?: string;
+}
+
+interface BackendBookedSlot {
+  slotId?: string;
+  id?: string;
+  _id?: string;
+
+  startTime?: string;
+  endTime?: string;
+
+  date?: string;
+
+  status?: string;
+
+  price?: number;
+}
+
+interface BackendSlot {
+  _id?: string;
+  id?: string;
+
+  startTime?: string;
+  endTime?: string;
+
+  date?: string;
+
+  status?: string;
+
+  price?: number;
+
+  available?: boolean;
+
+  booked?: boolean;
+}
+
+interface SlotsApiResponse {
+  success?: boolean;
+
+  message?: string;
+
+  slots?: BackendSlot[];
+
+  bookedSlots?: BackendBookedSlot[];
+
+  data?: {
+    slots?: BackendSlot[];
+    bookedSlots?: BackendBookedSlot[];
   };
+}
 
-  /* =========================================================
-    TYPES
-  ========================================================= */
+interface Slot {
+  id: string;
 
-  interface TurfImage {
-    url: string;
-    isPrimary?: boolean;
-  }
+  bookingKey: string;
 
-  interface TurfCourt {
-    _id?: string;
-    id?: string;
-    name?: string;
-    sport?: string;
-    sports?: string[];
-    pricePerHour?: number;
-    hasNightPricing?: boolean;
-    nightPricePerHour?: number;
-    nightStartHour?: number;
-    nightEndHour?: number;
-    status?: string;
-  }
+  startTime: string;
 
-  interface OperatingHour {
-    dayOfWeek: number;
-    openTime: string;
-    closeTime: string;
-    isClosed: boolean;
-  }
+  endTime: string;
 
-  interface Turf {
-    _id?: string;
-    id?: string;
-    name?: string;
-    description?: string;
-    address?: string;
-    city?: string;
-    amenities?: string[];
-    images?: TurfImage[];
-    courts?: TurfCourt[];
-    operatingHours?: OperatingHour[];
-    location?: {
-      type?: 'Point';
-      coordinates?: [number, number];
+  startMinutes: number;
+
+  endMinutes: number;
+
+  available: boolean;
+
+  price: number;
+
+  isPast: boolean;
+
+  isNight: boolean;
+}
+
+interface TurfDetailsScreenProps {
+  navigation: any;
+
+  route: {
+    params?: {
+      turf?: Turf;
     };
-  }
-
-  interface Slot {
-    id: string;
-    startTime: string;
-    endTime: string;
-    available: boolean;
-    price: number;
-    isPast?: boolean;
-    isNight?: boolean;
-  }
-
-  interface TurfDetailsScreenProps {
-    navigation: any;
-    route: {
-      params?: {
-        turf?: Turf;
-      };
-    };
-  }
-
-  /* =========================================================
-    CONSTANTS
-  ========================================================= */
-
-  const DAYS = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ];
-
-  /* =========================================================
-    HELPERS
-  ========================================================= */
-
-  const formatDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   };
+}
 
-  const formatDisplayDate = (date: Date): string => {
-    return date.toLocaleDateString('en-IN', {
+/* =========================================================
+   COLORS
+========================================================= */
+
+const COLORS = {
+  primary: '#16A34A',
+  primaryDark: '#15803D',
+  primaryLight: '#DCFCE7',
+
+  purple: '#7C3AED',
+  purpleLight: '#EDE9FE',
+
+  red: '#DC2626',
+  redLight: '#FEE2E2',
+
+  blue: '#2563EB',
+  blueLight: '#DBEAFE',
+
+  yellow: '#CA8A04',
+  yellowLight: '#FEF9C3',
+
+  background: '#F6F8FA',
+  white: '#FFFFFF',
+
+  text: '#111827',
+  textSecondary: '#6B7280',
+  textLight: '#9CA3AF',
+
+  border: '#E5E7EB',
+};
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
+const formatDate = (
+  date: Date
+): string => {
+  const year =
+    date.getFullYear();
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0');
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatDisplayDate = (
+  date: Date
+): string => {
+  return date.toLocaleDateString(
+    'en-IN',
+    {
+      weekday: 'short',
       day: '2-digit',
       month: 'short',
-      weekday: 'short',
-    });
-  };
+    }
+  );
+};
 
-  /* =========================================================
-    TIME PARSER
-  ========================================================= */
+const isSameDate = (
+  first: Date,
+  second: Date
+): boolean => {
+  return (
+    formatDate(first) ===
+    formatDate(second)
+  );
+};
 
-  const parseTimeToMinutes = (time: string): number => {
-    if (!time) return 0;
+const isPastDate = (
+  date: Date
+): boolean => {
+  const today =
+    new Date();
 
-    const normalized = time.trim().toUpperCase();
+  today.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
-    const match = normalized.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  const target =
+    new Date(date);
 
-    if (!match) return 0;
+  target.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
-    let hour = Number(match[1]);
-    const minute = Number(match[2]);
-    const period = match[3];
+  return (
+    target.getTime() <
+    today.getTime()
+  );
+};
+
+/* =========================================================
+   TIME HELPERS
+========================================================= */
+
+const parseTimeToMinutes = (
+  time?: string
+): number | null => {
+  if (!time) {
+    return null;
+  }
+
+  const value =
+    String(time).trim();
+
+  /*
+    24-hour format
+    00:00
+    06:00
+    18:30
+    23:00
+  */
+  const twentyFourHour =
+    value.match(
+      /^(\d{1,2}):(\d{2})$/
+    );
+
+  if (twentyFourHour) {
+    const hour =
+      Number(
+        twentyFourHour[1]
+      );
+
+    const minute =
+      Number(
+        twentyFourHour[2]
+      );
 
     if (
-      Number.isNaN(hour) ||
-      Number.isNaN(minute) ||
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute <= 59
+    ) {
+      return (
+        hour * 60 +
+        minute
+      );
+    }
+  }
+
+  /*
+    12-hour format
+  */
+  const twelveHour =
+    value.match(
+      /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i
+    );
+
+  if (twelveHour) {
+    let hour =
+      Number(
+        twelveHour[1]
+      );
+
+    const minute =
+      Number(
+        twelveHour[2]
+      );
+
+    const period =
+      twelveHour[3].toUpperCase();
+
+    if (
+      hour < 1 ||
+      hour > 12 ||
       minute < 0 ||
       minute > 59
     ) {
-      return 0;
+      return null;
     }
 
-    if (period === 'AM') {
-      if (hour === 12) hour = 0;
+    if (
+      period === 'AM'
+    ) {
+      if (hour === 12) {
+        hour = 0;
+      }
+    } else {
+      if (hour !== 12) {
+        hour += 12;
+      }
     }
 
-    if (period === 'PM') {
-      if (hour !== 12) hour += 12;
-    }
-
-    if (hour < 0 || hour > 23) return 0;
-
-    return hour * 60 + minute;
-  };
-
-  const formatTime = (minutes: number): string => {
-    const safeMinutes = ((minutes % 1440) + 1440) % 1440;
-
-    const hour24 = Math.floor(safeMinutes / 60);
-    const minute = safeMinutes % 60;
-
-    const period = hour24 >= 12 ? 'PM' : 'AM';
-
-    let hour12 = hour24 % 12;
-    if (hour12 === 0) hour12 = 12;
-
-    return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(
-      2,
-      '0'
-    )} ${period}`;
-  };
-
-  const getTurfImage = (turf: Turf): string | null => {
-    if (!Array.isArray(turf.images)) return null;
-
-    const primaryImage = turf.images.find((image) => image.isPrimary === true);
-
-    return primaryImage?.url || turf.images[0]?.url || null;
-  };
-
-  const getCourtId = (court: TurfCourt): string => {
-    return court._id || court.id || '';
-  };
-
-  const getCourtSportText = (court: TurfCourt): string => {
-    if (court.sport) return court.sport;
-
-    if (Array.isArray(court.sports) && court.sports.length > 0) {
-      return court.sports.join(' • ');
-    }
-
-    return 'Sport';
-  };
-
-  const isSameDate = (firstDate: Date, secondDate: Date): boolean => {
     return (
-      firstDate.getFullYear() === secondDate.getFullYear() &&
-      firstDate.getMonth() === secondDate.getMonth() &&
-      firstDate.getDate() === secondDate.getDate()
+      hour * 60 +
+      minute
     );
-  };
+  }
 
-  const isPastDate = (date: Date): boolean => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  return null;
+};
 
-    const checkDate = new Date(date);
-    checkDate.setHours(0, 0, 0, 0);
+const formatTime = (
+  minutes: number
+): string => {
+  const normalized =
+    ((minutes % 1440) +
+      1440) %
+    1440;
 
-    return checkDate < today;
-  };
-
-  const getCurrentMinutes = (): number => {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
-  };
-
-  /* =========================================================
-    NIGHT PRICING CHECK
-  ========================================================= */
-
-  const isNightSlot = (
-    slotStartMinutes: number,
-    court: TurfCourt
-  ): boolean => {
-    if (court.hasNightPricing !== true) return false;
-
-    if (
-      typeof court.nightStartHour !== 'number' ||
-      typeof court.nightEndHour !== 'number'
-    ) {
-      return false;
-    }
-
-    const startHour = court.nightStartHour;
-    const endHour = court.nightEndHour;
-
-    if (
-      startHour < 0 ||
-      startHour > 23 ||
-      endHour < 0 ||
-      endHour > 23
-    ) {
-      return false;
-    }
-
-    const nightStart = startHour * 60;
-    const nightEnd = endHour * 60;
-
-    if (nightStart === nightEnd) return false;
-
-    if (nightStart < nightEnd) {
-      return slotStartMinutes >= nightStart && slotStartMinutes < nightEnd;
-    }
-
-    return slotStartMinutes >= nightStart || slotStartMinutes < nightEnd;
-  };
-
-  /* =========================================================
-    PRICE HELPERS
-  ========================================================= */
-
-  const getNormalCourtPrice = (court: TurfCourt): number => {
-    if (
-      typeof court.pricePerHour === 'number' &&
-      Number.isFinite(court.pricePerHour) &&
-      court.pricePerHour >= 0
-    ) {
-      return court.pricePerHour;
-    }
-    return 0;
-  };
-
-  const getNightCourtPrice = (court: TurfCourt): number => {
-    if (
-      court.hasNightPricing === true &&
-      typeof court.nightPricePerHour === 'number' &&
-      Number.isFinite(court.nightPricePerHour) &&
-      court.nightPricePerHour >= 0
-    ) {
-      return court.nightPricePerHour;
-    }
-    return getNormalCourtPrice(court);
-  };
-
-  const getSlotPrice = (
-    court: TurfCourt,
-    slotStartMinutes: number
-  ): number => {
-    const night = isNightSlot(slotStartMinutes, court);
-    if (night) return getNightCourtPrice(court);
-    return getNormalCourtPrice(court);
-  };
-
-  /* =========================================================
-    SCREEN
-  ========================================================= */
-
-  export const TurfDetailsScreen: React.FC<TurfDetailsScreenProps> = ({
-    navigation,
-    route,
-  }) => {
-    const turf = route.params?.turf;
-
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [selectedCourtId, setSelectedCourtId] = useState<string>('');
-    const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
-    const [bookedSlots, setBookedSlots] = useState<string[]>([]);
-    const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [currentTimeMinutes, setCurrentTimeMinutes] = useState<number>(
-      getCurrentMinutes()
+  let hour =
+    Math.floor(
+      normalized / 60
     );
 
-    /* UPDATE CURRENT TIME */
-    useEffect(() => {
-      const updateCurrentTime = () => {
-        setCurrentTimeMinutes(getCurrentMinutes());
-      };
+  const minute =
+    normalized % 60;
 
-      updateCurrentTime();
-      const interval = setInterval(updateCurrentTime, 60 * 1000);
+  const period =
+    hour >= 12
+      ? 'PM'
+      : 'AM';
 
-      return () => clearInterval(interval);
-    }, []);
+  hour =
+    hour % 12;
 
-    /* IMAGE */
-    const imageUrl = useMemo(() => {
-      if (!turf) return null;
-      return getTurfImage(turf);
-    }, [turf]);
+  if (hour === 0) {
+    hour = 12;
+  }
 
-    /* ACTIVE COURTS */
-    const activeCourts = useMemo(() => {
-      if (!Array.isArray(turf?.courts)) return [];
+  return `${String(hour).padStart(
+    2,
+    '0'
+  )}:${String(minute).padStart(
+    2,
+    '0'
+  )} ${period}`;
+};
 
-      return turf.courts.filter(
-        (court) =>
-          court.status !== 'inactive' && court.status !== 'maintenance'
+const getCurrentMinutes = (): number => {
+  const now =
+    new Date();
+
+  return (
+    now.getHours() * 60 +
+    now.getMinutes()
+  );
+};
+
+/* =========================================================
+   CURRENCY
+========================================================= */
+
+const formatCurrency = (
+  amount: number
+): string => {
+  return `₹${Number(
+    amount || 0
+  ).toLocaleString(
+    'en-IN'
+  )}`;
+};
+
+/* =========================================================
+   TURF HELPERS
+========================================================= */
+
+const getTurfId = (
+  turf?: Turf
+): string => {
+  return (
+    turf?._id ||
+    turf?.id ||
+    ''
+  );
+};
+
+const getCourtId = (
+  court?: TurfCourt
+): string => {
+  return (
+    court?._id ||
+    court?.id ||
+    ''
+  );
+};
+
+const getTurfImage = (
+  turf?: Turf
+): string | null => {
+  if (
+    !turf?.images ||
+    turf.images.length === 0
+  ) {
+    return null;
+  }
+
+  const primary =
+    turf.images.find(
+      image =>
+        image.isPrimary ===
+          true &&
+        !!image.url
+    );
+
+  if (primary?.url) {
+    return primary.url;
+  }
+
+  const first =
+    turf.images.find(
+      image =>
+        !!image.url
+    );
+
+  return (
+    first?.url ?? null
+  );
+};
+
+const getCourtSportText = (
+  court?: TurfCourt
+): string => {
+  if (!court) {
+    return 'Sport';
+  }
+
+  if (
+    court.sport &&
+    court.sport.trim()
+  ) {
+    return court.sport.trim();
+  }
+
+  if (
+    Array.isArray(
+      court.sports
+    ) &&
+    court.sports.length > 0
+  ) {
+    return court.sports.join(
+      ' • '
+    );
+  }
+
+  return 'Sport';
+};
+
+const getNormalCourtPrice = (
+  court?: TurfCourt
+): number => {
+  const price =
+    Number(
+      court?.pricePerHour
+    );
+
+  return Number.isFinite(
+    price
+  ) && price >= 0
+    ? price
+    : 0;
+};
+
+const getNightCourtPrice = (
+  court?: TurfCourt
+): number => {
+  if (
+    !court?.hasNightPricing
+  ) {
+    return getNormalCourtPrice(
+      court
+    );
+  }
+
+  const price =
+    Number(
+      court.nightPricePerHour
+    );
+
+  return Number.isFinite(
+    price
+  ) && price >= 0
+    ? price
+    : getNormalCourtPrice(
+        court
       );
-    }, [turf]);
+};
 
-    /* DEFAULT COURT */
-    useEffect(() => {
-      if (activeCourts.length === 0) {
-        setSelectedCourtId('');
-        return;
-      }
+/* =========================================================
+   OPERATING HOURS
+========================================================= */
 
-      const currentCourtStillExists =
-        selectedCourtId &&
-        activeCourts.some(
-          (court) => getCourtId(court) === selectedCourtId
-        );
+const getOperatingHourForDay = (
+  turf: Turf | undefined,
+  dayOfWeek: number
+): OperatingHour | undefined => {
+  if (
+    !Array.isArray(
+      turf?.operatingHours
+    )
+  ) {
+    return undefined;
+  }
 
-      if (!currentCourtStillExists) {
-        const firstCourt = activeCourts[0];
-        setSelectedCourtId(getCourtId(firstCourt));
-      }
-    }, [activeCourts, selectedCourtId]);
+  const dayNames = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ];
 
-    /* SELECTED COURT */
-    const selectedCourt = useMemo(() => {
-      return activeCourts.find(
-        (court) => getCourtId(court) === selectedCourtId
-      );
-    }, [activeCourts, selectedCourtId]);
-
-    /* SELECTED DAY */
-    const selectedDayOfWeek = selectedDate.getDay();
-
-    /* OPERATING HOURS */
-    const selectedOperatingHour = useMemo(() => {
-      return turf?.operatingHours?.find(
-        (hour) => hour.dayOfWeek === selectedDayOfWeek
-      );
-    }, [turf?.operatingHours, selectedDayOfWeek]);
-
-    /* NIGHT INFO */
-    const nightPricingEnabled = selectedCourt?.hasNightPricing === true;
-    const nightStartHour = selectedCourt?.nightStartHour;
-    const nightEndHour = selectedCourt?.nightEndHour;
-
-    const normalPrice = selectedCourt
-      ? getNormalCourtPrice(selectedCourt)
-      : 0;
-
-    const nightPrice = selectedCourt
-      ? getNightCourtPrice(selectedCourt)
-      : 0;
-
-    const nightPricingText = useMemo(() => {
+  return turf.operatingHours.find(
+    hour => {
       if (
-        !nightPricingEnabled ||
-        typeof nightStartHour !== 'number' ||
-        typeof nightEndHour !== 'number'
+        typeof hour.dayOfWeek ===
+        'number'
       ) {
-        return null;
+        return (
+          hour.dayOfWeek ===
+          dayOfWeek
+        );
       }
 
-      return `${formatTime(nightStartHour * 60)} - ${formatTime(
-        nightEndHour * 60
-      )}`;
-    }, [nightPricingEnabled, nightStartHour, nightEndHour]);
+      if (
+        typeof hour.day ===
+        'string'
+      ) {
+        return (
+          hour.day
+            .trim()
+            .toLowerCase() ===
+          dayNames[
+            dayOfWeek
+          ]
+        );
+      }
 
-    /* GENERATE SLOTS */
-    const generateSlots = useCallback((): Slot[] => {
-      if (!selectedCourt || !selectedCourtId) return [];
+      return false;
+    }
+  );
+};
 
-      const openingTime = selectedOperatingHour?.openTime || '06:00';
-      const closingTime = selectedOperatingHour?.closeTime || '23:00';
+const getOpeningTime = (
+  hour?: OperatingHour
+): string => {
+  return (
+    hour?.openingTime ||
+    hour?.openTime ||
+    '00:00'
+  );
+};
 
-      if (selectedOperatingHour?.isClosed) return [];
+const getClosingTime = (
+  hour?: OperatingHour
+): string => {
+  return (
+    hour?.closingTime ||
+    hour?.closeTime ||
+    '00:00'
+  );
+};
 
-      const startMinutes = parseTimeToMinutes(openingTime);
-      const endMinutes = parseTimeToMinutes(closingTime);
+/* =========================================================
+   24-HOUR DETECTION
+========================================================= */
 
-      if (endMinutes <= startMinutes) return [];
+/*
+  IMPORTANT
 
-      const todaySelected = isSameDate(selectedDate, new Date());
-      const nowMinutes = currentTimeMinutes;
+  These values mean a full 24-hour day:
 
-      const generatedSlots: Slot[] = [];
+  00:00 -> 00:00
+
+  or
+
+  00:00 -> 24:00
+
+  Since normal JavaScript time parsing does
+  not accept 24:00 as a normal hour, we
+  explicitly handle it.
+*/
+
+const is24HourOperatingDay = (
+  openingTime: string,
+  closingTime: string
+): boolean => {
+  const normalizedOpen =
+    openingTime
+      .trim()
+      .toUpperCase();
+
+  const normalizedClose =
+    closingTime
+      .trim()
+      .toUpperCase();
+
+  if (
+    normalizedOpen ===
+      '00:00' &&
+    normalizedClose ===
+      '00:00'
+  ) {
+    return true;
+  }
+
+  if (
+    normalizedOpen ===
+      '12:00 AM' &&
+    normalizedClose ===
+      '12:00 AM'
+  ) {
+    return true;
+  }
+
+  if (
+    normalizedOpen ===
+      '00:00' &&
+    normalizedClose ===
+      '24:00'
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+/* =========================================================
+   NIGHT PRICING
+========================================================= */
+
+const isNightSlot = (
+  startMinutes: number,
+  court?: TurfCourt
+): boolean => {
+  if (
+    !court?.hasNightPricing
+  ) {
+    return false;
+  }
+
+  const startHour =
+    Number(
+      court.nightStartHour
+    );
+
+  const endHour =
+    Number(
+      court.nightEndHour
+    );
+
+  if (
+    !Number.isInteger(
+      startHour
+    ) ||
+    !Number.isInteger(
+      endHour
+    ) ||
+    startHour < 0 ||
+    startHour > 23 ||
+    endHour < 0 ||
+    endHour > 23
+  ) {
+    return false;
+  }
+
+  const nightStart =
+    startHour * 60;
+
+  const nightEnd =
+    endHour * 60;
+
+  /*
+    Example:
+    18:00 -> 23:00
+  */
+  if (
+    nightStart <
+    nightEnd
+  ) {
+    return (
+      startMinutes >=
+        nightStart &&
+      startMinutes <
+        nightEnd
+    );
+  }
+
+  /*
+    Example:
+    22:00 -> 06:00
+  */
+  if (
+    nightStart >
+    nightEnd
+  ) {
+    return (
+      startMinutes >=
+        nightStart ||
+      startMinutes <
+        nightEnd
+    );
+  }
+
+  return false;
+};
+
+const getSlotPrice = (
+  startMinutes: number,
+  court?: TurfCourt
+): number => {
+  if (
+    isNightSlot(
+      startMinutes,
+      court
+    )
+  ) {
+    return getNightCourtPrice(
+      court
+    );
+  }
+
+  return getNormalCourtPrice(
+    court
+  );
+};
+
+/* =========================================================
+   BOOKING KEY
+========================================================= */
+
+const createBookingKey = (
+  date: string,
+  courtId: string,
+  startMinutes: number
+): string => {
+  return `${date}_${courtId}_${startMinutes}`;
+};
+
+const getMinutesFromBookingKey = (
+  bookingKey: string
+): number | null => {
+  const parts =
+    bookingKey.split('_');
+
+  const last =
+    parts[parts.length - 1];
+
+  const minutes =
+    Number(last);
+
+  if (
+    Number.isFinite(minutes) &&
+    minutes >= 0 &&
+    minutes < 1440
+  ) {
+    return minutes;
+  }
+
+  return null;
+};
+
+/* =========================================================
+   BACKEND SLOT ID PARSER
+========================================================= */
+
+const extractMinutesFromSlotId = (
+  slotId?: string
+): number | null => {
+  if (!slotId) {
+    return null;
+  }
+
+  const parts =
+    String(slotId).split(
+      '_'
+    );
+
+  const last =
+    parts[
+      parts.length - 1
+    ];
+
+  if (
+    /^\d+$/.test(last)
+  ) {
+    const minutes =
+      Number(last);
+
+    if (
+      minutes >= 0 &&
+      minutes < 1440
+    ) {
+      return minutes;
+    }
+  }
+
+  return parseTimeToMinutes(
+    last
+  );
+};
+
+/* =========================================================
+   NORMALIZE BOOKED SLOTS
+========================================================= */
+
+const normalizeBookedSlots = (
+  response: SlotsApiResponse,
+  date: string,
+  courtId: string
+): Set<string> => {
+  const result =
+    new Set<string>();
+
+  const bookedSlots =
+    Array.isArray(
+      response.bookedSlots
+    )
+      ? response.bookedSlots
+      : Array.isArray(
+          response.data
+            ?.bookedSlots
+        )
+        ? response.data
+            ?.bookedSlots ?? []
+        : [];
+
+  for (
+    const item of bookedSlots
+  ) {
+    if (!item) {
+      continue;
+    }
+
+    const backendDate =
+      item.date || date;
+
+    const startMinutes =
+      parseTimeToMinutes(
+        item.startTime
+      );
+
+    if (
+      startMinutes !== null
+    ) {
+      result.add(
+        createBookingKey(
+          backendDate,
+          courtId,
+          startMinutes
+        )
+      );
+
+      continue;
+    }
+
+    const rawId =
+      item.slotId ||
+      item.id ||
+      item._id;
+
+    const idMinutes =
+      extractMinutesFromSlotId(
+        rawId
+      );
+
+    if (
+      idMinutes !== null
+    ) {
+      result.add(
+        createBookingKey(
+          backendDate,
+          courtId,
+          idMinutes
+        )
+      );
+    }
+  }
+
+  return result;
+};
+
+/* =========================================================
+   COMPONENT
+========================================================= */
+
+const TurfDetailsScreen: React.FC<
+  TurfDetailsScreenProps
+> = ({
+  navigation,
+  route,
+}) => {
+  const turf =
+    route.params?.turf;
+
+  const mountedRef =
+    useRef(true);
+
+  /* =======================================================
+     STATE
+  ======================================================= */
+
+  const [
+    selectedDate,
+    setSelectedDate,
+  ] = useState<Date>(
+    new Date()
+  );
+
+  const [
+    selectedCourtId,
+    setSelectedCourtId,
+  ] = useState('');
+
+  /*
+    IMPORTANT:
+    Each date keeps its own selected slots.
+
+    Example:
+    {
+      "2026-10-05": ["2026-10-05_court1_600"],
+      "2026-10-07": [
+        "2026-10-07_court1_1080",
+        "2026-10-07_court1_1140"
+      ]
+    }
+  */
+  const [
+    selectedSlotsByDate,
+    setSelectedSlotsByDate,
+  ] = useState<Record<string, string[]>>({});
+
+  /*
+    Availability is also cached separately for every date.
+    This prevents switching dates from losing information.
+  */
+  const [
+    bookedSlotKeysByDate,
+    setBookedSlotKeysByDate,
+  ] = useState<Record<string, Set<string>>>({});
+
+  const [
+    loadingDates,
+    setLoadingDates,
+  ] = useState<Record<string, boolean>>({});
+
+  const [
+    errorByDate,
+    setErrorByDate,
+  ] = useState<Record<string, string>>({});
+
+  const [
+    currentTimeMinutes,
+    setCurrentTimeMinutes,
+  ] = useState(
+    getCurrentMinutes()
+  );
+
+  /* =======================================================
+     MOUNT
+  ======================================================= */
+
+  useEffect(() => {
+    mountedRef.current =
+      true;
+
+    return () => {
+      mountedRef.current =
+        false;
+    };
+  }, []);
+
+  /* =======================================================
+     CURRENT TIME
+  ======================================================= */
+
+  useEffect(() => {
+    const timer =
+      setInterval(() => {
+        if (
+          mountedRef.current
+        ) {
+          setCurrentTimeMinutes(
+            getCurrentMinutes()
+          );
+        }
+      }, 60 * 1000);
+
+    return () =>
+      clearInterval(timer);
+  }, []);
+
+  /* =======================================================
+     TURF ID
+  ======================================================= */
+
+  const turfId =
+    useMemo(
+      () =>
+        getTurfId(turf),
+      [turf]
+    );
+
+  /* =======================================================
+     IMAGE
+  ======================================================= */
+
+  const turfImage =
+    useMemo(
+      () =>
+        getTurfImage(turf),
+      [turf]
+    );
+
+  /* =======================================================
+     ACTIVE COURTS
+  ======================================================= */
+
+  const activeCourts =
+    useMemo(() => {
+      return (
+        turf?.courts ?? []
+      ).filter(
+        court => {
+          const status =
+            String(
+              court.status ??
+                'active'
+            ).toLowerCase();
+
+          return (
+            status !==
+              'inactive' &&
+            status !==
+              'maintenance'
+          );
+        }
+      );
+    }, [
+      turf?.courts,
+    ]);
+
+  /* =======================================================
+     DEFAULT COURT
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      activeCourts.length ===
+      0
+    ) {
+      setSelectedCourtId(
+        ''
+      );
+
+      return;
+    }
+
+    const exists =
+      activeCourts.some(
+        court =>
+          getCourtId(
+            court
+          ) ===
+          selectedCourtId
+      );
+
+    if (!exists) {
+      setSelectedCourtId(
+        getCourtId(
+          activeCourts[0]
+        )
+      );
+    }
+  }, [
+    activeCourts,
+    selectedCourtId,
+  ]);
+
+  /* =======================================================
+     SELECTED COURT
+  ======================================================= */
+
+  const selectedCourt =
+    useMemo(() => {
+      return activeCourts.find(
+        court =>
+          getCourtId(
+            court
+          ) ===
+          selectedCourtId
+      );
+    }, [
+      activeCourts,
+      selectedCourtId,
+    ]);
+
+  /* =======================================================
+     SELECTED DAY
+  ======================================================= */
+
+  const selectedDayOfWeek =
+    selectedDate.getDay();
+
+  const selectedOperatingHour =
+    useMemo(
+      () =>
+        getOperatingHourForDay(
+          turf,
+          selectedDayOfWeek
+        ),
+      [
+        turf,
+        selectedDayOfWeek,
+      ]
+    );
+
+  /* =======================================================
+     OPERATING TIMES
+  ======================================================= */
+
+  const openingTime =
+    getOpeningTime(
+      selectedOperatingHour
+    );
+
+  const closingTime =
+    getClosingTime(
+      selectedOperatingHour
+    );
+
+  const isTwentyFourHours =
+    is24HourOperatingDay(
+      openingTime,
+      closingTime
+    );
+
+  /* =======================================================
+     GENERATE 24-HOUR SLOTS
+========================================================= */
+
+  const slots =
+    useMemo(() => {
+      if (
+        !selectedCourt ||
+        !selectedCourtId
+      ) {
+        return [];
+      }
+
+      if (
+        selectedOperatingHour
+          ?.isClosed === true
+      ) {
+        return [];
+      }
+
+      /*
+        =====================================================
+        24-HOUR MODE
+        =====================================================
+
+        If backend gives:
+
+        00:00 -> 00:00
+
+        we create:
+
+        00-01
+        01-02
+        02-03
+        ...
+        23-00
+
+        exactly 24 slots.
+      */
+
+      let slotStart = 0;
+      let slotCount = 24;
+
+      if (
+        isTwentyFourHours
+      ) {
+        slotStart = 0;
+        slotCount = 24;
+      } else {
+        /*
+          Normal operating-hours mode.
+        */
+
+        const start =
+          parseTimeToMinutes(
+            openingTime
+          );
+
+        const end =
+          parseTimeToMinutes(
+            closingTime
+          );
+
+        if (
+          start === null ||
+          end === null
+        ) {
+          return [];
+        }
+
+        slotStart =
+          start;
+
+        let totalMinutes =
+          end - start;
+
+        /*
+          Overnight schedule:
+
+          18:00 -> 02:00
+
+          becomes:
+
+          18:00 -> 26:00
+        */
+        if (
+          totalMinutes <= 0
+        ) {
+          totalMinutes +=
+            1440;
+        }
+
+        /*
+          Generate one-hour
+          slots only.
+        */
+        slotCount =
+          Math.floor(
+            totalMinutes /
+              60
+          );
+
+        if (
+          slotCount <= 0
+        ) {
+          return [];
+        }
+      }
+
+      const generated: Slot[] =
+        [];
 
       for (
-        let current = startMinutes;
-        current + 60 <= endMinutes;
-        current += 60
+        let index = 0;
+        index < slotCount;
+        index++
       ) {
-        const startTime = formatTime(current);
-        const endTime = formatTime(current + 60);
+        /*
+          For 24-hour:
 
-        const slotId = `${formatDate(selectedDate)}_${selectedCourtId}_${current}`;
+          index 0 = 00:00
+          index 1 = 01:00
+          ...
+          index 23 = 23:00
+        */
+        const rawStart =
+          slotStart +
+          index * 60;
 
-        const isPast = todaySelected && current < nowMinutes;
-        const isBooked = bookedSlots.includes(slotId);
+        const actualStart =
+          rawStart % 1440;
 
-        const isNight = isNightSlot(current, selectedCourt);
-        const price = getSlotPrice(selectedCourt, current);
-        const available = !isPast && !isBooked;
+        const actualEnd =
+          (rawStart + 60) %
+          1440;
 
-        generatedSlots.push({
-          id: slotId,
+        const startTime =
+          formatTime(
+            actualStart
+          );
+
+        const endTime =
+          formatTime(
+            actualEnd
+          );
+
+        const bookingKey =
+          createBookingKey(
+            formatDate(
+              selectedDate
+            ),
+            selectedCourtId,
+            actualStart
+          );
+
+        const currentDateString =
+          formatDate(selectedDate);
+
+        const currentBookedSlotKeys =
+          bookedSlotKeysByDate[
+            currentDateString
+          ] ?? new Set<string>();
+
+        const isBooked =
+          currentBookedSlotKeys.has(
+            bookingKey
+          );
+
+        /*
+          Past logic applies
+          only to today.
+        */
+        const today =
+          isSameDate(
+            selectedDate,
+            new Date()
+          );
+
+        const isPast =
+          today &&
+          actualStart <
+            currentTimeMinutes;
+
+        const isNight =
+          isNightSlot(
+            actualStart,
+            selectedCourt
+          );
+
+        const price =
+          getSlotPrice(
+            actualStart,
+            selectedCourt
+          );
+
+        generated.push({
+          id: bookingKey,
+
+          bookingKey,
+
           startTime,
+
           endTime,
+
+          startMinutes:
+            actualStart,
+
+          endMinutes:
+            actualEnd,
+
+          available:
+            !isBooked &&
+            !isPast,
+
           price,
-          available,
+
           isPast,
+
           isNight,
         });
       }
 
-      return generatedSlots;
+      return generated;
     }, [
       selectedCourt,
       selectedCourtId,
       selectedOperatingHour,
+      openingTime,
+      closingTime,
+      isTwentyFourHours,
       selectedDate,
-      bookedSlots,
       currentTimeMinutes,
+      bookedSlotKeysByDate,
     ]);
 
-    const slots = useMemo(() => generateSlots(), [generateSlots]);
+  /* =======================================================
+     LOAD BOOKED SLOTS FOR ONE DATE
+  ======================================================= */
 
-    /* LOAD BOOKED SLOTS */
-    const loadBookedSlots = useCallback(async () => {
-      if (!selectedCourtId || !turf?._id) {
-        setBookedSlots([]);
-        return;
-      }
-
-      try {
-        setLoadingSlots(true);
-        setErrorMessage(null);
-
-        const response = await fetch(
-          `${API_BASE_URL}/slots?turfId=${encodeURIComponent(
-            turf._id
-          )}&courtId=${encodeURIComponent(
-            selectedCourtId
-          )}&date=${encodeURIComponent(formatDate(selectedDate))}`
-        );
-
-        if (!response.ok) {
-          setBookedSlots([]);
-          return;
+  const loadBookedSlotsForDate =
+    useCallback(
+      async (
+        dateValue: Date,
+        showLoader = true
+      ): Promise<Set<string>> => {
+        if (
+          !turfId ||
+          !selectedCourtId
+        ) {
+          return new Set<string>();
         }
 
-        const data = await response.json();
+        const dateString =
+          formatDate(dateValue);
 
-        const serverBookedSlots = Array.isArray(data?.bookedSlots)
-          ? data.bookedSlots
-          : Array.isArray(data?.slots)
-          ? data.slots
-          : [];
-
-        setBookedSlots(
-          serverBookedSlots.filter(
-            (item: unknown): item is string => typeof item === 'string'
-          )
-        );
-      } catch (error) {
-        console.log('Slot API not available:', error);
-        setBookedSlots([]);
-      } finally {
-        setLoadingSlots(false);
-      }
-    }, [selectedCourtId, selectedDate, turf?._id]);
-
-    useEffect(() => {
-      setSelectedSlots([]);
-      loadBookedSlots();
-    }, [selectedDate, selectedCourtId, loadBookedSlots]);
-
-    /* SLOT SELECTION */
-    const isSlotSelected = useCallback(
-      (slot: Slot): boolean => {
-        return selectedSlots.some(
-          (selectedSlot) => selectedSlot.id === slot.id
-        );
-      },
-      [selectedSlots]
-    );
-
-    const handleSelectSlot = useCallback((slot: Slot) => {
-      if (!slot.available || slot.isPast) return;
-
-      setSelectedSlots((previousSlots) => {
-        const alreadySelected = previousSlots.some(
-          (selectedSlot) => selectedSlot.id === slot.id
-        );
-
-        if (alreadySelected) {
-          return previousSlots.filter(
-            (selectedSlot) => selectedSlot.id !== slot.id
+        if (showLoader) {
+          setLoadingDates(
+            previous => ({
+              ...previous,
+              [dateString]: true,
+            })
           );
         }
 
-        return [...previousSlots, slot];
-      });
-    }, []);
+        setErrorByDate(
+          previous => ({
+            ...previous,
+            [dateString]: '',
+          })
+        );
 
-    /* TOTAL PRICE */
-    const totalPrice = useMemo(() => {
-      return selectedSlots.reduce(
-        (total, slot) => total + Number(slot.price || 0),
-        0
-      );
-    }, [selectedSlots]);
+        try {
+          const url =
+            getApiUrl(
+              `/slots?turfId=${encodeURIComponent(
+                turfId
+              )}&courtId=${encodeURIComponent(
+                selectedCourtId
+              )}&date=${encodeURIComponent(
+                dateString
+              )}`
+            );
 
-    /* SORTED SLOTS */
-    const sortedSelectedSlots = useMemo(() => {
-      return [...selectedSlots].sort(
-        (a, b) =>
-          parseTimeToMinutes(a.startTime) -
-          parseTimeToMinutes(b.startTime)
-      );
-    }, [selectedSlots]);
+          console.log(
+            'GET /api/slots',
+            url
+          );
 
-    /* SELECTED TIME TEXT */
-    const selectedTimeText = useMemo(() => {
-      if (sortedSelectedSlots.length === 0) return 'Select slots';
+          const response =
+            await fetch(
+              url,
+              {
+                method: 'GET',
+                headers: {
+                  Accept:
+                    'application/json',
+                },
+              }
+            );
 
-      if (sortedSelectedSlots.length === 1) {
-        return `${sortedSelectedSlots[0].startTime} - ${sortedSelectedSlots[0].endTime}`;
-      }
+          const text =
+            await response.text();
 
-      return `${sortedSelectedSlots.length} slots selected`;
-    }, [sortedSelectedSlots]);
+          let data: SlotsApiResponse =
+            {};
 
-    /* HANDLERS */
-    const handleSelectCourt = (courtId: string) => {
-      if (courtId === selectedCourtId) return;
-      setSelectedSlots([]);
-      setSelectedCourtId(courtId);
-    };
+          if (text) {
+            try {
+              data =
+                JSON.parse(text);
+            } catch {
+              throw new Error(
+                'Backend returned invalid JSON.'
+              );
+            }
+          }
 
-    const handleSelectDate = (date: Date) => {
-      if (isPastDate(date)) return;
-      setSelectedSlots([]);
-      setSelectedDate(date);
-    };
+          if (!response.ok) {
+            throw new Error(
+              data.message ||
+                `Slot API failed with HTTP ${response.status}`
+            );
+          }
 
-    const handleBookNow = () => {
-      if (!selectedCourt) {
-        Alert.alert('Select Court', 'Please select a court first.');
-        return;
-      }
+          if (
+            data.success ===
+            false
+          ) {
+            throw new Error(
+              data.message ||
+                'Unable to load slots.'
+            );
+          }
 
-      if (selectedSlots.length === 0) {
-        Alert.alert('Select Slots', 'Please select at least one available slot.');
-        return;
-      }
+          /*
+            IMPORTANT:
+            Only bookedSlots are treated as booked.
+            data.slots may contain available slots too.
+          */
+          const normalized =
+            normalizeBookedSlots(
+              data,
+              dateString,
+              selectedCourtId
+            );
 
-      const orderedSlots = [...selectedSlots].sort(
-        (a, b) =>
-          parseTimeToMinutes(a.startTime) -
-          parseTimeToMinutes(b.startTime)
-      );
+          if (mountedRef.current) {
+            setBookedSlotKeysByDate(
+              previous => ({
+                ...previous,
+                [dateString]:
+                  normalized,
+              })
+            );
 
-      const bookingData = {
-        turf,
-        court: selectedCourt,
-        date: formatDate(selectedDate),
-        slots: orderedSlots.map((slot) => ({
-          id: slot.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          price: slot.price,
-          isNight: slot.isNight === true,
-        })),
-        slotCount: orderedSlots.length,
-        totalAmount: totalPrice,
-      };
+            /*
+              If a slot became booked after the user
+              selected it, remove that slot from this date.
+            */
+            setSelectedSlotsByDate(
+              previous => {
+                const existing =
+                  previous[
+                    dateString
+                  ] ?? [];
 
-      navigation.navigate('Payment', bookingData);
-    };
+                if (
+                  existing.length ===
+                  0
+                ) {
+                  return previous;
+                }
 
-    /* NO TURF */
-    if (!turf) {
-      return (
-        <SafeAreaView style={styles.container}>
-          <View style={styles.noTurfContainer}>
-            <View style={styles.noTurfIconCircle}>
-              <Text style={styles.noTurfIcon}>⚽</Text>
-            </View>
+                const remaining =
+                  existing.filter(
+                    bookingKey =>
+                      !normalized.has(
+                        bookingKey
+                      )
+                  );
 
-            <Text style={styles.noTurfTitle}>
-              Turf details not available
-            </Text>
+                if (
+                  remaining.length ===
+                  existing.length
+                ) {
+                  return previous;
+                }
 
-            <Text style={styles.noTurfText}>
-              We couldn't load this turf's information.
-            </Text>
+                return {
+                  ...previous,
+                  [dateString]:
+                    remaining,
+                };
+              }
+            );
+          }
 
-            <TouchableOpacity
-              style={styles.backButtonLarge}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.backButtonLargeText}>GO BACK</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      );
+          return normalized;
+        } catch (error) {
+          console.error(
+            `Slot API error for ${dateString}:`,
+            error
+          );
+
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Unable to load slot availability.';
+
+          if (mountedRef.current) {
+            setErrorByDate(
+              previous => ({
+                ...previous,
+                [dateString]:
+                  message,
+              })
+            );
+          }
+
+          return new Set<string>();
+        } finally {
+          if (
+            showLoader &&
+            mountedRef.current
+          ) {
+            setLoadingDates(
+              previous => ({
+                ...previous,
+                [dateString]: false,
+              })
+            );
+          }
+        }
+      },
+      [
+        turfId,
+        selectedCourtId,
+      ]
+    );
+
+  /* =======================================================
+     LOAD CURRENT DATE
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      !turfId ||
+      !selectedCourtId
+    ) {
+      return;
     }
 
-    /* =========================================================
-      UI
-    ========================================================= */
+    const dateString =
+      formatDate(selectedDate);
 
+    /*
+      Load only when this date has not already been
+      checked for the current court.
+    */
+    if (
+      bookedSlotKeysByDate[
+        dateString
+      ] !== undefined
+    ) {
+      return;
+    }
+
+    loadBookedSlotsForDate(
+      selectedDate
+    );
+  }, [
+    turfId,
+    selectedCourtId,
+    selectedDate,
+    bookedSlotKeysByDate,
+    loadBookedSlotsForDate,
+  ]);
+
+  /* =======================================================
+     SLOT SELECTION
+  ======================================================= */
+
+  const handleSelectSlot =
+    useCallback(
+      (slot: Slot) => {
+        if (!slot.available) {
+          return;
+        }
+
+        const dateString =
+          formatDate(selectedDate);
+
+        setSelectedSlotsByDate(
+          previous => {
+            const current =
+              previous[
+                dateString
+              ] ?? [];
+
+            if (
+              current.includes(
+                slot.id
+              )
+            ) {
+              const remaining =
+                current.filter(
+                  id =>
+                    id !== slot.id
+                );
+
+              if (
+                remaining.length ===
+                0
+              ) {
+                const next = {
+                  ...previous,
+                };
+
+                delete next[
+                  dateString
+                ];
+
+                return next;
+              }
+
+              return {
+                ...previous,
+                [dateString]:
+                  remaining,
+              };
+            }
+
+            return {
+              ...previous,
+              [dateString]: [
+                ...current,
+                slot.id,
+              ],
+            };
+          }
+        );
+      },
+      [selectedDate]
+    );
+
+  /* =======================================================
+     SELECTED SLOT OBJECTS FOR CURRENT DATE
+  ======================================================= */
+
+  const selectedSlotObjects =
+    useMemo(() => {
+      const dateString =
+        formatDate(selectedDate);
+
+      const selectedIds =
+        selectedSlotsByDate[
+          dateString
+        ] ?? [];
+
+      return slots
+        .filter(slot =>
+          selectedIds.includes(
+            slot.id
+          )
+        )
+        .sort(
+          (a, b) =>
+            a.startMinutes -
+            b.startMinutes
+        );
+    }, [
+      slots,
+      selectedDate,
+      selectedSlotsByDate,
+    ]);
+
+  /* =======================================================
+     ALL SELECTED BOOKINGS
+  ======================================================= */
+
+  const selectedDateStrings =
+    useMemo(() => {
+      return Object.keys(
+        selectedSlotsByDate
+      )
+        .filter(
+          date =>
+            (
+              selectedSlotsByDate[
+                date
+              ] ?? []
+            ).length > 0
+        )
+        .sort();
+    }, [
+      selectedSlotsByDate,
+    ]);
+
+  const selectedBookingCount =
+    useMemo(() => {
+      return selectedDateStrings.reduce(
+        (total, date) =>
+          total +
+          (
+            selectedSlotsByDate[
+              date
+            ] ?? []
+          ).length,
+        0
+      );
+    }, [
+      selectedDateStrings,
+      selectedSlotsByDate,
+    ]);
+
+  const totalPrice =
+    useMemo(() => {
+      /*
+        Current-date slots are available directly.
+        For older dates, selected slot IDs include the
+        start-minute in the booking key, so we calculate
+        their prices from the selected court and date.
+      */
+      return selectedDateStrings.reduce(
+        (grandTotal, dateString) => {
+          const ids =
+            selectedSlotsByDate[
+              dateString
+            ] ?? [];
+
+          return (
+            grandTotal +
+            ids.reduce(
+              (
+                dateTotal,
+                bookingKey
+              ) => {
+                const parts =
+                  bookingKey.split(
+                    '_'
+                  );
+
+                const startMinutes =
+                  Number(
+                    parts[
+                      parts.length - 1
+                    ]
+                  );
+
+                const safeMinutes =
+                  Number.isFinite(
+                    startMinutes
+                  )
+                    ? startMinutes
+                    : 0;
+
+                return (
+                  dateTotal +
+                  getSlotPrice(
+                    safeMinutes,
+                    selectedCourt
+                  )
+                );
+              },
+              0
+            )
+          );
+        },
+        0
+      );
+    }, [
+      selectedDateStrings,
+      selectedSlotsByDate,
+      selectedCourt,
+    ]);
+
+  const selectedTimeText =
+    useMemo(() => {
+      if (
+        selectedSlotObjects.length ===
+        0
+      ) {
+        return selectedBookingCount > 0
+          ? `${selectedBookingCount} slot(s) across ${selectedDateStrings.length} date(s)`
+          : 'Select slots';
+      }
+
+      if (
+        selectedBookingCount >
+        selectedSlotObjects.length
+      ) {
+        return `${selectedBookingCount} slots across ${selectedDateStrings.length} dates`;
+      }
+
+      if (
+        selectedSlotObjects.length ===
+        1
+      ) {
+        const slot =
+          selectedSlotObjects[0];
+
+        return `${slot.startTime} - ${slot.endTime}`;
+      }
+
+      const first =
+        selectedSlotObjects[0];
+
+      const last =
+        selectedSlotObjects[
+          selectedSlotObjects.length -
+            1
+        ];
+
+      return `${first.startTime} - ${last.endTime}`;
+    }, [
+      selectedSlotObjects,
+      selectedBookingCount,
+      selectedDateStrings.length,
+    ]);
+
+  /* =======================================================
+     DATE LIST
+  ======================================================= */
+
+  const nextSevenDays =
+    useMemo(() => {
+      const result: Date[] =
+        [];
+
+      for (
+        let index = 0;
+        index < 7;
+        index++
+      ) {
+        const date =
+          new Date();
+
+        date.setDate(
+          date.getDate() +
+            index
+        );
+
+        date.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        result.push(
+          date
+        );
+      }
+
+      return result;
+    }, []);
+
+  /* =======================================================
+     COURT CHANGE
+  ======================================================= */
+
+  const handleCourtChange =
+    useCallback(
+      (courtId: string) => {
+        setSelectedCourtId(
+          courtId
+        );
+
+        /*
+          Court changes must clear all date selections,
+          because slot IDs are court-specific.
+        */
+        setSelectedSlotsByDate(
+          {}
+        );
+
+        setBookedSlotKeysByDate(
+          {}
+        );
+
+        setLoadingDates({});
+        setErrorByDate({});
+      },
+      []
+    );
+
+  /* =======================================================
+     DATE CHANGE
+  ======================================================= */
+
+  const handleDateChange =
+    useCallback(
+      (date: Date) => {
+        if (
+          isPastDate(date)
+        ) {
+          return;
+        }
+
+        /*
+          IMPORTANT:
+          Do NOT clear selectedSlotsByDate here.
+          The user's selections for other dates must remain.
+        */
+        setSelectedDate(
+          new Date(date)
+        );
+      },
+      []
+    );
+
+  /* =======================================================
+     REMOVE SLOT FOR ANY DATE
+  ======================================================= */
+
+  const removeSelectedSlotForDate =
+    useCallback(
+      (
+        dateString: string,
+        slotId: string
+      ) => {
+        setSelectedSlotsByDate(
+          previous => {
+            const current =
+              previous[
+                dateString
+              ] ?? [];
+
+            const remaining =
+              current.filter(
+                id =>
+                  id !== slotId
+              );
+
+            if (
+              remaining.length ===
+              0
+            ) {
+              const next = {
+                ...previous,
+              };
+
+              delete next[
+                dateString
+              ];
+
+              return next;
+            }
+
+            return {
+              ...previous,
+              [dateString]:
+                remaining,
+            };
+          }
+        );
+      },
+      []
+    );
+
+  const removeSelectedSlot =
+    useCallback(
+      (slotId: string) => {
+        removeSelectedSlotForDate(
+          formatDate(selectedDate),
+          slotId
+        );
+      },
+      [
+        selectedDate,
+        removeSelectedSlotForDate,
+      ]
+    );
+
+  /* =======================================================
+     BOOK NOW
+  ======================================================= */
+
+  const handleBookNow =
+    useCallback(
+      async () => {
+        if (
+          !selectedCourt
+        ) {
+          Alert.alert(
+            'Select Court',
+            'Please select a court.'
+          );
+
+          return;
+        }
+
+        if (
+          selectedBookingCount ===
+          0
+        ) {
+          Alert.alert(
+            'Select Date & Slot',
+            'Please select at least one slot. You can select slots on multiple dates.'
+          );
+
+          return;
+        }
+
+        /*
+          Re-check every selected date before payment.
+          This is important because another customer can
+          book a slot while this screen is open.
+        */
+        const dateStrings =
+          [...selectedDateStrings];
+
+        const refreshedBookings: Array<{
+          date: string;
+          slots: Slot[];
+          slotCount: number;
+          totalAmount: number;
+        }> = [];
+
+        for (
+          const dateString of dateStrings
+        ) {
+          const selectedIds =
+            selectedSlotsByDate[
+              dateString
+            ] ?? [];
+
+          if (
+            selectedIds.length ===
+            0
+          ) {
+            continue;
+          }
+
+          const dateParts =
+            dateString.split('-');
+
+          const dateValue =
+            new Date(
+              Number(
+                dateParts[0]
+              ),
+              Number(
+                dateParts[1]
+              ) - 1,
+              Number(
+                dateParts[2]
+              )
+            );
+
+          const operatingHour =
+            getOperatingHourForDay(
+              turf,
+              dateValue.getDay()
+            );
+
+          if (
+            operatingHour?.isClosed
+          ) {
+            Alert.alert(
+              'Turf Closed',
+              `${formatDisplayDate(
+                dateValue
+              )} is closed. Please remove that date from your selection.`
+            );
+
+            setSelectedDate(
+              dateValue
+            );
+
+            return;
+          }
+
+          /*
+            Refresh availability from backend.
+          */
+          const booked =
+            await loadBookedSlotsForDate(
+              dateValue,
+              false
+            );
+
+          /*
+            Convert selected booking keys into
+            actual Slot objects.
+          */
+          const openHour =
+            getOpeningTime(
+              operatingHour
+            );
+
+          const closeHour =
+            getClosingTime(
+              operatingHour
+            );
+
+          const twentyFour =
+            is24HourOperatingDay(
+              openHour,
+              closeHour
+            );
+
+          let slotStart = 0;
+          let slotCount = 24;
+
+          if (
+            !twentyFour
+          ) {
+            const startMinutes =
+              parseTimeToMinutes(
+                openHour
+              );
+
+            const endMinutes =
+              parseTimeToMinutes(
+                closeHour
+              );
+
+            if (
+              startMinutes ===
+                null ||
+              endMinutes ===
+                null
+            ) {
+              Alert.alert(
+                'Invalid Operating Hours',
+                `Operating hours are invalid for ${formatDisplayDate(
+                  dateValue
+                )}.`
+              );
+
+              return;
+            }
+
+            slotStart =
+              startMinutes;
+
+            let totalMinutes =
+              endMinutes -
+              startMinutes;
+
+            if (
+              totalMinutes <=
+              0
+            ) {
+              totalMinutes +=
+                1440;
+            }
+
+            slotCount =
+              Math.floor(
+                totalMinutes /
+                  60
+              );
+          }
+
+          const availableSlots: Slot[] =
+            [];
+
+          for (
+            let index = 0;
+            index < slotCount;
+            index++
+          ) {
+            const rawStart =
+              slotStart +
+              index * 60;
+
+            const actualStart =
+              rawStart % 1440;
+
+            const actualEnd =
+              (rawStart + 60) %
+              1440;
+
+            const bookingKey =
+              createBookingKey(
+                dateString,
+                selectedCourtId,
+                actualStart
+              );
+
+            const today =
+              isSameDate(
+                dateValue,
+                new Date()
+              );
+
+            const isPast =
+              today &&
+              actualStart <
+                currentTimeMinutes;
+
+            const isBooked =
+              booked.has(
+                bookingKey
+              );
+
+            if (
+              !isBooked &&
+              !isPast
+            ) {
+              availableSlots.push({
+                id: bookingKey,
+                bookingKey,
+                startTime:
+                  formatTime(
+                    actualStart
+                  ),
+                endTime:
+                  formatTime(
+                    actualEnd
+                  ),
+                startMinutes:
+                  actualStart,
+                endMinutes:
+                  actualEnd,
+                available: true,
+                price:
+                  getSlotPrice(
+                    actualStart,
+                    selectedCourt
+                  ),
+                isPast: false,
+                isNight:
+                  isNightSlot(
+                    actualStart,
+                    selectedCourt
+                  ),
+              });
+            }
+          }
+
+          const selectedObjects =
+            selectedIds
+              .map(id =>
+                availableSlots.find(
+                  slot =>
+                    slot.id === id
+                )
+              )
+              .filter(
+                (
+                  slot
+                ): slot is Slot =>
+                  !!slot
+              )
+              .sort(
+                (a, b) =>
+                  a.startMinutes -
+                  b.startMinutes
+              );
+
+          if (
+            selectedObjects.length !==
+            selectedIds.length
+          ) {
+            Alert.alert(
+              'Slot Unavailable',
+              `One or more selected slots on ${formatDisplayDate(
+                dateValue
+              )} are no longer available. Please select again.`
+            );
+
+            setSelectedDate(
+              dateValue
+            );
+
+            /*
+              Remove only unavailable slots.
+            */
+            setSelectedSlotsByDate(
+              previous => ({
+                ...previous,
+                [dateString]:
+                  selectedObjects.map(
+                    slot =>
+                      slot.id
+                  ),
+              })
+            );
+
+            return;
+          }
+
+          const dateTotal =
+            selectedObjects.reduce(
+              (sum, slot) =>
+                sum +
+                Number(
+                  slot.price || 0
+                ),
+              0
+            );
+
+          refreshedBookings.push({
+            date: dateString,
+            slots:
+              selectedObjects,
+            slotCount:
+              selectedObjects.length,
+            totalAmount:
+              dateTotal,
+          });
+        }
+
+        if (
+          refreshedBookings.length ===
+          0
+        ) {
+          Alert.alert(
+            'Select Slot',
+            'Please select at least one available slot.'
+          );
+
+          return;
+        }
+
+        const grandTotal =
+          refreshedBookings.reduce(
+            (sum, booking) =>
+              sum +
+              booking.totalAmount,
+            0
+          );
+
+        const totalSlots =
+          refreshedBookings.reduce(
+            (sum, booking) =>
+              sum +
+              booking.slotCount,
+            0
+          );
+
+        const paymentBookings =
+          refreshedBookings.map(
+            booking => ({
+              date:
+                booking.date,
+              courtId:
+                selectedCourtId,
+              slots:
+                booking.slots.map(
+                  slot => ({
+                    id:
+                      slot.id,
+                    bookingKey:
+                      slot.bookingKey,
+                    startTime:
+                      slot.startTime,
+                    endTime:
+                      slot.endTime,
+                    startMinutes:
+                      slot.startMinutes,
+                    endMinutes:
+                      slot.endMinutes,
+                    price:
+                      slot.price,
+                    isNight:
+                      slot.isNight,
+                  })
+                ),
+              slotCount:
+                booking.slotCount,
+              totalAmount:
+                booking.totalAmount,
+            })
+          );
+
+        /*
+          New multi-date navigation payload.
+
+          `bookings` is the important new field.
+          `date`, `slots`, etc. are also kept for
+          backward compatibility with older PaymentScreen
+          code that may still read a single booking.
+        */
+        const firstBooking =
+          paymentBookings[0];
+
+        const bookingData = {
+          turf,
+
+          court:
+            selectedCourt,
+
+          turfId,
+
+          courtId:
+            selectedCourtId,
+
+          bookings:
+            paymentBookings,
+
+          dates:
+            paymentBookings.map(
+              booking =>
+                booking.date
+            ),
+
+          slotCount:
+            totalSlots,
+
+          totalAmount:
+            grandTotal,
+
+          /*
+            Legacy single-booking fields.
+          */
+          date:
+            firstBooking.date,
+
+          slots:
+            firstBooking.slots,
+
+          /*
+            Helpful explicit flags.
+          */
+          isMultiDate:
+            paymentBookings.length >
+              1,
+
+          isMultiSlot:
+            totalSlots > 1,
+        };
+
+        console.log(
+          'MULTI-DATE BOOKING DATA:',
+          JSON.stringify(
+            bookingData,
+            null,
+            2
+          )
+        );
+
+        navigation.navigate(
+          'Payment',
+          bookingData
+        );
+      },
+      [
+        selectedCourt,
+        selectedBookingCount,
+        selectedDateStrings,
+        selectedSlotsByDate,
+        turf,
+        turfId,
+        selectedCourtId,
+        currentTimeMinutes,
+        loadBookedSlotsForDate,
+        navigation,
+      ]
+    );
+
+  /* =======================================================
+     NO TURF
+  ======================================================= */
+
+  if (!turf) {
     return (
-      <SafeAreaView style={styles.container}>
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
+      <SafeAreaView
+        style={
+          styles.safeArea
+        }
+      >
+        <View
+          style={
+            styles.emptyContainer
+          }
+        >
+          <Text
+            style={
+              styles.emptyTitle
+            }
           >
-            <Text style={styles.backText}>‹</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Turf Details
+            Turf not found
           </Text>
 
-          <View style={styles.headerSpacer} />
+          <TouchableOpacity
+            style={
+              styles.backButtonLarge
+            }
+            onPress={() =>
+              navigation.goBack()
+            }
+          >
+            <Text
+              style={
+                styles.backButtonLargeText
+              }
+            >
+              GO BACK
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /* =======================================================
+     SELECTED COURT PRICES
+  ======================================================= */
+
+  const normalPrice =
+    getNormalCourtPrice(
+      selectedCourt
+    );
+
+  const nightPrice =
+    getNightCourtPrice(
+      selectedCourt
+    );
+
+  /* =======================================================
+     RENDER
+  ======================================================= */
+
+  return (
+    <SafeAreaView
+      style={
+        styles.safeArea
+      }
+    >
+      {/* ===================================================
+          HEADER
+      =================================================== */}
+
+      <View
+        style={
+          styles.header
+        }
+      >
+        <TouchableOpacity
+          style={
+            styles.headerBackButton
+          }
+          onPress={() =>
+            navigation.goBack()
+          }
+        >
+          <Text
+            style={
+              styles.headerBackText
+            }
+          >
+            ‹
+          </Text>
+        </TouchableOpacity>
+
+        <Text
+          style={
+            styles.headerTitle
+          }
+          numberOfLines={1}
+        >
+          {turf.name ||
+            'Turf Details'}
+        </Text>
+
+        <View
+          style={
+            styles.headerSpacer
+          }
+        />
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={
+          false
+        }
+        contentContainerStyle={
+          styles.scrollContent
+        }
+      >
+        {/* =================================================
+            IMAGE
+        ================================================= */}
+
+        <View
+          style={
+            styles.imageContainer
+          }
+        >
+          {turfImage ? (
+            <Image
+              source={{
+                uri: turfImage,
+              }}
+              style={
+                styles.turfImage
+              }
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={
+                styles.imagePlaceholder
+              }
+            >
+              <Text
+                style={
+                  styles.imagePlaceholderText
+                }
+              >
+                NO IMAGE
+              </Text>
+            </View>
+          )}
+
+          <View
+            style={
+              styles.turfBadge
+            }
+          >
+            <Text
+              style={
+                styles.turfBadgeText
+              }
+            >
+              TURF
+            </Text>
+          </View>
         </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+        {/* =================================================
+            TURF INFO
+        ================================================= */}
+
+        <View
+          style={
+            styles.card
+          }
         >
-          {/* TURF IMAGE */}
-          <View style={styles.imageContainer}>
-            {imageUrl ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.turfImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={styles.placeholderEmoji}>⚽</Text>
-                <Text style={styles.placeholderText}>No image available</Text>
-              </View>
+          <Text
+            style={
+              styles.turfName
+            }
+          >
+            {turf.name ||
+              'Turf'}
+          </Text>
+
+          {!!turf.city && (
+            <Text
+              style={
+                styles.cityText
+              }
+            >
+              {turf.city}
+            </Text>
+          )}
+
+          {!!turf.address && (
+            <Text
+              style={
+                styles.addressText
+              }
+            >
+              {turf.address}
+            </Text>
+          )}
+
+          {!!turf.description && (
+            <Text
+              style={
+                styles.description
+              }
+            >
+              {turf.description}
+            </Text>
+          )}
+        </View>
+
+        {/* =================================================
+            COURTS
+        ================================================= */}
+
+        <View
+          style={
+            styles.section
+          }
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            Select Court
+          </Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={
+              false
+            }
+            contentContainerStyle={
+              styles.courtScroll
+            }
+          >
+            {activeCourts.map(
+              court => {
+                const courtId =
+                  getCourtId(
+                    court
+                  );
+
+                const selected =
+                  courtId ===
+                  selectedCourtId;
+
+                return (
+                  <TouchableOpacity
+                    key={
+                      courtId ||
+                      court.name
+                    }
+                    style={[
+                      styles.courtCard,
+                      selected &&
+                        styles.courtCardSelected,
+                    ]}
+                    onPress={() =>
+                      handleCourtChange(
+                        courtId
+                      )
+                    }
+                  >
+                    <View
+                      style={
+                        styles.courtIcon
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.courtIconText
+                        }
+                      >
+                        ⚽
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.courtName,
+                        selected &&
+                          styles.courtNameSelected,
+                      ]}
+                      numberOfLines={
+                        1
+                      }
+                    >
+                      {court.name ||
+                        'Court'}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.courtSport,
+                        selected &&
+                          styles.courtSportSelected,
+                      ]}
+                    >
+                      {getCourtSportText(
+                        court
+                      )}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.courtPrice,
+                        selected &&
+                          styles.courtPriceSelected,
+                      ]}
+                    >
+                      {formatCurrency(
+                        getNormalCourtPrice(
+                          court
+                        )
+                      )}
+                      /hr
+                    </Text>
+
+                    {court.hasNightPricing && (
+                      <Text
+                        style={
+                          styles.courtNightPrice
+                        }
+                      >
+                        🌙{' '}
+                        {formatCurrency(
+                          getNightCourtPrice(
+                            court
+                          )
+                        )}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              }
             )}
+          </ScrollView>
+        </View>
 
-            {/* IMAGE OVERLAY BADGE */}
-            <View style={styles.imageBadge}>
-              <Text style={styles.imageBadgeText}>🏟️ TURF</Text>
-            </View>
-          </View>
+        {/* =================================================
+            PRICING
+        ================================================= */}
 
-          {/* BASIC DETAILS */}
-          <View style={styles.detailsCard}>
-            <Text style={styles.turfName}>{turf.name || 'Unnamed Turf'}</Text>
+        {selectedCourt && (
+          <View
+            style={
+              styles.pricingCard
+            }
+          >
+            <View
+              style={
+                styles.pricingHeader
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.pricingTitle
+                  }
+                >
+                  {selectedCourt.name ||
+                    'Court'}
+                </Text>
 
-            <View style={styles.locationRow}>
-              <View style={styles.locationDot} />
-              <Text style={styles.locationText} numberOfLines={2}>
-                {turf.address || turf.city || 'Location unavailable'}
+                <Text
+                  style={
+                    styles.pricingSport
+                  }
+                >
+                  {getCourtSportText(
+                    selectedCourt
+                  )}
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.pricingNormal
+                }
+              >
+                {formatCurrency(
+                  normalPrice
+                )}
+                /hr
               </Text>
             </View>
 
-            {turf.description ? (
-              <Text style={styles.description}>{turf.description}</Text>
-            ) : null}
-          </View>
-
-          {/* COURTS */}
-          <View style={styles.section}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitleNoMargin}>Select Court</Text>
-              <View style={styles.sectionTitleAccent} />
-            </View>
-
-            {activeCourts.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.emptyIcon}>🏟️</Text>
-                <Text style={styles.emptyText}>No courts available.</Text>
-              </View>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.courtScrollContent}
+            {selectedCourt.hasNightPricing && (
+              <View
+                style={
+                  styles.nightPricingBox
+                }
               >
-                {activeCourts.map((court) => {
-                  const courtId = getCourtId(court);
-                  const selected = courtId === selectedCourtId;
-                  const sport = getCourtSportText(court);
-                  const courtNormalPrice = getNormalCourtPrice(court);
-                  const courtNightPrice = getNightCourtPrice(court);
+                <View>
+                  <Text
+                    style={
+                      styles.nightPricingTitle
+                    }
+                  >
+                    🌙 Night Pricing
+                  </Text>
 
-                  const hasValidNightPricing =
-                    court.hasNightPricing === true &&
-                    typeof court.nightPricePerHour === 'number' &&
-                    typeof court.nightStartHour === 'number' &&
-                    typeof court.nightEndHour === 'number';
+                  <Text
+                    style={
+                      styles.nightPricingTime
+                    }
+                  >
+                    {formatTime(
+                      Number(
+                        selectedCourt.nightStartHour ??
+                          0
+                      ) * 60
+                    )}{' '}
+                    -
+                    {' '}
+                    {formatTime(
+                      Number(
+                        selectedCourt.nightEndHour ??
+                          0
+                      ) * 60
+                    )}
+                  </Text>
+                </View>
 
-                  return (
-                    <TouchableOpacity
-                      key={courtId}
-                      style={[
-                        styles.courtCard,
-                        selected && styles.selectedCourtCard,
-                      ]}
-                      onPress={() => handleSelectCourt(courtId)}
-                      activeOpacity={0.85}
-                    >
-                      {selected && (
-                        <View style={styles.selectedCheck}>
-                          <Text style={styles.selectedCheckText}>✓</Text>
-                        </View>
-                      )}
-
-                      <Text
-                        style={[
-                          styles.courtName,
-                          selected && styles.selectedCourtText,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {court.name || 'Court'}
-                      </Text>
-
-                      <View
-                        style={[
-                          styles.sportPill,
-                          selected && styles.sportPillSelected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sportPillText,
-                            selected && styles.sportPillTextSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {sport}
-                        </Text>
-                      </View>
-
-                      <Text
-                        style={[
-                          styles.courtPrice,
-                          selected && styles.selectedCourtText,
-                        ]}
-                      >
-                        ₹{courtNormalPrice}/hr
-                      </Text>
-
-                      {hasValidNightPricing ? (
-                        <View
-                          style={[
-                            styles.nightPill,
-                            selected && styles.nightPillSelected,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.nightPillText,
-                              selected && styles.nightPillTextSelected,
-                            ]}
-                          >
-                            🌙 ₹{courtNightPrice}/hr
-                          </Text>
-                        </View>
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                <Text
+                  style={
+                    styles.nightPricingAmount
+                  }
+                >
+                  {formatCurrency(
+                    nightPrice
+                  )}
+                  /hr
+                </Text>
+              </View>
             )}
           </View>
+        )}
 
-          {/* SELECTED COURT PRICING */}
-          {selectedCourt ? (
-            <View style={styles.pricingCard}>
-              <View style={styles.pricingHeader}>
-                <View style={styles.pricingHeaderLeft}>
-                  <View style={styles.pricingIconCircle}>
-                    <Text style={styles.pricingIcon}>💰</Text>
-                  </View>
+        {/* =================================================
+            AMENITIES
+        ================================================= */}
 
-                  <View>
-                    <Text style={styles.pricingTitle}>
-                      {selectedCourt.name || 'Selected Court'}
-                    </Text>
+        {turf.amenities &&
+          turf.amenities.length >
+            0 && (
+            <View
+              style={
+                styles.section
+              }
+            >
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Amenities
+              </Text>
 
-                    <Text style={styles.pricingSport}>
-                      {getCourtSportText(selectedCourt)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.pricingRows}>
-                <View style={styles.pricingRow}>
-                  <View style={styles.pricingRowLeft}>
-                    <View style={styles.normalDot} />
-                    <Text style={styles.pricingRowLabel}>Normal price</Text>
-                  </View>
-
-                  <Text style={styles.pricingRowPrice}>₹{normalPrice}/hr</Text>
-                </View>
-
-                {nightPricingEnabled && nightPricingText ? (
-                  <View style={styles.pricingRow}>
-                    <View style={styles.pricingRowLeft}>
-                      <View style={styles.nightDot} />
-                      <View style={styles.nightLabelContainer}>
-                        <Text style={styles.pricingRowLabel}>Night price</Text>
-                        <Text style={styles.nightTimeText}>
-                          {nightPricingText}
-                        </Text>
-                      </View>
+              <View
+                style={
+                  styles.amenitiesContainer
+                }
+              >
+                {turf.amenities.map(
+                  (
+                    amenity,
+                    index
+                  ) => (
+                    <View
+                      key={`${amenity}-${index}`}
+                      style={
+                        styles.amenityChip
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.amenityText
+                        }
+                      >
+                        ✓ {amenity}
+                      </Text>
                     </View>
-
-                    <Text style={styles.nightPriceValue}>₹{nightPrice}/hr</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
-
-          {/* AMENITIES */}
-          {Array.isArray(turf.amenities) && turf.amenities.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionTitleNoMargin}>Amenities</Text>
-                <View style={styles.sectionTitleAccent} />
-              </View>
-
-              <View style={styles.amenitiesContainer}>
-                {turf.amenities.map((amenity, index) => (
-                  <View key={`${amenity}-${index}`} style={styles.amenityChip}>
-                    <Text style={styles.amenityText}>✓ {amenity}</Text>
-                  </View>
-                ))}
+                  )
+                )}
               </View>
             </View>
           )}
 
-          {/* DATE */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionTitleNoMargin}>Select Date</Text>
-                <View style={styles.sectionTitleAccent} />
-              </View>
+        {/* =================================================
+            MULTI-DATE SELECTION
+        ================================================= */}
 
-              <View style={styles.selectedDatePill}>
-                <Text style={styles.selectedDateText}>
-                  {formatDisplayDate(selectedDate)}
-                </Text>
-              </View>
+        <View
+          style={
+            styles.section
+          }
+        >
+          <View
+            style={
+              styles.multiDateHeader
+            }
+          >
+            <View
+              style={
+                styles.multiDateHeaderText
+              }
+            >
+              <Text
+                style={
+                  styles.sectionTitleNoMargin
+                }
+              >
+                Select Dates
+              </Text>
+
+              <Text
+                style={
+                  styles.multiDateHint
+                }
+              >
+                Choose a date, then select one or more slots.
+                Your selections stay saved when you switch dates.
+              </Text>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateScrollContent}
+            <View
+              style={
+                styles.selectedDateCountBadge
+              }
             >
-              {Array.from({ length: 7 }, (_, index) => {
-                const date = new Date();
-                date.setHours(0, 0, 0, 0);
-                date.setDate(date.getDate() + index);
+              <Text
+                style={
+                  styles.selectedDateCountText
+                }
+              >
+                {selectedDateStrings.length}
+              </Text>
 
-                const selected =
-                  formatDate(date) === formatDate(selectedDate);
+              <Text
+                style={
+                  styles.selectedDateCountLabel
+                }
+              >
+                date
+                {selectedDateStrings.length !==
+                1
+                  ? 's'
+                  : ''}
+              </Text>
+            </View>
+          </View>
 
-                const operatingHour = turf.operatingHours?.find(
-                  (hour) => hour.dayOfWeek === date.getDay()
-                );
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={
+              false
+            }
+            contentContainerStyle={
+              styles.dateScroll
+            }
+          >
+            {nextSevenDays.map(
+              date => {
+                const dateString =
+                  formatDate(date);
 
-                const closed = operatingHour?.isClosed === true;
+                const active =
+                  isSameDate(
+                    date,
+                    selectedDate
+                  );
+
+                const selectedCount =
+                  (
+                    selectedSlotsByDate[
+                      dateString
+                    ] ?? []
+                  ).length;
+
+                const hour =
+                  getOperatingHourForDay(
+                    turf,
+                    date.getDay()
+                  );
+
+                const closed =
+                  hour?.isClosed ===
+                  true;
 
                 return (
                   <TouchableOpacity
-                    key={formatDate(date)}
+                    key={
+                      dateString
+                    }
                     style={[
                       styles.dateCard,
-                      selected && styles.selectedDateCard,
-                      closed && !selected && styles.closedDateCard,
+                      active &&
+                        styles.dateCardSelected,
+                      selectedCount >
+                        0 &&
+                        !active &&
+                        styles.dateCardHasSelection,
+                      closed &&
+                        styles.dateCardClosed,
                     ]}
-                    onPress={() => handleSelectDate(date)}
-                    activeOpacity={0.85}
+                    onPress={() =>
+                      handleDateChange(
+                        date
+                      )
+                    }
+                    disabled={
+                      isPastDate(date)
+                    }
+                    activeOpacity={
+                      0.8
+                    }
                   >
+                    {selectedCount >
+                      0 && (
+                      <View
+                        style={[
+                          styles.dateSelectionBadge,
+                          active &&
+                            styles.dateSelectionBadgeActive,
+                        ]}
+                      >
+                        <Text
+                          style={
+                            styles.dateSelectionBadgeText
+                          }
+                        >
+                          {selectedCount}
+                        </Text>
+                      </View>
+                    )}
+
                     <Text
                       style={[
                         styles.dateDay,
-                        selected && styles.selectedDateTextWhite,
-                        closed && !selected && styles.closedDateText,
+                        active &&
+                          styles.dateTextSelected,
                       ]}
                     >
-                      {date.toLocaleDateString('en-IN', { weekday: 'short' })}
+                      {date.toLocaleDateString(
+                        'en-IN',
+                        {
+                          weekday:
+                            'short',
+                        }
+                      )}
                     </Text>
 
                     <Text
                       style={[
                         styles.dateNumber,
-                        selected && styles.selectedDateTextWhite,
-                        closed && !selected && styles.closedDateText,
+                        active &&
+                          styles.dateTextSelected,
                       ]}
                     >
                       {date.getDate()}
@@ -1004,454 +3289,983 @@
                     <Text
                       style={[
                         styles.dateMonth,
-                        selected && styles.selectedDateTextWhite,
-                        closed && !selected && styles.closedDateText,
+                        active &&
+                          styles.dateTextSelected,
                       ]}
                     >
-                      {date.toLocaleDateString('en-IN', { month: 'short' })}
+                      {date.toLocaleDateString(
+                        'en-IN',
+                        {
+                          month:
+                            'short',
+                        }
+                      )}
                     </Text>
 
                     {closed ? (
                       <Text
+                        style={
+                          styles.closedText
+                        }
+                      >
+                        Closed
+                      </Text>
+                    ) : selectedCount >
+                      0 ? (
+                      <Text
                         style={[
-                          styles.closedLabel,
-                          selected && styles.closedLabelSelected,
+                          styles.dateBookedLabel,
+                          active &&
+                            styles.dateBookedLabelActive,
                         ]}
                       >
-                        CLOSED
+                        {selectedCount}{' '}
+                        slot
+                        {selectedCount !==
+                        1
+                          ? 's'
+                          : ''}
                       </Text>
                     ) : null}
                   </TouchableOpacity>
                 );
-              })}
-            </ScrollView>
-          </View>
+              }
+            )}
+          </ScrollView>
 
-          {/* AVAILABLE SLOTS */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionTitleNoMargin}>
-                  Available Slots
-                </Text>
-                <View style={styles.sectionTitleAccent} />
-              </View>
+          <View
+            style={
+              styles.activeDateInfo
+            }
+          >
+            <View>
+              <Text
+                style={
+                  styles.selectedDateText
+                }
+              >
+                Booking date
+              </Text>
 
-              <Text style={styles.oneHourText}>1 hour each</Text>
+              <Text
+                style={
+                  styles.activeDateValue
+                }
+              >
+                {formatDisplayDate(
+                  selectedDate
+                )}
+              </Text>
             </View>
 
-            {/* PRICING LEGEND */}
-            {selectedCourt &&
-            selectedCourt.hasNightPricing === true &&
-            typeof selectedCourt.nightPricePerHour === 'number' &&
-            nightPricingText ? (
-              <View style={styles.priceLegend}>
-                <View style={styles.priceLegendItem}>
-                  <View style={styles.normalDot} />
-                  <Text style={styles.priceLegendText}>
-                    Normal ₹{normalPrice}/hr
-                  </Text>
-                </View>
+            <Text
+              style={
+                styles.activeDateSlotCount
+              }
+            >
+              {(
+                selectedSlotsByDate[
+                  formatDate(
+                    selectedDate
+                  )
+                ] ?? []
+              ).length}{' '}
+              selected
+            </Text>
+          </View>
+        </View>
 
-                <View style={styles.priceLegendItem}>
-                  <View style={styles.nightDot} />
-                  <Text style={styles.priceLegendText}>
-                    Night ₹{nightPrice}/hr
-                  </Text>
-                </View>
-              </View>
-            ) : null}
+        {/* =================================================
+            SLOT HEADER
+        ================================================= */}
 
-            {/* TODAY CURRENT TIME */}
-            {isSameDate(selectedDate, new Date()) ? (
-              <View style={styles.currentTimeBanner}>
-                <View style={styles.currentTimeIconCircle}>
-                  <Text style={styles.currentTimeIcon}>🕐</Text>
-                </View>
+        <View
+          style={
+            styles.slotHeader
+          }
+        >
+          <View>
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
+              Available Slots
+            </Text>
 
-                <View style={styles.currentTimeInfo}>
-                  <Text style={styles.currentTimeTitle}>Current time</Text>
-                  <Text style={styles.currentTimeValue}>
-                    {formatTime(currentTimeMinutes)}
-                  </Text>
-                </View>
+            <Text
+              style={
+                styles.slotSubtitle
+              }
+            >
+              {isTwentyFourHours
+                ? '24-hour booking available'
+                : `${openingTime} - ${closingTime}`}
+            </Text>
+          </View>
 
-                <Text style={styles.pastHint}>
-                  Past slots are unavailable
+          {loadingDates[
+            formatDate(
+              selectedDate
+            )
+          ] && (
+            <ActivityIndicator
+              size="small"
+              color={
+                COLORS.primary
+              }
+            />
+          )}
+        </View>
+
+        {/* =================================================
+            24 HOURS INDICATOR
+        ================================================= */}
+
+        {isTwentyFourHours &&
+          selectedOperatingHour?.isClosed !==
+            true && (
+            <View
+              style={
+                styles.twentyFourHourBanner
+              }
+            >
+              <Text
+                style={
+                  styles.twentyFourHourIcon
+                }
+              >
+                🕐
+              </Text>
+
+              <View
+                style={
+                  styles.twentyFourHourContent
+                }
+              >
+                <Text
+                  style={
+                    styles.twentyFourHourTitle
+                  }
+                >
+                  Open 24 Hours
+                </Text>
+
+                <Text
+                  style={
+                    styles.twentyFourHourText
+                  }
+                >
+                  All 24 one-hour slots are available for this day.
                 </Text>
               </View>
-            ) : null}
+            </View>
+          )}
 
-            {/* LOADING / ERROR / EMPTY / SLOTS */}
-            {loadingSlots ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={COLORS.primary} size="large" />
-                <Text style={styles.loadingText}>Loading slots...</Text>
-              </View>
-            ) : errorMessage ? (
-              <View style={styles.emptyBox}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
+        {/* =================================================
+            CLOSED
+        ================================================= */}
+
+        {selectedOperatingHour?.isClosed ===
+        true ? (
+          <View
+            style={
+              styles.closedCard
+            }
+          >
+            <Text
+              style={
+                styles.closedIcon
+              }
+            >
+              🔒
+            </Text>
+
+            <Text
+              style={
+                styles.closedTitle
+              }
+            >
+              Turf Closed
+            </Text>
+
+            <Text
+              style={
+                styles.closedDescription
+              }
+            >
+              This turf is closed on the selected date.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* =============================================
+                ERROR
+            ============================================= */}
+
+            {(
+              errorByDate[
+                formatDate(
+                  selectedDate
+                )
+              ] ?? ''
+            ) !== '' && (
+              <View
+                style={
+                  styles.errorCard
+                }
+              >
+                <Text
+                  style={
+                    styles.errorTitle
+                  }
+                >
+                  Unable to load availability
+                </Text>
+
+                <Text
+                  style={
+                    styles.errorText
+                  }
+                >
+                  {errorByDate[
+                    formatDate(
+                      selectedDate
+                    )
+                  ]}
+                </Text>
 
                 <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={loadBookedSlots}
-                  activeOpacity={0.85}
+                  style={
+                    styles.retryButton
+                  }
+                  onPress={() =>
+                    loadBookedSlotsForDate(
+                      selectedDate
+                    )
+                  }
                 >
-                  <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+                  <Text
+                    style={
+                      styles.retryButtonText
+                    }
+                  >
+                    RETRY
+                  </Text>
                 </TouchableOpacity>
               </View>
-            ) : slots.length === 0 ? (
-              <View style={styles.emptyBox}>
-                <View style={styles.emptyIconCircle}>
-                  <Text style={styles.emptyIcon}>🕐</Text>
-                </View>
+            )}
 
-                <Text style={styles.emptyTitle}>No slots available</Text>
+            {/* =============================================
+                CURRENT TIME
+            ============================================= */}
 
-                <Text style={styles.emptyText}>
-                  This turf may be closed on the selected date or the selected
-                  court has no available slots.
+            {isSameDate(
+              selectedDate,
+              new Date()
+            ) && (
+              <View
+                style={
+                  styles.currentTimeBanner
+                }
+              >
+                <Text
+                  style={
+                    styles.currentTimeText
+                  }
+                >
+                  Current time:{' '}
+                  {formatTime(
+                    currentTimeMinutes
+                  )}
+                </Text>
+
+                <Text
+                  style={
+                    styles.currentTimeHint
+                  }
+                >
+                  Past slots cannot be booked.
+                </Text>
+              </View>
+            )}
+
+            {/* =============================================
+                SLOT GRID
+            ============================================= */}
+
+            {loadingDates[
+              formatDate(
+                selectedDate
+              )
+            ] ? (
+              <View
+                style={
+                  styles.loadingContainer
+                }
+              >
+                <ActivityIndicator
+                  size="large"
+                  color={
+                    COLORS.primary
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.loadingText
+                  }
+                >
+                  Checking slot availability...
+                </Text>
+              </View>
+            ) : slots.length ===
+              0 ? (
+              <View
+                style={
+                  styles.noSlotsCard
+                }
+              >
+                <Text
+                  style={
+                    styles.noSlotsTitle
+                  }
+                >
+                  No slots available
+                </Text>
+
+                <Text
+                  style={
+                    styles.noSlotsText
+                  }
+                >
+                  Please check the turf operating hours.
                 </Text>
               </View>
             ) : (
-              <>
-                <Text style={styles.slotInstruction}>
-                  Tap multiple available slots to select them. Past and booked
-                  slots cannot be selected.
-                </Text>
+              <View
+                style={
+                  styles.slotGrid
+                }
+              >
+                {slots.map(
+                  slot => {
+                    const currentDateString =
+                      formatDate(
+                        selectedDate
+                      );
 
-                <View style={styles.slotsGrid}>
-                  {slots.map((slot) => {
-                    const selected = isSlotSelected(slot);
-                    const past = slot.isPast === true;
-                    const booked = !past && !slot.available;
-                    const night = slot.isNight === true;
+                    const selected =
+                      (
+                        selectedSlotsByDate[
+                          currentDateString
+                        ] ?? []
+                      ).includes(
+                        slot.id
+                      );
+
+                    const booked =
+                      (
+                        bookedSlotKeysByDate[
+                          currentDateString
+                        ] ??
+                        new Set<string>()
+                      ).has(
+                        slot.bookingKey
+                      );
 
                     return (
                       <TouchableOpacity
-                        key={slot.id}
-                        disabled={!slot.available || past}
+                        key={
+                          slot.id
+                        }
                         style={[
                           styles.slotCard,
-                          night &&
-                            !selected &&
-                            !past &&
-                            !booked &&
-                            styles.nightSlotCard,
-                          past && styles.pastSlotCard,
-                          booked && styles.bookedSlotCard,
-                          selected && styles.selectedSlotCard,
+
+                          selected &&
+                            styles.slotCardSelected,
+
+                          !slot.available &&
+                            styles.slotCardDisabled,
                         ]}
-                        onPress={() => handleSelectSlot(slot)}
-                        activeOpacity={0.85}
+                        disabled={
+                          !slot.available
+                        }
+                        onPress={() =>
+                          handleSelectSlot(
+                            slot
+                          )
+                        }
+                        activeOpacity={
+                          0.8
+                        }
                       >
-                        {/* NIGHT BADGE */}
-                        {night && !past && !booked && !selected ? (
-                          <View style={styles.nightBadge}>
-                            <Text style={styles.nightBadgeText}>🌙 NIGHT</Text>
-                          </View>
-                        ) : null}
-
-                        {/* PAST OVERLAY */}
-                        {past ? (
-                          <View style={styles.pastOverlay}>
-                            <Text style={styles.pastOverlayText}>PASSED</Text>
-                          </View>
-                        ) : null}
-
-                        {/* BOOKED OVERLAY */}
-                        {booked ? (
-                          <View style={styles.bookedOverlay}>
-                            <Text style={styles.bookedOverlayText}>BOOKED</Text>
-                          </View>
-                        ) : null}
-
-                        {/* SELECTED CHECK */}
-                        {selected ? (
-                          <View style={styles.selectedCheck}>
-                            <Text style={styles.selectedCheckText}>✓</Text>
-                          </View>
-                        ) : null}
-
                         <Text
                           style={[
                             styles.slotTime,
-                            night &&
-                              !selected &&
-                              !past &&
-                              !booked &&
-                              styles.slotTimeNight,
-                            past && styles.pastSlotText,
-                            booked && styles.bookedSlotText,
-                            selected && styles.selectedSlotText,
+                            selected &&
+                              styles.slotTimeSelected,
+                            !slot.available &&
+                              styles.slotTimeDisabled,
                           ]}
                         >
-                          {slot.startTime}
+                          {
+                            slot.startTime
+                          }
                         </Text>
 
                         <Text
                           style={[
                             styles.slotEndTime,
-                            past && styles.pastSlotText,
-                            booked && styles.bookedSlotText,
-                            selected && styles.selectedSlotText,
+                            selected &&
+                              styles.slotEndTimeSelected,
                           ]}
                         >
-                          to {slot.endTime}
+                          to{' '}
+                          {
+                            slot.endTime
+                          }
                         </Text>
 
                         <Text
                           style={[
                             styles.slotPrice,
-                            night &&
-                              !selected &&
-                              !past &&
-                              !booked &&
-                              styles.slotPriceNight,
-                            past && styles.pastSlotText,
-                            booked && styles.bookedSlotText,
-                            selected && styles.selectedSlotText,
+                            selected &&
+                              styles.slotPriceSelected,
                           ]}
                         >
-                          ₹{slot.price}
+                          {formatCurrency(
+                            slot.price
+                          )}
                         </Text>
 
-                        <Text
-                          style={[
-                            styles.slotStatus,
-                            past && styles.pastSlotStatus,
-                            booked && styles.bookedSlotText,
-                            selected && styles.selectedSlotText,
-                            night &&
-                              !selected &&
-                              !past &&
-                              !booked &&
-                              styles.slotStatusNight,
-                          ]}
-                        >
-                          {selected
-                            ? 'Selected'
-                            : past
-                            ? 'Time passed'
-                            : booked
-                            ? 'Booked'
-                            : night
-                            ? 'Night price'
-                            : 'Available'}
-                        </Text>
+                        {slot.isNight &&
+                          slot.available && (
+                            <View
+                              style={
+                                styles.nightBadge
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.nightBadgeText
+                                }
+                              >
+                                🌙 NIGHT
+                              </Text>
+                            </View>
+                          )}
+
+                        {selected && (
+                          <View
+                            style={
+                              styles.selectedCheck
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.selectedCheckText
+                              }
+                            >
+                              ✓
+                            </Text>
+                          </View>
+                        )}
+
+                        {!slot.isPast &&
+                          booked && (
+                            <View
+                              style={
+                                styles.slotOverlay
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.slotUnavailableText
+                                }
+                              >
+                                BOOKED
+                              </Text>
+                            </View>
+                          )}
+
+                        {slot.isPast && (
+                          <View
+                            style={
+                              styles.slotOverlay
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.slotUnavailableText
+                              }
+                            >
+                              PAST
+                            </Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
                     );
-                  })}
-                </View>
-              </>
+                  }
+                )}
+              </View>
             )}
-          </View>
+          </>
+        )}
 
-          {/* SELECTED SLOTS SUMMARY */}
-          {selectedSlots.length > 0 ? (
-            <View style={styles.selectedSummarySection}>
-              <View style={styles.selectedSummaryHeader}>
-                <View>
-                  <View style={styles.sectionTitleRow}>
-                    <Text style={styles.selectedSummaryTitle}>
-                      Selected Slots
-                    </Text>
-                    <View style={styles.sectionTitleAccent} />
-                  </View>
+        {/* =================================================
+            ALL SELECTED DATES + SLOTS
+        ================================================= */}
 
-                  <Text style={styles.selectedSummarySubtitle}>
-                    {selectedSlots.length}{' '}
-                    {selectedSlots.length === 1 ? 'slot' : 'slots'}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => setSelectedSlots([])}
-                  activeOpacity={0.8}
+        {selectedBookingCount >
+          0 && (
+          <View
+            style={
+              styles.selectedCard
+            }
+          >
+            <View
+              style={
+                styles.selectedHeader
+              }
+            >
+              <View>
+                <Text
+                  style={
+                    styles.selectedTitle
+                  }
                 >
-                  <Text style={styles.clearText}>CLEAR ALL</Text>
-                </TouchableOpacity>
+                  Booking Summary
+                </Text>
+
+                <Text
+                  style={
+                    styles.selectedSubtitle
+                  }
+                >
+                  {selectedBookingCount}{' '}
+                  slot
+                  {selectedBookingCount !==
+                  1
+                    ? 's'
+                    : ''}{' '}
+                  across{' '}
+                  {
+                    selectedDateStrings.length
+                  }{' '}
+                  date
+                  {selectedDateStrings.length !==
+                  1
+                    ? 's'
+                    : ''}
+                </Text>
               </View>
 
-              {sortedSelectedSlots.map((slot) => (
-                <View key={slot.id} style={styles.selectedSlotRow}>
-                  <View style={styles.selectedSlotRowLeft}>
-                    <View
-                      style={[
-                        styles.selectedSlotBullet,
-                        slot.isNight && styles.selectedNightBullet,
-                      ]}
-                    />
+              <Text
+                style={
+                  styles.selectedTotal
+                }
+              >
+                {formatCurrency(
+                  totalPrice
+                )}
+              </Text>
+            </View>
 
-                    <View>
-                      <Text style={styles.selectedSlotRowTime}>
-                        {slot.startTime} - {slot.endTime}
+            {selectedDateStrings.map(
+              dateString => {
+                const selectedIds =
+                  selectedSlotsByDate[
+                    dateString
+                  ] ?? [];
+
+                return (
+                  <View
+                    key={
+                      dateString
+                    }
+                    style={
+                      styles.selectedDateGroup
+                    }
+                  >
+                    <View
+                      style={
+                        styles.selectedDateGroupHeader
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.selectedDateGroupTitle
+                        }
+                      >
+                        {formatDisplayDate(
+                          new Date(
+                            Number(
+                              dateString.slice(
+                                0,
+                                4
+                              )
+                            ),
+                            Number(
+                              dateString.slice(
+                                5,
+                                7
+                              )
+                            ) - 1,
+                            Number(
+                              dateString.slice(
+                                8,
+                                10
+                              )
+                            )
+                          )
+                        )}
                       </Text>
 
-                      {slot.isNight ? (
-                        <Text style={styles.selectedNightText}>
-                          🌙 Night pricing
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedSlotsByDate(
+                            previous => {
+                              const next = {
+                                ...previous,
+                              };
+
+                              delete next[
+                                dateString
+                              ];
+
+                              return next;
+                            }
+                          );
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.clearDateText
+                          }
+                        >
+                          Clear date
                         </Text>
-                      ) : null}
+                      </TouchableOpacity>
                     </View>
+
+                    {[...selectedIds]
+                      .sort(
+                        (a, b) =>
+                          (
+                            getMinutesFromBookingKey(
+                              a
+                            ) ?? 0
+                          ) -
+                          (
+                            getMinutesFromBookingKey(
+                              b
+                            ) ?? 0
+                          )
+                      )
+                      .map(
+                        bookingKey => {
+                          const minutes =
+                            getMinutesFromBookingKey(
+                              bookingKey
+                            ) ?? 0;
+
+                          const endMinutes =
+                            (minutes +
+                              60) %
+                            1440;
+
+                          const isNight =
+                            isNightSlot(
+                              minutes,
+                              selectedCourt
+                            );
+
+                          const price =
+                            getSlotPrice(
+                              minutes,
+                              selectedCourt
+                            );
+
+                          return (
+                            <View
+                              key={
+                                bookingKey
+                              }
+                              style={
+                                styles.selectedSlotRow
+                              }
+                            >
+                              <View
+                                style={
+                                  styles.selectedSlotInfo
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.selectedSlotTime
+                                  }
+                                >
+                                  {formatTime(
+                                    minutes
+                                  )}{' '}
+                                  -{' '}
+                                  {formatTime(
+                                    endMinutes
+                                  )}
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.selectedSlotPrice
+                                  }
+                                >
+                                  {formatCurrency(
+                                    price
+                                  )}
+                                  {isNight
+                                    ? ' • Night'
+                                    : ''}
+                                </Text>
+                              </View>
+
+                              <TouchableOpacity
+                                style={
+                                  styles.removeButton
+                                }
+                                onPress={() =>
+                                  removeSelectedSlotForDate(
+                                    dateString,
+                                    bookingKey
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.removeButtonText
+                                  }
+                                >
+                                  ×
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        }
+                      )}
                   </View>
-
-                  <View style={styles.selectedSlotRowRight}>
-                    <Text style={styles.selectedSlotRowPrice}>
-                      ₹{slot.price}
-                    </Text>
-
-                    <TouchableOpacity
-                      onPress={() => handleSelectSlot(slot)}
-                      activeOpacity={0.8}
-                      style={styles.removeButton}
-                    >
-                      <Text style={styles.removeSlotText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-
-              <View style={styles.totalDivider} />
-
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalAmount}>₹{totalPrice}</Text>
-              </View>
-            </View>
-          ) : null}
-
-          {/* LOCATION */}
-          <View style={styles.section}>
-            <View style={styles.sectionTitleRow}>
-              <Text style={styles.sectionTitleNoMargin}>Location</Text>
-              <View style={styles.sectionTitleAccent} />
-            </View>
-
-            <View style={styles.locationCard}>
-              <View style={styles.locationIconCircle}>
-                <Text style={styles.locationCardIcon}>📍</Text>
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.locationCardTitle}>
-                  {turf.city || 'Location'}
-                </Text>
-
-                <Text style={styles.locationCardText}>
-                  {turf.address || 'Address unavailable'}
-                </Text>
-              </View>
-            </View>
+                );
+              }
+            )}
           </View>
+        )}
 
-          <View style={{ height: 120 }} />
-        </ScrollView>
+        {/* =================================================
+            LOCATION
+        ================================================= */}
 
-        {/* BOTTOM BOOKING BAR */}
-        <View style={styles.bottomContainer}>
-          <View style={styles.bottomInfo}>
-            <Text style={styles.bottomLabel}>
-              {selectedSlots.length > 0
-                ? `${selectedSlots.length} ${
-                    selectedSlots.length === 1 ? 'slot' : 'slots'
-                  }`
-                : 'No slots selected'}
-            </Text>
-
-            <Text style={styles.bottomPrice}>
-              {selectedSlots.length > 0 ? `₹${totalPrice}` : '—'}
-            </Text>
-
-            {selectedSlots.length > 0 ? (
-              <Text style={styles.bottomTime} numberOfLines={1}>
-                {selectedTimeText}
-              </Text>
-            ) : null}
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.bookButton,
-              selectedSlots.length === 0 && styles.disabledBookButton,
-            ]}
-            disabled={selectedSlots.length === 0}
-            onPress={handleBookNow}
-            activeOpacity={0.85}
+        {(turf.address ||
+          turf.city) && (
+          <View
+            style={
+              styles.locationCard
+            }
           >
-            <Text style={styles.bookButtonText}>CONTINUE →</Text>
-          </TouchableOpacity>
+            <Text
+              style={
+                styles.locationTitle
+              }
+            >
+              📍 Location
+            </Text>
+
+            {!!turf.address && (
+              <Text
+                style={
+                  styles.locationText
+                }
+              >
+                {turf.address}
+              </Text>
+            )}
+
+            {!!turf.city && (
+              <Text
+                style={
+                  styles.locationCity
+                }
+              >
+                {turf.city}
+              </Text>
+            )}
+          </View>
+        )}
+
+        <View
+          style={
+            styles.bottomSpacing
+          }
+        />
+      </ScrollView>
+
+      {/* =====================================================
+          BOOKING BAR
+      ===================================================== */}
+
+      <View
+        style={
+          styles.bookingBar
+        }
+      >
+        <View
+          style={
+            styles.bookingSummary
+          }
+        >
+          <Text
+            style={
+              styles.bookingCount
+            }
+          >
+            {selectedBookingCount}{' '}
+            slot
+            {selectedBookingCount !==
+            1
+              ? 's'
+              : ''}{' '}
+            •{' '}
+            {selectedDateStrings.length}{' '}
+            date
+            {selectedDateStrings.length !==
+            1
+              ? 's'
+              : ''}
+          </Text>
+
+          <Text
+            style={
+              styles.bookingTime
+            }
+          >
+            {selectedTimeText}
+          </Text>
+
+          <Text
+            style={
+              styles.bookingTotal
+            }
+          >
+            {formatCurrency(
+              totalPrice
+            )}
+          </Text>
         </View>
-      </SafeAreaView>
-    );
-  };
 
-  /* =========================================================
-    STYLES
-  ========================================================= */
+        <TouchableOpacity
+          style={[
+            styles.continueButton,
+            selectedBookingCount ===
+              0 &&
+              styles.continueButtonDisabled,
+          ]}
+          disabled={
+            selectedBookingCount ===
+            0
+          }
+          onPress={
+            handleBookNow
+          }
+        >
+          <Text
+            style={
+              styles.continueButtonText
+            }
+          >
+            CONTINUE
+          </Text>
 
-  const styles = StyleSheet.create({
-    container: {
+          <Text
+            style={
+              styles.continueArrow
+            }
+          >
+            →
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+/* =========================================================
+   STYLES
+========================================================= */
+
+const styles =
+  StyleSheet.create({
+    safeArea: {
       flex: 1,
-      backgroundColor: COLORS.bg,
+      backgroundColor:
+        COLORS.background,
     },
-
-    scrollContent: {
-      paddingBottom: 20,
-    },
-
-    /* HEADER */
 
     header: {
       height: 58,
-      backgroundColor: COLORS.white,
-      borderBottomWidth: 1,
-      borderBottomColor: COLORS.border,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      backgroundColor:
+        COLORS.white,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
       paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor:
+        COLORS.border,
     },
 
-    backButton: {
+    headerBackButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: COLORS.primarySoft,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      backgroundColor:
+        '#F3F4F6',
     },
 
-    backText: {
+    headerBackText: {
       fontSize: 32,
-      lineHeight: 34,
-      color: COLORS.primaryDark,
+      color:
+        COLORS.text,
       marginTop: -3,
-      fontWeight: '600',
     },
 
     headerTitle: {
       flex: 1,
-      textAlign: 'center',
-      fontSize: 17,
-      fontWeight: '800',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
+      fontSize: 18,
+      fontWeight:
+        '700',
+      color:
+        COLORS.text,
+      marginLeft: 12,
     },
 
     headerSpacer: {
       width: 40,
     },
 
-    /* IMAGE */
+    scrollContent: {
+      paddingBottom: 20,
+    },
 
     imageContainer: {
       width: '100%',
-      height: 240,
-      backgroundColor: COLORS.primarySoft,
-      position: 'relative',
+      height: 230,
+      backgroundColor:
+        '#E5E7EB',
+      position:
+        'relative',
     },
 
     turfImage: {
@@ -1461,1156 +4275,1160 @@
 
     imagePlaceholder: {
       flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
-    placeholderEmoji: {
-      fontSize: 48,
+    imagePlaceholderText: {
+      color:
+        COLORS.textSecondary,
+      fontWeight:
+        '700',
     },
 
-    placeholderText: {
-      marginTop: 8,
-      color: COLORS.textMuted,
-      fontSize: 13,
-      fontWeight: '600',
-    },
-
-    imageBadge: {
-      position: 'absolute',
-      top: 14,
-      left: 14,
-      backgroundColor: 'rgba(255,255,255,0.95)',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
+    turfBadge: {
+      position:
+        'absolute',
+      top: 16,
+      left: 16,
+      backgroundColor:
+        COLORS.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
       borderRadius: 20,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.12,
-      shadowRadius: 4,
-      elevation: 3,
     },
 
-    imageBadgeText: {
-      fontSize: 9,
-      fontWeight: '900',
-      color: COLORS.primaryDark,
-      letterSpacing: 1.5,
+    turfBadgeText: {
+      color:
+        COLORS.white,
+      fontSize: 11,
+      fontWeight:
+        '800',
     },
 
-    /* DETAILS */
-
-    detailsCard: {
-      backgroundColor: COLORS.white,
+    card: {
+      backgroundColor:
+        COLORS.white,
+      marginHorizontal: 16,
+      marginTop: -18,
+      borderRadius: 16,
       padding: 18,
-      borderBottomWidth: 1,
-      borderBottomColor: COLORS.border,
+      elevation: 3,
+      zIndex: 2,
     },
 
     turfName: {
-      fontSize: 24,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.3,
+      fontSize: 23,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
     },
 
-    locationRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 8,
+    cityText: {
+      fontSize: 14,
+      color:
+        COLORS.primary,
+      fontWeight:
+        '600',
+      marginTop: 5,
     },
 
-    locationDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: COLORS.primary,
-      marginRight: 8,
-    },
-
-    locationText: {
-      flex: 1,
-      color: COLORS.textSecondary,
-      fontSize: 13,
-      fontWeight: '500',
+    addressText: {
+      fontSize: 14,
+      color:
+        COLORS.textSecondary,
+      marginTop: 6,
+      lineHeight: 20,
     },
 
     description: {
-      marginTop: 12,
-      color: COLORS.textSecondary,
       fontSize: 14,
+      color:
+        COLORS.textSecondary,
+      marginTop: 12,
       lineHeight: 21,
     },
 
-    /* SECTION */
-
     section: {
-      backgroundColor: COLORS.white,
-      padding: 18,
-      marginTop: 10,
-    },
-
-    sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 14,
-    },
-
-    sectionTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 12,
+      marginTop: 20,
     },
 
     sectionTitle: {
-      fontSize: 17,
-      fontWeight: '800',
-      color: COLORS.textPrimary,
-      marginBottom: 12,
+      fontSize: 19,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
+      marginHorizontal: 16,
     },
 
     sectionTitleNoMargin: {
+      fontSize: 19,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
+    },
+
+    multiDateHeader: {
+      paddingHorizontal: 16,
+      paddingTop: 2,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+    },
+
+    multiDateHeaderText: {
+      flex: 1,
+      paddingRight: 12,
+    },
+
+    multiDateHint: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 5,
+      lineHeight: 17,
+    },
+
+    selectedDateCountBadge: {
+      minWidth: 48,
+      minHeight: 48,
+      borderRadius: 14,
+      backgroundColor:
+        COLORS.primaryLight,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      paddingHorizontal: 8,
+    },
+
+    selectedDateCountText: {
       fontSize: 17,
-      fontWeight: '800',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primaryDark,
     },
 
-    sectionTitleAccent: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: COLORS.accent,
-      marginLeft: 8,
-      marginTop: 2,
+    selectedDateCountLabel: {
+      fontSize: 9,
+      fontWeight:
+        '700',
+      color:
+        COLORS.primaryDark,
     },
 
-    selectedDatePill: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      backgroundColor: COLORS.primarySoft,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-    },
-
-    selectedDateText: {
-      fontSize: 11,
-      color: COLORS.primaryDark,
-      fontWeight: '800',
-      letterSpacing: 0.5,
-    },
-
-    oneHourText: {
-      fontSize: 11,
-      color: COLORS.textMuted,
-      fontWeight: '600',
-      letterSpacing: 0.3,
-    },
-
-    /* COURTS */
-
-    courtScrollContent: {
-      paddingRight: 4,
+    courtScroll: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
     },
 
     courtCard: {
-      width: 165,
-      padding: 14,
+      width: 155,
+      minHeight: 175,
+      backgroundColor:
+        COLORS.white,
       borderRadius: 16,
-      borderWidth: 1.5,
-      borderColor: COLORS.borderLight,
-      backgroundColor: COLORS.primarySoft,
-      marginRight: 10,
-      position: 'relative',
+      padding: 14,
+      marginRight: 12,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
     },
 
-    selectedCourtCard: {
-      backgroundColor: COLORS.primary,
-      borderColor: COLORS.primary,
-      shadowColor: COLORS.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
-      elevation: 5,
+    courtCardSelected: {
+      borderColor:
+        COLORS.primary,
+      borderWidth: 2,
+      backgroundColor:
+        '#F0FDF4',
+    },
+
+    courtIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      backgroundColor:
+        COLORS.primaryLight,
+      marginBottom: 10,
+    },
+
+    courtIconText: {
+      fontSize: 20,
     },
 
     courtName: {
-      fontSize: 14,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
+      fontSize: 16,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
     },
 
-    sportPill: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
-      backgroundColor: COLORS.white,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 10,
+    courtNameSelected: {
+      color:
+        COLORS.primaryDark,
     },
 
-    sportPillSelected: {
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      borderColor: 'rgba(255,255,255,0.35)',
+    courtSport: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 4,
     },
 
-    sportPillText: {
-      fontSize: 10,
-      color: COLORS.primaryDark,
-      fontWeight: '800',
-      letterSpacing: 0.4,
-    },
-
-    sportPillTextSelected: {
-      color: COLORS.white,
+    courtSportSelected: {
+      color:
+        COLORS.primaryDark,
     },
 
     courtPrice: {
       fontSize: 14,
-      color: COLORS.primaryDark,
-      fontWeight: '900',
+      color:
+        COLORS.text,
+      fontWeight:
+        '700',
       marginTop: 10,
+    },
+
+    courtPriceSelected: {
+      color:
+        COLORS.primaryDark,
     },
 
     courtNightPrice: {
       fontSize: 12,
-      color: COLORS.night,
-      fontWeight: '700',
+      color:
+        COLORS.purple,
+      fontWeight:
+        '700',
       marginTop: 5,
     },
 
-    selectedCourtText: {
-      color: COLORS.white,
-    },
-
-    nightPill: {
-      alignSelf: 'flex-start',
-      marginTop: 8,
-      backgroundColor: COLORS.nightLight,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-    },
-
-    nightPillSelected: {
-      backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-
-    nightPillText: {
-      fontSize: 10,
-      color: COLORS.night,
-      fontWeight: '800',
-      letterSpacing: 0.3,
-    },
-
-    nightPillTextSelected: {
-      color: COLORS.white,
-    },
-
-    selectedCheck: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: COLORS.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10,
-    },
-
-    selectedCheckText: {
-      color: COLORS.primaryDark,
-      fontSize: 13,
-      fontWeight: '900',
-    },
-
-    /* PRICING CARD */
-
     pricingCard: {
-      backgroundColor: COLORS.white,
-      marginTop: 10,
-      padding: 18,
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: COLORS.borderLight,
+      backgroundColor:
+        COLORS.white,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
     },
 
     pricingHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-
-    pricingHeaderLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-
-    pricingIconCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: COLORS.primarySoft,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-
-    pricingIcon: {
-      fontSize: 20,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
     },
 
     pricingTitle: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
+      fontSize: 17,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
     },
 
     pricingSport: {
-      fontSize: 11,
-      color: COLORS.textMuted,
-      marginTop: 2,
-      fontWeight: '600',
-    },
-
-    pricingRows: {
-      marginTop: 14,
-    },
-
-    pricingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 9,
-      borderTopWidth: 1,
-      borderTopColor: COLORS.border,
-    },
-
-    pricingRowLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
-    },
-
-    pricingRowLabel: {
       fontSize: 13,
-      color: COLORS.textSecondary,
-      fontWeight: '700',
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
     },
 
-    pricingRowPrice: {
+    pricingNormal: {
+      fontSize: 16,
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+    },
+
+    nightPricingBox: {
+      marginTop: 14,
+      backgroundColor:
+        COLORS.purpleLight,
+      borderRadius: 12,
+      padding: 13,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+    },
+
+    nightPricingTitle: {
       fontSize: 14,
-      color: COLORS.primaryDark,
-      fontWeight: '900',
+      fontWeight:
+        '800',
+      color:
+        COLORS.purple,
     },
 
-    nightLabelContainer: {
-      flex: 1,
+    nightPricingTime: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
     },
 
-    nightTimeText: {
-      fontSize: 10,
-      color: COLORS.night,
-      marginTop: 2,
-      fontWeight: '600',
-    },
-
-    nightPriceValue: {
+    nightPricingAmount: {
       fontSize: 14,
-      color: COLORS.night,
-      fontWeight: '900',
+      fontWeight:
+        '800',
+      color:
+        COLORS.purple,
     },
-
-    /* AMENITIES */
 
     amenitiesContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+      flexDirection:
+        'row',
+      flexWrap:
+        'wrap',
+      paddingHorizontal: 16,
+      paddingTop: 12,
       gap: 8,
     },
 
     amenityChip: {
-      backgroundColor: COLORS.primarySoft,
+      backgroundColor:
+        COLORS.primaryLight,
       borderRadius: 20,
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
     },
 
     amenityText: {
-      color: COLORS.primaryDark,
+      color:
+        COLORS.primaryDark,
       fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.2,
+      fontWeight:
+        '700',
     },
 
-    /* DATE */
-
-    dateScrollContent: {
-      paddingRight: 4,
+    dateScroll: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
     },
 
     dateCard: {
-      width: 78,
+      width: 72,
       minHeight: 92,
-      borderRadius: 16,
-      backgroundColor: COLORS.primarySoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 9,
-      paddingVertical: 10,
-      borderWidth: 1.5,
-      borderColor: COLORS.borderLight,
+      backgroundColor:
+        COLORS.white,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      marginRight: 10,
     },
 
-    selectedDateCard: {
-      backgroundColor: COLORS.primary,
-      borderColor: COLORS.primary,
-      shadowColor: COLORS.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.28,
-      shadowRadius: 8,
-      elevation: 4,
+    dateCardSelected: {
+      backgroundColor:
+        COLORS.primary,
+      borderColor:
+        COLORS.primary,
     },
 
-    closedDateCard: {
-      backgroundColor: COLORS.cardSoft,
-      borderColor: COLORS.border,
-      opacity: 0.7,
+    dateCardHasSelection: {
+      borderColor:
+        COLORS.primary,
+      borderWidth: 2,
+      backgroundColor:
+        '#F0FDF4',
+    },
+
+    dateSelectionBadge: {
+      position:
+        'absolute',
+      top: 5,
+      right: 5,
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor:
+        COLORS.primary,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      paddingHorizontal: 4,
+      zIndex: 5,
+    },
+
+    dateSelectionBadgeActive: {
+      backgroundColor:
+        COLORS.white,
+    },
+
+    dateSelectionBadgeText: {
+      fontSize: 10,
+      fontWeight:
+        '900',
+      color:
+        COLORS.white,
+    },
+
+    dateCardClosed: {
+      opacity: 0.55,
     },
 
     dateDay: {
-      fontSize: 11,
-      color: COLORS.textMuted,
-      fontWeight: '700',
-      letterSpacing: 0.3,
+      fontSize: 12,
+      fontWeight:
+        '700',
+      color:
+        COLORS.textSecondary,
     },
 
     dateNumber: {
-      fontSize: 22,
-      color: COLORS.textPrimary,
-      fontWeight: '900',
-      marginVertical: 3,
+      fontSize: 24,
+      fontWeight:
+        '900',
+      color:
+        COLORS.text,
+      marginTop: 3,
     },
 
     dateMonth: {
-      fontSize: 10,
-      color: COLORS.textMuted,
-      fontWeight: '600',
-    },
-
-    selectedDateTextWhite: {
-      color: COLORS.white,
-    },
-
-    closedDateText: {
-      color: COLORS.textMuted,
-    },
-
-    closedLabel: {
-      fontSize: 8,
-      color: COLORS.danger,
-      fontWeight: '900',
-      marginTop: 3,
-      letterSpacing: 0.5,
-    },
-
-    closedLabelSelected: {
-      color: COLORS.white,
-    },
-
-    /* PRICE LEGEND */
-
-    priceLegend: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 14,
-      gap: 16,
-    },
-
-    priceLegendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-
-    normalDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: COLORS.primary,
-      marginRight: 6,
-    },
-
-    nightDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: COLORS.night,
-      marginRight: 6,
-    },
-
-    priceLegendText: {
       fontSize: 11,
-      color: COLORS.textSecondary,
-      fontWeight: '700',
-      letterSpacing: 0.2,
+      color:
+        COLORS.textSecondary,
     },
 
-    /* CURRENT TIME */
+    dateTextSelected: {
+      color:
+        COLORS.white,
+    },
 
-    currentTimeBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: COLORS.primarySoft,
-      borderWidth: 1,
-      borderColor: COLORS.borderSoft,
-      borderRadius: 14,
+    closedText: {
+      fontSize: 9,
+      color:
+        COLORS.red,
+      fontWeight:
+        '800',
+      marginTop: 3,
+    },
+
+    selectedDateText: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 0,
+    },
+
+    activeDateInfo: {
+      marginHorizontal: 16,
+      marginTop: 12,
       padding: 12,
-      marginBottom: 14,
-    },
-
-    currentTimeIconCircle: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      backgroundColor: COLORS.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 10,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.white,
       borderWidth: 1,
-      borderColor: COLORS.borderLight,
+      borderColor:
+        COLORS.border,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
     },
 
-    currentTimeIcon: {
-      fontSize: 16,
-    },
-
-    currentTimeInfo: {
-      flex: 1,
-    },
-
-    currentTimeTitle: {
-      fontSize: 10,
-      color: COLORS.textMuted,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-    },
-
-    currentTimeValue: {
-      fontSize: 14,
-      color: COLORS.primaryDark,
-      fontWeight: '900',
+    activeDateValue: {
+      fontSize: 15,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
       marginTop: 2,
     },
 
-    pastHint: {
-      fontSize: 9,
-      color: COLORS.textMuted,
-      textAlign: 'right',
-      fontWeight: '600',
-      maxWidth: 90,
-    },
-
-    /* SLOT INSTRUCTION */
-
-    slotInstruction: {
+    activeDateSlotCount: {
       fontSize: 12,
-      color: COLORS.textMuted,
-      marginBottom: 12,
-      lineHeight: 18,
-      fontWeight: '500',
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+      backgroundColor:
+        COLORS.primaryLight,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius: 10,
     },
 
-    /* SLOT GRID */
+    dateBookedLabel: {
+      fontSize: 9,
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+      marginTop: 3,
+    },
 
-    slotsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
+    dateBookedLabelActive: {
+      color:
+        COLORS.white,
+    },
+
+    slotHeader: {
+      marginTop: 20,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+      paddingRight: 16,
+    },
+
+    slotSubtitle: {
+      marginHorizontal: 16,
+      marginTop: 4,
+      color:
+        COLORS.textSecondary,
+      fontSize: 12,
+    },
+
+    twentyFourHourBanner: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor:
+        COLORS.primaryLight,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      borderWidth: 1,
+      borderColor:
+        '#BBF7D0',
+    },
+
+    twentyFourHourIcon: {
+      fontSize: 25,
+      marginRight: 10,
+    },
+
+    twentyFourHourContent: {
+      flex: 1,
+    },
+
+    twentyFourHourTitle: {
+      fontSize: 14,
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+    },
+
+    twentyFourHourText: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
+    },
+
+    currentTimeBanner: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.blueLight,
+    },
+
+    currentTimeText: {
+      fontSize: 13,
+      fontWeight:
+        '800',
+      color:
+        COLORS.blue,
+    },
+
+    currentTimeHint: {
+      fontSize: 11,
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
+    },
+
+    slotGrid: {
+      flexDirection:
+        'row',
+      flexWrap:
+        'wrap',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      gap: 10,
     },
 
     slotCard: {
-      width: '48%',
-      minHeight: 118,
-      borderRadius: 16,
-      borderWidth: 1.5,
-      borderColor: COLORS.borderSoft,
-      backgroundColor: COLORS.primarySoft,
-      padding: 12,
-      marginBottom: 10,
-      position: 'relative',
-      overflow: 'hidden',
+      width: '31%',
+      minHeight: 110,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      backgroundColor:
+        COLORS.white,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      padding: 8,
+      position:
+        'relative',
+      overflow:
+        'hidden',
     },
 
-    nightSlotCard: {
-      backgroundColor: COLORS.nightSoft,
-      borderColor: COLORS.nightBorder,
+    slotCardSelected: {
+      backgroundColor:
+        COLORS.primary,
+      borderColor:
+        COLORS.primary,
     },
 
-    nightBadge: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      backgroundColor: COLORS.nightLight,
-      borderRadius: 8,
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-      zIndex: 5,
-    },
-
-    nightBadgeText: {
-      fontSize: 8,
-      fontWeight: '900',
-      color: COLORS.night,
-      letterSpacing: 0.5,
-    },
-
-    pastSlotCard: {
-      backgroundColor: COLORS.cardSoft,
-      borderColor: COLORS.border,
-      opacity: 0.6,
-    },
-
-    pastSlotText: {
-      color: COLORS.textMuted,
-    },
-
-    pastSlotStatus: {
-      color: COLORS.textMuted,
-    },
-
-    pastOverlay: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      backgroundColor: COLORS.border,
-      borderRadius: 8,
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-      zIndex: 5,
-    },
-
-    pastOverlayText: {
-      fontSize: 8,
-      fontWeight: '900',
-      color: COLORS.textMuted,
-      letterSpacing: 0.5,
-    },
-
-    bookedSlotCard: {
-      backgroundColor: COLORS.cardSoft,
-      borderColor: COLORS.border,
-      opacity: 0.7,
-    },
-
-    bookedOverlay: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      backgroundColor: COLORS.dangerSoft,
-      borderRadius: 8,
-      paddingHorizontal: 7,
-      paddingVertical: 3,
-      zIndex: 5,
-    },
-
-    bookedOverlayText: {
-      fontSize: 8,
-      fontWeight: '900',
-      color: COLORS.dangerText,
-      letterSpacing: 0.5,
-    },
-
-    bookedSlotText: {
-      color: COLORS.textMuted,
-    },
-
-    selectedSlotCard: {
-      backgroundColor: COLORS.primary,
-      borderColor: COLORS.primary,
-      opacity: 1,
-      shadowColor: COLORS.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 5,
-    },
-
-    slotSelectedCheck: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: COLORS.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10,
-    },
-
-    slotSelectedCheckText: {
-      color: COLORS.primaryDark,
-      fontSize: 14,
-      fontWeight: '900',
+    slotCardDisabled: {
+      backgroundColor:
+        '#F3F4F6',
+      borderColor:
+        '#E5E7EB',
     },
 
     slotTime: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: COLORS.primaryDark,
-      letterSpacing: 0.2,
+      fontSize: 14,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
     },
 
-    slotTimeNight: {
-      color: COLORS.night,
+    slotTimeSelected: {
+      color:
+        COLORS.white,
+    },
+
+    slotTimeDisabled: {
+      color:
+        COLORS.textLight,
     },
 
     slotEndTime: {
-      fontSize: 11,
-      color: COLORS.textSecondary,
+      fontSize: 10,
+      color:
+        COLORS.textSecondary,
       marginTop: 2,
-      fontWeight: '600',
+    },
+
+    slotEndTimeSelected: {
+      color:
+        COLORS.white,
     },
 
     slotPrice: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      marginTop: 10,
-    },
-
-    slotPriceNight: {
-      color: COLORS.night,
-    },
-
-    slotStatus: {
-      fontSize: 11,
-      color: COLORS.primaryDark,
-      fontWeight: '800',
-      marginTop: 4,
-      letterSpacing: 0.2,
-    },
-
-    slotStatusNight: {
-      color: COLORS.night,
-    },
-
-    selectedSlotText: {
-      color: COLORS.white,
-    },
-
-    /* SELECTED SUMMARY */
-
-    selectedSummarySection: {
-      backgroundColor: COLORS.white,
-      marginTop: 10,
-      padding: 18,
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: COLORS.borderLight,
-    },
-
-    selectedSummaryHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 14,
-    },
-
-    selectedSummaryTitle: {
-      fontSize: 17,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-    },
-
-    selectedSummarySubtitle: {
       fontSize: 12,
-      color: COLORS.textMuted,
-      marginTop: 2,
-      fontWeight: '600',
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+      marginTop: 8,
     },
 
-    clearText: {
-      color: COLORS.dangerText,
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1,
+    slotPriceSelected: {
+      color:
+        COLORS.white,
     },
 
-    selectedSlotRow: {
-      minHeight: 56,
-      borderRadius: 12,
-      backgroundColor: COLORS.primaryFaint,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      marginBottom: 8,
-      paddingHorizontal: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+    nightBadge: {
+      backgroundColor:
+        COLORS.purpleLight,
+      paddingHorizontal: 5,
+      paddingVertical: 3,
+      borderRadius: 5,
+      marginTop: 5,
     },
 
-    selectedSlotRowLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flex: 1,
+    nightBadgeText: {
+      fontSize: 7,
+      fontWeight:
+        '900',
+      color:
+        COLORS.purple,
     },
 
-    selectedSlotBullet: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: COLORS.primary,
-      marginRight: 9,
+    selectedCheck: {
+      position:
+        'absolute',
+      top: 5,
+      right: 5,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor:
+        COLORS.white,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
-    selectedNightBullet: {
-      backgroundColor: COLORS.night,
-    },
-
-    selectedSlotRowTime: {
+    selectedCheckText: {
       fontSize: 13,
-      fontWeight: '800',
-      color: COLORS.textPrimary,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primary,
     },
 
-    selectedNightText: {
-      fontSize: 9,
-      color: COLORS.night,
-      fontWeight: '800',
-      marginTop: 2,
-      letterSpacing: 0.3,
+    /*
+      Full BOOKED / PAST overlay.
+    */
+    slotOverlay: {
+      // ...StyleSheet.absoluteFillObject,
+      backgroundColor:
+        'rgba(255,255,255,0.78)',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      zIndex: 20,
     },
 
-    selectedSlotRowRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
+    slotUnavailableText: {
+      fontSize: 10,
+      fontWeight:
+        '900',
+      color:
+        COLORS.red,
     },
-
-    selectedSlotRowPrice: {
-      fontSize: 13,
-      fontWeight: '900',
-      color: COLORS.primaryDark,
-      marginRight: 10,
-    },
-
-    removeButton: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: COLORS.dangerSoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: COLORS.dangerBorder,
-    },
-
-    removeSlotText: {
-      fontSize: 18,
-      lineHeight: 20,
-      color: COLORS.dangerText,
-      fontWeight: '700',
-      marginTop: -2,
-    },
-
-    totalDivider: {
-      height: 1,
-      backgroundColor: COLORS.borderLight,
-      marginTop: 6,
-      marginBottom: 14,
-    },
-
-    totalRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-
-    totalLabel: {
-      fontSize: 14,
-      fontWeight: '800',
-      color: COLORS.textSecondary,
-      letterSpacing: 0.3,
-    },
-
-    totalAmount: {
-      fontSize: 22,
-      fontWeight: '900',
-      color: COLORS.primaryDark,
-      letterSpacing: 0.2,
-    },
-
-    /* LOCATION */
-
-    locationCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: COLORS.primaryFaint,
-      borderRadius: 14,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-    },
-
-    locationIconCircle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: COLORS.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-    },
-
-    locationCardIcon: {
-      fontSize: 18,
-    },
-
-    locationCardTitle: {
-      fontSize: 14,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
-    },
-
-    locationCardText: {
-      fontSize: 12,
-      color: COLORS.textSecondary,
-      marginTop: 4,
-      fontWeight: '500',
-    },
-
-    /* EMPTY / ERROR / LOADING */
 
     loadingContainer: {
-      paddingVertical: 28,
-      alignItems: 'center',
-      justifyContent: 'center',
+      minHeight: 150,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
     },
 
     loadingText: {
+      fontSize: 13,
+      color:
+        COLORS.textSecondary,
       marginTop: 10,
-      fontSize: 12,
-      color: COLORS.textMuted,
-      fontWeight: '600',
-      letterSpacing: 0.3,
     },
 
-    emptyBox: {
-      alignItems: 'center',
-      paddingVertical: 26,
-      backgroundColor: COLORS.primaryFaint,
-      borderRadius: 16,
+    errorCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor:
+        COLORS.redLight,
       borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      paddingHorizontal: 20,
+      borderColor:
+        '#FECACA',
     },
 
-    emptyIconCircle: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: COLORS.white,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-    },
-
-    emptyIcon: {
-      fontSize: 26,
-    },
-
-    emptyTitle: {
-      fontSize: 15,
-      fontWeight: '800',
-      color: COLORS.textPrimary,
-      letterSpacing: 0.2,
-    },
-
-    emptyText: {
-      fontSize: 12,
-      color: COLORS.textMuted,
-      marginTop: 6,
-      textAlign: 'center',
-      lineHeight: 18,
+    errorTitle: {
+      fontSize: 14,
+      fontWeight:
+        '800',
+      color:
+        COLORS.red,
     },
 
     errorText: {
-      color: COLORS.dangerText,
-      fontSize: 13,
-      textAlign: 'center',
-      fontWeight: '600',
-      marginBottom: 12,
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 5,
     },
 
     retryButton: {
-      marginTop: 4,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 22,
-      backgroundColor: COLORS.danger,
+      alignSelf:
+        'flex-start',
+      marginTop: 10,
+      backgroundColor:
+        COLORS.red,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 8,
     },
 
     retryButtonText: {
-      color: COLORS.white,
+      color:
+        COLORS.white,
       fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1,
+      fontWeight:
+        '800',
     },
 
-    /* BOTTOM BOOKING BAR */
-
-    bottomContainer: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      minHeight: 86,
-      backgroundColor: COLORS.white,
-      borderTopWidth: 1,
-      borderTopColor: COLORS.border,
-      paddingHorizontal: 18,
-      paddingVertical: 12,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      elevation: 10,
+    closedCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      backgroundColor:
+        COLORS.redLight,
+      borderRadius: 16,
+      padding: 20,
+      alignItems:
+        'center',
     },
 
-    bottomInfo: {
-      flex: 1,
-      paddingRight: 10,
+    closedIcon: {
+      fontSize: 28,
     },
 
-    bottomLabel: {
-      fontSize: 10,
-      color: COLORS.textMuted,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-    },
-
-    bottomPrice: {
-      fontSize: 20,
-      fontWeight: '900',
-      color: COLORS.primaryDark,
-      marginTop: 3,
-      letterSpacing: 0.2,
-    },
-
-    bottomTime: {
-      fontSize: 10,
-      color: COLORS.textSecondary,
-      marginTop: 3,
-      fontWeight: '600',
-    },
-
-    bookButton: {
-      backgroundColor: COLORS.primary,
-      borderRadius: 14,
-      paddingHorizontal: 24,
-      paddingVertical: 15,
-      shadowColor: COLORS.primary,
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.32,
-      shadowRadius: 10,
-      elevation: 5,
-    },
-
-    disabledBookButton: {
-      backgroundColor: COLORS.disabled,
-      shadowOpacity: 0,
-      elevation: 0,
-    },
-
-    bookButtonText: {
-      color: COLORS.white,
-      fontSize: 13,
-      fontWeight: '900',
-      letterSpacing: 1,
-    },
-
-    /* NO TURF */
-
-    noTurfContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 30,
-    },
-
-    noTurfIconCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: COLORS.primarySoft,
-      borderWidth: 1,
-      borderColor: COLORS.borderLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 14,
-    },
-
-    noTurfIcon: {
-      fontSize: 40,
-    },
-
-    noTurfTitle: {
+    closedTitle: {
       fontSize: 18,
-      fontWeight: '900',
-      color: COLORS.textPrimary,
-      textAlign: 'center',
-      letterSpacing: 0.2,
+      fontWeight:
+        '800',
+      color:
+        COLORS.red,
+      marginTop: 8,
     },
 
-    noTurfText: {
+    closedDescription: {
       fontSize: 13,
-      color: COLORS.textMuted,
-      textAlign: 'center',
-      marginTop: 6,
-      lineHeight: 19,
+      color:
+        COLORS.textSecondary,
+      marginTop: 5,
+      textAlign:
+        'center',
+    },
+
+    noSlotsCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 18,
+      borderRadius: 14,
+      backgroundColor:
+        COLORS.white,
+      alignItems:
+        'center',
+    },
+
+    noSlotsTitle: {
+      fontSize: 16,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
+    },
+
+    noSlotsText: {
+      fontSize: 13,
+      color:
+        COLORS.textSecondary,
+      marginTop: 5,
+      textAlign:
+        'center',
+    },
+
+    selectedCard: {
+      marginHorizontal: 16,
+      marginTop: 20,
+      backgroundColor:
+        COLORS.white,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor:
+        COLORS.primaryLight,
+    },
+
+    selectedDateGroup: {
+      marginTop: 10,
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.border,
+      paddingTop: 8,
+    },
+
+    selectedDateGroupHeader: {
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+      paddingVertical: 5,
+    },
+
+    selectedDateGroupTitle: {
+      fontSize: 14,
+      fontWeight:
+        '800',
+      color:
+        COLORS.primaryDark,
+    },
+
+    clearDateText: {
+      fontSize: 11,
+      fontWeight:
+        '800',
+      color:
+        COLORS.red,
+    },
+
+    selectedSlotInfo: {
+      flex: 1,
+    },
+
+    selectedHeader: {
+      flexDirection:
+        'row',
+      justifyContent:
+        'space-between',
+      alignItems:
+        'center',
+      marginBottom: 12,
+    },
+
+    selectedTitle: {
+      fontSize: 17,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
+    },
+
+    selectedSubtitle: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
+    },
+
+    selectedTotal: {
+      fontSize: 18,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primaryDark,
+    },
+
+    selectedSlotRow: {
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.border,
+      paddingVertical: 12,
+    },
+
+    selectedSlotTime: {
+      fontSize: 14,
+      fontWeight:
+        '700',
+      color:
+        COLORS.text,
+    },
+
+    selectedSlotPrice: {
+      fontSize: 12,
+      color:
+        COLORS.textSecondary,
+      marginTop: 3,
+    },
+
+    removeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor:
+        COLORS.redLight,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    removeButtonText: {
+      fontSize: 22,
+      color:
+        COLORS.red,
+      lineHeight: 25,
+    },
+
+    locationCard: {
+      marginHorizontal: 16,
+      marginTop: 20,
+      backgroundColor:
+        COLORS.white,
+      borderRadius: 16,
+      padding: 16,
+    },
+
+    locationTitle: {
+      fontSize: 17,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
+    },
+
+    locationText: {
+      fontSize: 14,
+      color:
+        COLORS.textSecondary,
+      marginTop: 10,
+      lineHeight: 20,
+    },
+
+    locationCity: {
+      fontSize: 13,
+      color:
+        COLORS.primary,
+      fontWeight:
+        '700',
+      marginTop: 5,
+    },
+
+    bottomSpacing: {
+      height: 30,
+    },
+
+    emptyContainer: {
+      flex: 1,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    emptyTitle: {
+      fontSize: 22,
+      fontWeight:
+        '800',
+      color:
+        COLORS.text,
     },
 
     backButtonLarge: {
-      marginTop: 22,
-      backgroundColor: COLORS.primary,
-      borderRadius: 12,
+      marginTop: 20,
+      backgroundColor:
+        COLORS.primary,
       paddingHorizontal: 24,
-      paddingVertical: 13,
-      shadowColor: COLORS.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 4,
+      paddingVertical: 12,
+      borderRadius: 10,
     },
 
     backButtonLargeText: {
-      color: COLORS.white,
-      fontWeight: '900',
+      color:
+        COLORS.white,
+      fontWeight:
+        '800',
+    },
+
+    bookingBar: {
+      backgroundColor:
+        COLORS.white,
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.border,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 10,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      gap: 12,
+    },
+
+    bookingSummary: {
+      flex: 1,
+    },
+
+    bookingCount: {
+      fontSize: 11,
+      fontWeight:
+        '700',
+      color:
+        COLORS.textSecondary,
+    },
+
+    bookingTime: {
       fontSize: 12,
-      letterSpacing: 1.2,
+      fontWeight:
+        '700',
+      color:
+        COLORS.text,
+      marginTop: 2,
+    },
+
+    bookingTotal: {
+      fontSize: 18,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primaryDark,
+      marginTop: 2,
+    },
+
+    continueButton: {
+      minWidth: 135,
+      height: 52,
+      borderRadius: 13,
+      backgroundColor:
+        COLORS.primary,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      paddingHorizontal: 14,
+    },
+
+    continueButtonDisabled: {
+      backgroundColor:
+        '#A7F3D0',
+    },
+
+    continueButtonText: {
+      color:
+        COLORS.white,
+      fontSize: 13,
+      fontWeight:
+        '900',
+    },
+
+    continueArrow: {
+      color:
+        COLORS.white,
+      fontSize: 20,
+      marginLeft: 7,
     },
   });
 
-  export default TurfDetailsScreen;
+export default TurfDetailsScreen;

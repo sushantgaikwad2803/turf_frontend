@@ -25,48 +25,67 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import Constants from 'expo-constants';
-
 import { SavedTurfsScreen } from './SavedTurfsScreen';
 import { NotificationsScreen } from './NotificationsScreen';
 import { OwnerProfileScreen } from './OwnerProfileScreen';
-import { CustomerProfileScreen } from './CustomerProfileScreen';
+import  CustomerProfileScreen  from './CustomerProfileScreen';
 import OwnerDashboardScreen from './OwnerDashboardScreen';
 
 /* =========================================================
    API
 ========================================================= */
 
-const FALLBACK_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-const API_PORT = 5000;
-
-/*
- * React Native's "Fetch failed" / "Network request failed" usually means
- * the phone cannot reach the backend. In Expo development, use the same
- * LAN host that Expo is running on instead of hard-coding the computer IP.
+/**
+ * The backend URL comes ONLY from EXPO_PUBLIC_API_URL.
+ * No local IP address, no port 5000, and no Expo hostUri are used here.
+ *
+ * Valid .env example:
+ * EXPO_PUBLIC_API_URL=https://turfbackend-production-a87e.up.railway.app/api
  */
 const getApiBaseUrl = (): string => {
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    Constants.manifest2?.extra?.expoClient?.hostUri ||
-    '';
+  const rawValue = process.env.EXPO_PUBLIC_API_URL;
 
-  const host = String(hostUri).split(':')[0].trim();
-
-  // Never use localhost/127.0.0.1 from a physical device.
-  if (
-    host &&
-    host !== 'localhost' &&
-    host !== '127.0.0.1' &&
-    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)
-  ) {
-    return `http://${host}:${API_PORT}/api`;
+  if (!rawValue || !rawValue.trim()) {
+    throw new Error(
+      'EXPO_PUBLIC_API_URL is missing. Add it to your .env file and restart Expo.',
+    );
   }
 
-  return FALLBACK_API_BASE_URL;
+  let url = rawValue.trim();
+
+  // Remove accidental surrounding quotes from .env values.
+  url = url.replace(/^[\"']|[\"']$/g, '');
+
+  // Remove trailing slash(es) so endpoints are joined consistently.
+  url = url.replace(/\/+$/, '');
+
+  // React Native fetch requires an absolute URL with a protocol.
+  // If the .env value does not contain one, default to HTTPS for Railway.
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  // Prevent accidental values such as "https://" from reaching fetch().
+  if (!/^https?:\/\/[^\s/]+/i.test(url)) {
+    throw new Error(
+      `Invalid EXPO_PUBLIC_API_URL: ${url}. Expected a URL such as https://your-backend.up.railway.app/api`,
+    );
+  }
+
+  return url;
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+/**
+ * Build every API endpoint from the single normalized base URL.
+ */
+const getApiUrl = (path: string): string => {
+  const cleanPath = path.replace(/^\/+/, '');
+  return `${API_BASE_URL}/${cleanPath}`;
+};
+
+// console.log('TurfBook API base URL:', API_BASE_URL);
 
 
 /* =========================================================
@@ -478,11 +497,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         if (showLoader) setLoading(true);
         setErrorMessage(null);
 
-        const apiUrl = `${API_BASE_URL}/turfs`;
+        const apiUrl = getApiUrl('turfs');
 
-        console.log('========================================');
-        console.log('TurfBook API request:', apiUrl);
-        console.log('========================================');
+        // console.log('========================================');
+        // console.log('TurfBook API request:', apiUrl);
+        // console.log('========================================');
 
         const controller = new AbortController();
 
@@ -497,31 +516,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             method: 'GET',
             headers: {
               Accept: 'application/json',
-              'Content-Type': 'application/json',
             },
             signal: controller.signal,
           });
         } catch (networkError) {
+          const errorText =
+            networkError instanceof Error
+              ? networkError.message
+              : String(networkError);
+
           const isAbort =
             networkError instanceof Error &&
             (networkError.name === 'AbortError' ||
-              networkError.message.toLowerCase().includes('abort'));
+              errorText.toLowerCase().includes('abort'));
 
           if (isAbort) {
             throw new Error(
-              `Request timed out after 15 seconds. Make sure your phone and computer are on the same Wi-Fi network and the backend is running on port ${API_PORT}.`,
+              `Request timed out while connecting to ${apiUrl}. Check that the Railway backend is running and the URL is correct.`,
+            );
+          }
+
+          if (errorText.toLowerCase().includes('malformedurlexception') ||
+              errorText.toLowerCase().includes('no protocol')) {
+            throw new Error(
+              `Invalid backend URL: ${apiUrl}. EXPO_PUBLIC_API_URL must be a complete URL such as https://your-backend.up.railway.app/api.`,
             );
           }
 
           throw new Error(
-            `Cannot connect to the backend at ${apiUrl}. ` +
-              `Make sure the backend is running on port ${API_PORT}, ` +
-              `the server listens on 0.0.0.0, and Windows Firewall allows port ${API_PORT}. ` +
-              `Original error: ${
-                networkError instanceof Error
-                  ? networkError.message
-                  : 'Network request failed'
-              }`,
+            `Cannot connect to the backend at ${apiUrl}. Original error: ${errorText || 'Network request failed'}`,
           );
         }
 
@@ -547,8 +570,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         }
 
-        console.log('Turf API status:', response.status);
-        console.log('Turf API response:', responseText.slice(0, 500));
+        // console.log('Turf API status:', response.status);
+        // console.log('Turf API response:', responseText.slice(0, 500));
 
         if (!response.ok) {
           const serverMessage =
@@ -578,14 +601,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       } catch (error) {
         console.error('========================================');
         console.error('FETCH TURFS ERROR:', error);
-        console.error('API URL:', `${API_BASE_URL}/turfs`);
+        console.error('API URL:', getApiUrl('turfs'));
         console.error('========================================');
 
         const rawMessage =
           error instanceof Error ? error.message : String(error);
 
         const message = rawMessage.toLowerCase().includes('network request failed')
-          ? `Unable to connect to TurfBook server. Check that your phone and PC are on the same Wi-Fi and that the backend is running at ${API_BASE_URL}.`
+          ? `Unable to connect to TurfBook server at ${getApiUrl('turfs')}. Check your Railway backend and network connection.`
           : rawMessage;
 
         setErrorMessage(message);

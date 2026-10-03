@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,14 +15,19 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+/* =========================================================
+   API
+========================================================= */
+
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? '')
+  .trim()
+  .replace(/\/+$/, '');
 
 /* =========================================================
-   THEME COLORS - WHITE & LIGHT GREEN
+   THEME
 ========================================================= */
 
 const COLORS = {
-  // Primary Greens
   primary: '#22C55E',
   primaryDark: '#16A34A',
   primaryDeep: '#15803D',
@@ -32,33 +37,28 @@ const COLORS = {
   primaryFaint: '#F7FEF9',
   primaryMuted: '#BBF7D0',
 
-  // Accent (warm contrast)
   accent: '#F97316',
   accentLight: '#FFEDD5',
   accentSoft: '#FEF3C7',
   accentText: '#92400E',
 
-  // Neutrals
   bg: '#FFFFFF',
   bgSoft: '#FAFEFB',
   bgMuted: '#F4FBF6',
   card: '#FFFFFF',
   cardSoft: '#F9FDFA',
 
-  // Borders
   border: '#E8F5EC',
   borderLight: '#D1FAE5',
   borderSoft: '#BBF7D0',
   borderDark: '#A7F3D0',
 
-  // Text
   textPrimary: '#0F172A',
   textSecondary: '#475569',
   textMuted: '#94A3B8',
   textLight: '#CBD5E1',
   placeholder: '#94A3B8',
 
-  // Status
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
   dangerBorder: '#FECACA',
@@ -75,10 +75,6 @@ const COLORS = {
   white: '#FFFFFF',
   black: '#000000',
   overlay: 'rgba(15, 23, 42, 0.5)',
-
-  // Shadows
-  shadowColor: '#22C55E',
-  shadowLight: '#DCFCE7',
 };
 
 /* =========================================================
@@ -146,17 +142,52 @@ interface OwnerProfileScreenProps {
 }
 
 /* =========================================================
-   DEFAULT OPERATING HOURS
+   DEFAULT HOURS
 ========================================================= */
 
 const DEFAULT_OPERATING_HOURS: OperatingHour[] = [
-  { day: 'Monday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Tuesday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Wednesday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Thursday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Friday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Saturday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
-  { day: 'Sunday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  {
+    day: 'Monday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Tuesday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Wednesday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Thursday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Friday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Saturday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
+  {
+    day: 'Sunday',
+    openingTime: '06:00',
+    closingTime: '23:00',
+    isClosed: false,
+  },
 ];
 
 /* =========================================================
@@ -166,32 +197,95 @@ const DEFAULT_OPERATING_HOURS: OperatingHour[] = [
 const cloneDefaultHours = (): OperatingHour[] =>
   DEFAULT_OPERATING_HOURS.map((item) => ({ ...item }));
 
+const getErrorMessage = (
+  error: unknown,
+  fallback = 'Something went wrong.',
+): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+};
+
+const buildApiUrl = (path: string): string => {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'API URL is not configured. Please add EXPO_PUBLIC_API_URL to your .env file.',
+    );
+  }
+
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  return `${API_BASE_URL}${cleanPath}`;
+};
+
+const parseApiResponse = async (response: Response): Promise<any> => {
+  const text = await response.text();
+
+  let data: any = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        message: text,
+      };
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message ||
+        data?.error ||
+        `Request failed with status ${response.status}`,
+    );
+  }
+
+  return data;
+};
+
 const timeStringToDate = (time: string): Date => {
-  const [hours, minutes] = time.split(':').map(Number);
+  const [hours, minutes] = String(time || '')
+    .split(':')
+    .map(Number);
+
   const date = new Date();
+
   date.setHours(
     Number.isNaN(hours) ? 6 : hours,
     Number.isNaN(minutes) ? 0 : minutes,
     0,
     0,
   );
+
   return date;
 };
 
 const dateToTimeString = (date: Date): string => {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
+
   return `${hours}:${minutes}`;
 };
 
 const hourToTimeString = (hour?: number): string => {
   const safeHour =
     typeof hour === 'number' && hour >= 0 && hour <= 23 ? hour : 18;
+
   return `${String(safeHour).padStart(2, '0')}:00`;
 };
 
 const timeStringToHour = (time: string): number => {
-  const [hours] = time.split(':').map(Number);
+  const [hours] = String(time || '')
+    .split(':')
+    .map(Number);
+
   return Number.isNaN(hours) ? 0 : hours;
 };
 
@@ -199,21 +293,29 @@ const formatHour = (hour?: number): string => {
   if (typeof hour !== 'number' || hour < 0 || hour > 23) {
     return '--:--';
   }
+
   const suffix = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+
   return `${String(displayHour).padStart(2, '0')}:00 ${suffix}`;
 };
 
 const maskAccountNumber = (accountNumber: string): string => {
-  if (!accountNumber) return 'Not added';
-  if (accountNumber.length <= 4) return accountNumber;
+  if (!accountNumber) {
+    return 'Not added';
+  }
+
+  if (accountNumber.length <= 4) {
+    return accountNumber;
+  }
+
   return `•••• •••• ${accountNumber.slice(-4)}`;
 };
 
 const getTurfStatusColors = (status?: string) => {
-  const clean = (status || 'active').toLowerCase();
+  const cleanStatus = String(status || 'active').toLowerCase();
 
-  switch (clean) {
+  switch (cleanStatus) {
     case 'active':
       return {
         bg: COLORS.primarySoft,
@@ -221,6 +323,7 @@ const getTurfStatusColors = (status?: string) => {
         text: COLORS.primaryDark,
         dot: COLORS.primary,
       };
+
     case 'maintenance':
       return {
         bg: COLORS.warningSoft,
@@ -228,6 +331,8 @@ const getTurfStatusColors = (status?: string) => {
         text: COLORS.warningText,
         dot: COLORS.warning,
       };
+
+    case 'inactive':
     default:
       return {
         bg: COLORS.cardSoft,
@@ -236,6 +341,14 @@ const getTurfStatusColors = (status?: string) => {
         dot: COLORS.textMuted,
       };
   }
+};
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+const normalizePhone = (phone: string): string => {
+  return phone.replace(/\D/g, '');
 };
 
 /* =========================================================
@@ -248,14 +361,20 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   onLogout,
   onNavigateToAddTurf,
 }) => {
-  /* MODALS */
+  /* =======================================================
+     MODALS
+  ======================================================= */
+
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBankModal, setShowBankModal] = useState(false);
   const [showTurfModal, setShowTurfModal] = useState(false);
   const [showCourtModal, setShowCourtModal] = useState(false);
 
-  /* PROFILE */
+  /* =======================================================
+     PROFILE
+  ======================================================= */
+
   const [name, setName] = useState(user.name || '');
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
@@ -263,14 +382,20 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  /* BANK */
+  /* =======================================================
+     BANK
+  ======================================================= */
+
   const [bankDetails, setBankDetails] = useState<BankDetails>({
     accountHolderName: '',
     accountNumber: '',
     ifscCode: '',
   });
 
-  /* TURF */
+  /* =======================================================
+     TURF FORM
+  ======================================================= */
+
   const [turfName, setTurfName] = useState('');
   const [turfDescription, setTurfDescription] = useState('');
   const [turfAddress, setTurfAddress] = useState('');
@@ -280,7 +405,10 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     cloneDefaultHours(),
   );
 
-  /* COURT */
+  /* =======================================================
+     COURT FORM
+  ======================================================= */
+
   const [courtName, setCourtName] = useState('');
   const [courtSport, setCourtSport] = useState('');
   const [courtPrice, setCourtPrice] = useState('');
@@ -291,232 +419,436 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [courtNightStartTime, setCourtNightStartTime] = useState('18:00');
   const [courtNightEndTime, setCourtNightEndTime] = useState('23:00');
 
-  /* DATA */
+  /* =======================================================
+     DATA
+  ======================================================= */
+
   const [turfs, setTurfs] = useState<Turf[]>([]);
   const [turfCourts, setTurfCourts] = useState<Record<string, Court[]>>({});
+
   const [expandedTurfId, setExpandedTurfId] = useState<string | null>(null);
+
   const [selectedTurfId, setSelectedTurfId] = useState<string | null>(null);
   const [selectedTurf, setSelectedTurf] = useState<Turf | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
 
-  /* TIME PICKERS */
+  /* =======================================================
+     TIME PICKERS
+  ======================================================= */
+
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timePickerMode, setTimePickerMode] = useState<'opening' | 'closing'>(
-    'opening',
-  );
+
+  const [timePickerMode, setTimePickerMode] = useState<
+    'opening' | 'closing'
+  >('opening');
+
   const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
     null,
   );
 
   const [showCourtTimePicker, setShowCourtTimePicker] = useState(false);
+
   const [courtTimePickerMode, setCourtTimePickerMode] = useState<
     'nightStart' | 'nightEnd'
   >('nightStart');
 
-  /* LOADING */
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
 
-  /* LOAD USER */
+  const mountedRef = useRef(true);
+
+  /* =======================================================
+     COMPONENT LIFECYCLE
+  ======================================================= */
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     setName(user.name || '');
     setEmail(user.email || '');
     setPhone(user.phone || '');
   }, [user.name, user.email, user.phone]);
 
-  useEffect(() => {
-    fetchOwnerData();
+  /* =======================================================
+     FETCH TURFS
+  ======================================================= */
+
+  const fetchTurfs = useCallback(async () => {
+    const response = await fetch(
+      buildApiUrl(`/owners/${encodeURIComponent(user._id)}/turfs`),
+    );
+
+    const data = await parseApiResponse(response);
+
+    const ownerTurfs = Array.isArray(data?.turfs)
+      ? data.turfs
+      : Array.isArray(data)
+        ? data
+        : [];
+
+    if (mountedRef.current) {
+      setTurfs(ownerTurfs);
+    }
+
+    return ownerTurfs;
   }, [user._id]);
 
-  /* FETCH OWNER DATA */
+  /* =======================================================
+     FETCH BANK DETAILS
+  ======================================================= */
+
+  const fetchBankDetails = useCallback(async () => {
+    const response = await fetch(
+      buildApiUrl(
+        `/owners/${encodeURIComponent(user._id)}/bank-details`,
+      ),
+    );
+
+    const data = await parseApiResponse(response);
+
+    if (!mountedRef.current) {
+      return;
+    }
+
+    if (data) {
+      setBankDetails({
+        accountHolderName: data.accountHolderName || '',
+        accountNumber: data.accountNumber || '',
+        ifscCode: data.ifscCode || '',
+      });
+    } else {
+      setBankDetails({
+        accountHolderName: '',
+        accountNumber: '',
+        ifscCode: '',
+      });
+    }
+  }, [user._id]);
+
+  /* =======================================================
+     FETCH OWNER DATA
+  ======================================================= */
+
   const fetchOwnerData = useCallback(async () => {
     try {
       setFetchingData(true);
-      await Promise.all([fetchTurfs(), fetchBankDetails()]);
+
+      const results = await Promise.allSettled([
+        fetchTurfs(),
+        fetchBankDetails(),
+      ]);
+
+      const failedRequests = results.filter(
+        (result) => result.status === 'rejected',
+      );
+
+      if (failedRequests.length > 0) {
+        const firstError = failedRequests[0];
+
+        if (firstError.status === 'rejected') {
+          console.error(
+            'Owner data request failed:',
+            firstError.reason,
+          );
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch owner data:', error);
-    } finally {
-      setFetchingData(false);
-    }
-  }, [user._id]);
 
-  /* FETCH TURFS */
-  const fetchTurfs = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/owners/${user._id}/turfs`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch turfs.');
+      if (mountedRef.current) {
+        Alert.alert(
+          'Connection Error',
+          getErrorMessage(
+            error,
+            'Unable to load your owner data.',
+          ),
+        );
       }
-
-      const ownerTurfs = data.turfs || data || [];
-      setTurfs(ownerTurfs);
-    } catch (error) {
-      console.error('Failed to fetch turfs:', error);
+    } finally {
+      if (mountedRef.current) {
+        setFetchingData(false);
+      }
     }
-  };
+  }, [fetchTurfs, fetchBankDetails]);
 
-  /* FETCH BANK */
-  const fetchBankDetails = async () => {
+  useEffect(() => {
+    fetchOwnerData();
+  }, [fetchOwnerData]);
+
+  /* =======================================================
+     FETCH COURTS
+  ======================================================= */
+
+  const fetchCourts = useCallback(async (turfId: string) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/owners/${user._id}/bank-details`,
+        buildApiUrl(`/turfs/${encodeURIComponent(turfId)}/courts`),
       );
-      const data = await response.json();
 
-      if (response.ok && data) {
-        setBankDetails({
-          accountHolderName: data.accountHolderName || '',
-          accountNumber: data.accountNumber || '',
-          ifscCode: data.ifscCode || '',
-        });
-      } else {
-        setBankDetails({
-          accountHolderName: '',
-          accountNumber: '',
-          ifscCode: '',
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch bank details:', error);
-    }
-  };
+      const data = await parseApiResponse(response);
 
-  /* FETCH COURTS */
-  const fetchCourts = async (turfId: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/turfs/${turfId}/courts`);
-      const data = await response.json();
+      const courts = Array.isArray(data?.courts)
+        ? data.courts
+        : Array.isArray(data)
+          ? data
+          : [];
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch courts.');
+      if (mountedRef.current) {
+        setTurfCourts((previous) => ({
+          ...previous,
+          [turfId]: courts,
+        }));
       }
 
-      setTurfCourts((previous) => ({
-        ...previous,
-        [turfId]: data.courts || data || [],
-      }));
+      return courts;
     } catch (error) {
       console.error('Failed to fetch courts:', error);
-      Alert.alert('Unable to Load Courts', 'Failed to load courts for this turf.');
-    }
-  };
 
-  /* TOGGLE TURF */
+      Alert.alert(
+        'Unable to Load Courts',
+        getErrorMessage(
+          error,
+          'Failed to load courts for this turf.',
+        ),
+      );
+
+      return [];
+    }
+  }, []);
+
+  /* =======================================================
+     TOGGLE TURF
+  ======================================================= */
+
   const handleToggleTurf = async (turfId: string) => {
     if (expandedTurfId === turfId) {
       setExpandedTurfId(null);
       return;
     }
+
     setExpandedTurfId(turfId);
+
     await fetchCourts(turfId);
   };
 
-  /* UPDATE PROFILE */
+  /* =======================================================
+     UPDATE PROFILE
+  ======================================================= */
+
   const handleUpdateProfile = async () => {
-    if (!name.trim() || !email.trim() || !phone.trim()) {
-      Alert.alert('Missing Information', 'Please fill in all profile fields.');
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedPhone) {
+      Alert.alert(
+        'Missing Information',
+        'Please fill in all profile fields.',
+      );
+      return;
+    }
+
+    if (!validateEmail(trimmedEmail)) {
+      Alert.alert(
+        'Invalid Email',
+        'Please enter a valid email address.',
+      );
+      return;
+    }
+
+    const cleanPhone = normalizePhone(trimmedPhone);
+
+    if (cleanPhone.length < 10) {
+      Alert.alert(
+        'Invalid Phone',
+        'Please enter a valid phone number.',
+      );
       return;
     }
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/users/${user._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-        }),
-      });
 
-      const data = await response.json();
+      const response = await fetch(
+        buildApiUrl(`/users/${encodeURIComponent(user._id)}`),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: trimmedName,
+            email: trimmedEmail,
+            phone: trimmedPhone,
+          }),
+        },
+      );
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update profile.');
+      const data = await parseApiResponse(response);
+
+      const updatedUser = data?.user || data;
+
+      if (updatedUser && mountedRef.current) {
+        onUpdateUser?.(updatedUser);
       }
 
-      const updatedUser = data.user || data;
-      onUpdateUser?.(updatedUser);
       setShowEditProfile(false);
-      Alert.alert('Profile Updated', 'Your profile has been updated successfully.');
-    } catch (error: any) {
-      Alert.alert('Update Failed', error.message || 'Failed to update profile.');
+
+      Alert.alert(
+        'Profile Updated',
+        'Your profile has been updated successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Update Failed',
+        getErrorMessage(
+          error,
+          'Failed to update profile.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  /* CHANGE PASSWORD */
+  /* =======================================================
+     CHANGE PASSWORD
+  ======================================================= */
+
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword) {
-      Alert.alert('Missing Password', 'Please enter your current and new password.');
+    const current = currentPassword.trim();
+    const next = newPassword.trim();
+
+    if (!current || !next) {
+      Alert.alert(
+        'Missing Password',
+        'Please enter your current and new password.',
+      );
       return;
     }
 
-    if (newPassword.length < 6) {
-      Alert.alert('Invalid Password', 'New password must contain at least 6 characters.');
+    if (next.length < 6) {
+      Alert.alert(
+        'Invalid Password',
+        'New password must contain at least 6 characters.',
+      );
+      return;
+    }
+
+    if (current === next) {
+      Alert.alert(
+        'Invalid Password',
+        'New password must be different from your current password.',
+      );
       return;
     }
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/users/${user._id}/password`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
 
-      const data = await response.json();
+      const response = await fetch(
+        buildApiUrl(
+          `/users/${encodeURIComponent(user._id)}/password`,
+        ),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            currentPassword: current,
+            newPassword: next,
+          }),
+        },
+      );
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to change password.');
-      }
+      await parseApiResponse(response);
 
       setCurrentPassword('');
       setNewPassword('');
       setShowPasswordModal(false);
-      Alert.alert('Password Changed', 'Your password has been changed successfully.');
-    } catch (error: any) {
-      Alert.alert('Password Change Failed', error.message || 'Failed to change password.');
+
+      Alert.alert(
+        'Password Changed',
+        'Your password has been changed successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Password Change Failed',
+        getErrorMessage(
+          error,
+          'Failed to change password.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  /* ADD TURF */
+  /* =======================================================
+     ADD TURF NAVIGATION
+  ======================================================= */
+
   const handleAddTurf = () => {
     if (onNavigateToAddTurf) {
       onNavigateToAddTurf();
       return;
     }
-    Alert.alert('Navigation Error', 'Add Turf navigation is not configured.');
+
+    Alert.alert(
+      'Navigation Error',
+      'Add Turf navigation is not configured.',
+    );
   };
 
-  /* EDIT TURF */
+  /* =======================================================
+     EDIT TURF
+  ======================================================= */
+
   const handleEditTurf = (turf: Turf) => {
     setSelectedTurf(turf);
+
     setTurfName(turf.name || '');
     setTurfDescription(turf.description || '');
     setTurfAddress(turf.address || '');
     setTurfCity(turf.city || '');
 
-    if (turf.operatingHours && turf.operatingHours.length > 0) {
+    if (turf.operatingHours?.length) {
       setOperatingHours(
         DEFAULT_OPERATING_HOURS.map((defaultHour) => {
           const existingHour = turf.operatingHours?.find(
-            (hour) => hour.day.toLowerCase() === defaultHour.day.toLowerCase(),
+            (hour) =>
+              hour.day.toLowerCase() ===
+              defaultHour.day.toLowerCase(),
           );
 
-          if (!existingHour) return { ...defaultHour };
+          if (!existingHour) {
+            return { ...defaultHour };
+          }
 
           return {
             day: defaultHour.day,
-            openingTime: existingHour.openingTime || defaultHour.openingTime,
-            closingTime: existingHour.closingTime || defaultHour.closingTime,
-            isClosed: existingHour.isClosed ?? defaultHour.isClosed,
+            openingTime:
+              existingHour.openingTime ||
+              defaultHour.openingTime,
+            closingTime:
+              existingHour.closingTime ||
+              defaultHour.closingTime,
+            isClosed:
+              existingHour.isClosed ??
+              defaultHour.isClosed,
           };
         }),
       );
@@ -527,7 +859,10 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     setShowTurfModal(true);
   };
 
-  /* UPDATE OPERATING HOURS */
+  /* =======================================================
+     UPDATE OPERATING HOUR
+  ======================================================= */
+
   const updateOperatingHour = (
     index: number,
     field: keyof OperatingHour,
@@ -535,155 +870,271 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   ) => {
     setOperatingHours((previous) =>
       previous.map((hour, hourIndex) => {
-        if (hourIndex !== index) return hour;
-        return { ...hour, [field]: value };
+        if (hourIndex !== index) {
+          return hour;
+        }
+
+        return {
+          ...hour,
+          [field]: value,
+        };
       }),
     );
   };
 
-  /* OPEN TURF TIME PICKER */
-  const openTimePicker = (index: number, mode: 'opening' | 'closing') => {
+  /* =======================================================
+     TURF TIME PICKER
+  ======================================================= */
+
+  const openTimePicker = (
+    index: number,
+    mode: 'opening' | 'closing',
+  ) => {
     setSelectedHourIndex(index);
     setTimePickerMode(mode);
     setShowTimePicker(true);
   };
 
-  /* TURF TIME PICKER */
-  const handleTimeChange = (event: any, selectedDate?: Date) => {
+  const handleTimeChange = (
+    event: any,
+    selectedDate?: Date,
+  ) => {
     setShowTimePicker(false);
 
-    if (event?.type === 'dismissed' || !selectedDate || selectedHourIndex === null) {
+    if (
+      event?.type === 'dismissed' ||
+      !selectedDate ||
+      selectedHourIndex === null
+    ) {
       setSelectedHourIndex(null);
       return;
     }
 
     const newTime = dateToTimeString(selectedDate);
-    const field = timePickerMode === 'opening' ? 'openingTime' : 'closingTime';
-    updateOperatingHour(selectedHourIndex, field, newTime);
+
+    const field =
+      timePickerMode === 'opening'
+        ? 'openingTime'
+        : 'closingTime';
+
+    updateOperatingHour(
+      selectedHourIndex,
+      field,
+      newTime,
+    );
+
     setSelectedHourIndex(null);
   };
 
-  /* SAVE TURF */
+  /* =======================================================
+     SAVE TURF
+  ======================================================= */
+
   const handleSaveTurf = async () => {
-    if (!turfName.trim() || !turfAddress.trim() || !turfCity.trim()) {
-      Alert.alert('Missing Information', 'Please fill in turf name, address and city.');
+    const cleanName = turfName.trim();
+    const cleanDescription = turfDescription.trim();
+    const cleanAddress = turfAddress.trim();
+    const cleanCity = turfCity.trim();
+
+    if (!cleanName || !cleanAddress || !cleanCity) {
+      Alert.alert(
+        'Missing Information',
+        'Please fill in turf name, address and city.',
+      );
       return;
     }
 
     for (const hour of operatingHours) {
-      if (hour.isClosed) continue;
+      if (hour.isClosed) {
+        continue;
+      }
 
       if (!hour.openingTime || !hour.closingTime) {
-        Alert.alert('Invalid Hours', `Please select opening and closing time for ${hour.day}.`);
+        Alert.alert(
+          'Invalid Hours',
+          `Please select opening and closing time for ${hour.day}.`,
+        );
         return;
       }
 
-      const opening = timeStringToDate(hour.openingTime).getTime();
-      const closing = timeStringToDate(hour.closingTime).getTime();
+      const opening =
+        timeStringToDate(hour.openingTime).getTime();
+
+      const closing =
+        timeStringToDate(hour.closingTime).getTime();
 
       if (opening >= closing) {
-        Alert.alert('Invalid Hours', `Closing time must be later than opening time on ${hour.day}.`);
+        Alert.alert(
+          'Invalid Hours',
+          `Closing time must be later than opening time on ${hour.day}.`,
+        );
         return;
       }
     }
 
     try {
       setLoading(true);
-      const isEditing = selectedTurf !== null;
-      const method = isEditing ? 'PUT' : 'POST';
-      const url = isEditing
-        ? `${API_BASE_URL}/turfs/${selectedTurf!._id}`
-        : `${API_BASE_URL}/turfs`;
 
-      const payload = {
-        owner: user._id,
-        name: turfName.trim(),
-        description: turfDescription.trim(),
-        address: turfAddress.trim(),
-        city: turfCity.trim(),
-        operatingHours,
-      };
+      const isEditing = Boolean(selectedTurf);
+
+      const url = isEditing
+        ? buildApiUrl(
+            `/turfs/${encodeURIComponent(
+              selectedTurf!._id,
+            )}`,
+          )
+        : buildApiUrl('/turfs');
 
       const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        method: isEditing ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner: user._id,
+          name: cleanName,
+          description: cleanDescription,
+          address: cleanAddress,
+          city: cleanCity,
+          operatingHours,
+        }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to save turf.');
-      }
+      await parseApiResponse(response);
 
       closeTurfModal();
+
       await fetchTurfs();
-      Alert.alert('Success', isEditing ? 'Turf updated successfully.' : 'Turf added successfully.');
-    } catch (error: any) {
-      Alert.alert('Save Failed', error.message || 'Failed to save turf.');
+
+      Alert.alert(
+        'Success',
+        isEditing
+          ? 'Turf updated successfully.'
+          : 'Turf added successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Save Failed',
+        getErrorMessage(
+          error,
+          'Failed to save turf.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  /* CLOSE TURF MODAL */
+  /* =======================================================
+     CLOSE TURF MODAL
+  ======================================================= */
+
   const closeTurfModal = () => {
     setShowTurfModal(false);
+
     setSelectedTurf(null);
+
     setTurfName('');
     setTurfDescription('');
     setTurfAddress('');
     setTurfCity('');
+
     setOperatingHours(cloneDefaultHours());
   };
 
-  /* DELETE TURF */
+  /* =======================================================
+     DELETE TURF
+  ======================================================= */
+
   const handleDeleteTurf = (turf: Turf) => {
     const courtCount = turfCourts[turf._id]?.length;
+
     const courtMessage =
       typeof courtCount === 'number'
-        ? `\n\nThis turf currently has ${courtCount} court${courtCount === 1 ? '' : 's'}.`
+        ? `\n\nThis turf currently has ${courtCount} court${
+            courtCount === 1 ? '' : 's'
+          }.`
         : '';
 
     Alert.alert(
       'Delete Turf',
       `Are you sure you want to permanently delete "${turf.name}"?${courtMessage}\n\nAll courts belonging to this turf will also be deleted.\n\nThis action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Delete Turf',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-              const response = await fetch(`${API_BASE_URL}/turfs/${turf._id}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-              });
 
-              const data = await response.json();
+              const response = await fetch(
+                buildApiUrl(
+                  `/turfs/${encodeURIComponent(turf._id)}`,
+                ),
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                },
+              );
 
-              if (!response.ok) {
-                throw new Error(data.message || 'Failed to delete turf.');
+              const data = await parseApiResponse(response);
+
+              if (!mountedRef.current) {
+                return;
               }
 
-              setTurfs((previous) => previous.filter((item) => item._id !== turf._id));
+              setTurfs((previous) =>
+                previous.filter(
+                  (item) => item._id !== turf._id,
+                ),
+              );
 
               setTurfCourts((previous) => {
                 const updated = { ...previous };
+
                 delete updated[turf._id];
+
                 return updated;
               });
 
-              if (expandedTurfId === turf._id) setExpandedTurfId(null);
-              if (selectedTurf?._id === turf._id) closeTurfModal();
+              if (expandedTurfId === turf._id) {
+                setExpandedTurfId(null);
+              }
 
-              Alert.alert('Turf Deleted', data.message || 'Turf and all its courts were deleted successfully.');
-            } catch (error: any) {
-              console.error('Delete turf error:', error);
-              Alert.alert('Delete Failed', error.message || 'Failed to delete turf.');
+              if (selectedTurf?._id === turf._id) {
+                closeTurfModal();
+              }
+
+              Alert.alert(
+                'Turf Deleted',
+                data?.message ||
+                  'Turf and all its courts were deleted successfully.',
+              );
+            } catch (error) {
+              console.error(
+                'Delete turf error:',
+                error,
+              );
+
+              Alert.alert(
+                'Delete Failed',
+                getErrorMessage(
+                  error,
+                  'Failed to delete turf.',
+                ),
+              );
             } finally {
-              setLoading(false);
+              if (mountedRef.current) {
+                setLoading(false);
+              }
             }
           },
         },
@@ -691,55 +1142,104 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* COURT RESET */
+  /* =======================================================
+     RESET COURT
+  ======================================================= */
+
   const resetCourtForm = () => {
     setCourtName('');
     setCourtSport('');
     setCourtPrice('');
+
     setCourtHasNightPricing(false);
+
     setCourtNightPrice('');
     setCourtNightStartTime('18:00');
     setCourtNightEndTime('23:00');
+
     setSelectedCourt(null);
   };
 
-  /* ADD COURT */
+  /* =======================================================
+     ADD COURT
+  ======================================================= */
+
   const handleAddCourt = (turfId: string) => {
     setSelectedTurfId(turfId);
+
     resetCourtForm();
+
     setShowCourtModal(true);
   };
 
-  /* EDIT COURT */
-  const handleEditCourt = (turfId: string, court: Court) => {
+  /* =======================================================
+     EDIT COURT
+  ======================================================= */
+
+  const handleEditCourt = (
+    turfId: string,
+    court: Court,
+  ) => {
     setSelectedTurfId(turfId);
     setSelectedCourt(court);
+
     setCourtName(court.name || '');
     setCourtSport(court.sport || '');
+
     setCourtPrice(
-      court.pricePerHour !== undefined ? String(court.pricePerHour) : '',
+      court.pricePerHour !== undefined
+        ? String(court.pricePerHour)
+        : '',
     );
-    setCourtHasNightPricing(Boolean(court.hasNightPricing));
+
+    setCourtHasNightPricing(
+      Boolean(court.hasNightPricing),
+    );
+
     setCourtNightPrice(
-      court.nightPricePerHour !== undefined ? String(court.nightPricePerHour) : '',
+      court.nightPricePerHour !== undefined
+        ? String(court.nightPricePerHour)
+        : '',
     );
-    setCourtNightStartTime(hourToTimeString(court.nightStartHour));
-    setCourtNightEndTime(hourToTimeString(court.nightEndHour));
+
+    setCourtNightStartTime(
+      hourToTimeString(court.nightStartHour),
+    );
+
+    setCourtNightEndTime(
+      hourToTimeString(court.nightEndHour),
+    );
+
     setShowCourtModal(true);
   };
 
-  /* OPEN COURT TIME PICKER */
-  const openCourtTimePicker = (mode: 'nightStart' | 'nightEnd') => {
+  /* =======================================================
+     COURT TIME PICKER
+  ======================================================= */
+
+  const openCourtTimePicker = (
+    mode: 'nightStart' | 'nightEnd',
+  ) => {
     setCourtTimePickerMode(mode);
     setShowCourtTimePicker(true);
   };
 
-  /* COURT TIME PICKER */
-  const handleCourtTimeChange = (event: any, selectedDate?: Date) => {
+  const handleCourtTimeChange = (
+    event: any,
+    selectedDate?: Date,
+  ) => {
     setShowCourtTimePicker(false);
-    if (event?.type === 'dismissed' || !selectedDate) return;
 
-    const selectedTime = dateToTimeString(selectedDate);
+    if (
+      event?.type === 'dismissed' ||
+      !selectedDate
+    ) {
+      return;
+    }
+
+    const selectedTime =
+      dateToTimeString(selectedDate);
+
     if (courtTimePickerMode === 'nightStart') {
       setCourtNightStartTime(selectedTime);
     } else {
@@ -747,7 +1247,10 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     }
   };
 
-  /* SAVE COURT */
+  /* =======================================================
+     SAVE COURT
+  ======================================================= */
+
   const handleSaveCourt = async () => {
     if (
       !selectedTurfId ||
@@ -755,14 +1258,20 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       !courtSport.trim() ||
       !courtPrice.trim()
     ) {
-      Alert.alert('Missing Information', 'Please fill all required court fields.');
+      Alert.alert(
+        'Missing Information',
+        'Please fill all required court fields.',
+      );
       return;
     }
 
     const price = Number(courtPrice);
 
-    if (Number.isNaN(price) || price <= 0) {
-      Alert.alert('Invalid Price', 'Base price must be greater than ₹0.');
+    if (!Number.isFinite(price) || price <= 0) {
+      Alert.alert(
+        'Invalid Price',
+        'Base price must be greater than ₹0.',
+      );
       return;
     }
 
@@ -772,33 +1281,53 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
     if (courtHasNightPricing) {
       if (!courtNightPrice.trim()) {
-        Alert.alert('Night Pricing', 'Please enter the night price per hour.');
+        Alert.alert(
+          'Night Pricing',
+          'Please enter the night price per hour.',
+        );
         return;
       }
 
       nightPrice = Number(courtNightPrice);
 
-      if (Number.isNaN(nightPrice) || nightPrice <= 0) {
-        Alert.alert('Invalid Night Price', 'Night price must be greater than ₹0.');
+      if (
+        !Number.isFinite(nightPrice) ||
+        nightPrice <= 0
+      ) {
+        Alert.alert(
+          'Invalid Night Price',
+          'Night price must be greater than ₹0.',
+        );
         return;
       }
 
-      nightStartHour = timeStringToHour(courtNightStartTime);
-      nightEndHour = timeStringToHour(courtNightEndTime);
+      nightStartHour =
+        timeStringToHour(courtNightStartTime);
+
+      nightEndHour =
+        timeStringToHour(courtNightEndTime);
 
       if (nightStartHour === nightEndHour) {
-        Alert.alert('Invalid Night Hours', 'Night start and end time cannot be the same.');
+        Alert.alert(
+          'Invalid Night Hours',
+          'Night start and end time cannot be the same.',
+        );
         return;
       }
     }
 
     try {
       setLoading(true);
-      const isEditing = selectedCourt !== null;
-      const method = isEditing ? 'PUT' : 'POST';
+
+      const isEditing = Boolean(selectedCourt);
+
       const url = isEditing
-        ? `${API_BASE_URL}/courts/${selectedCourt!._id}`
-        : `${API_BASE_URL}/courts`;
+        ? buildApiUrl(
+            `/courts/${encodeURIComponent(
+              selectedCourt!._id,
+            )}`,
+          )
+        : buildApiUrl('/courts');
 
       const payload = {
         turf: selectedTurfId,
@@ -806,79 +1335,132 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
         sport: courtSport.trim(),
         pricePerHour: price,
         hasNightPricing: courtHasNightPricing,
+
         ...(courtHasNightPricing
           ? {
               nightPricePerHour: nightPrice,
-              nightStartHour: nightStartHour,
-              nightEndHour: nightEndHour,
+              nightStartHour,
+              nightEndHour,
             }
           : {}),
       };
 
       const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
+        method: isEditing ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to save court.');
-      }
+      await parseApiResponse(response);
 
       setShowCourtModal(false);
+
       await fetchCourts(selectedTurfId);
+
       resetCourtForm();
-      Alert.alert('Success', isEditing ? 'Court updated successfully.' : 'Court added successfully.');
-    } catch (error: any) {
-      Alert.alert('Save Failed', error.message || 'Failed to save court.');
+
+      Alert.alert(
+        'Success',
+        isEditing
+          ? 'Court updated successfully.'
+          : 'Court added successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Save Failed',
+        getErrorMessage(
+          error,
+          'Failed to save court.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  /* DELETE COURT */
-  const handleDeleteCourt = (turfId: string, court: Court) => {
+  /* =======================================================
+     DELETE COURT
+  ======================================================= */
+
+  const handleDeleteCourt = (
+    turfId: string,
+    court: Court,
+  ) => {
     Alert.alert(
       'Delete Court',
       `Are you sure you want to delete "${court.name}"?\n\nThis action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-              const response = await fetch(`${API_BASE_URL}/courts/${court._id}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-              });
 
-              const data = await response.json();
+              const response = await fetch(
+                buildApiUrl(
+                  `/courts/${encodeURIComponent(
+                    court._id,
+                  )}`,
+                ),
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                },
+              );
 
-              if (!response.ok) {
-                throw new Error(data.message || 'Failed to delete court.');
+              const data =
+                await parseApiResponse(response);
+
+              if (!mountedRef.current) {
+                return;
               }
 
               setTurfCourts((previous) => ({
                 ...previous,
-                [turfId]: (previous[turfId] || []).filter(
-                  (item) => item._id !== court._id,
+                [turfId]: (
+                  previous[turfId] || []
+                ).filter(
+                  (item) =>
+                    item._id !== court._id,
                 ),
               }));
 
-              if (selectedCourt?._id === court._id) {
+              if (
+                selectedCourt?._id ===
+                court._id
+              ) {
                 setSelectedCourt(null);
                 setShowCourtModal(false);
               }
 
-              Alert.alert('Court Deleted', data.message || 'Court deleted successfully.');
-            } catch (error: any) {
-              Alert.alert('Delete Failed', error.message || 'Failed to delete court.');
+              Alert.alert(
+                'Court Deleted',
+                data?.message ||
+                  'Court deleted successfully.',
+              );
+            } catch (error) {
+              Alert.alert(
+                'Delete Failed',
+                getErrorMessage(
+                  error,
+                  'Failed to delete court.',
+                ),
+              );
             } finally {
-              setLoading(false);
+              if (mountedRef.current) {
+                setLoading(false);
+              }
             }
           },
         },
@@ -886,75 +1468,135 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* SAVE BANK */
+  /* =======================================================
+     SAVE BANK
+  ======================================================= */
+
   const handleSaveBankDetails = async () => {
-    if (
-      !bankDetails.accountHolderName.trim() ||
-      !bankDetails.accountNumber.trim() ||
-      !bankDetails.ifscCode.trim()
-    ) {
-      Alert.alert('Missing Information', 'Please fill all bank details.');
+    const holder =
+      bankDetails.accountHolderName.trim();
+
+    const account =
+      bankDetails.accountNumber.trim();
+
+    const ifsc =
+      bankDetails.ifscCode.trim().toUpperCase();
+
+    if (!holder || !account || !ifsc) {
+      Alert.alert(
+        'Missing Information',
+        'Please fill all bank details.',
+      );
+      return;
+    }
+
+    if (account.length < 6) {
+      Alert.alert(
+        'Invalid Account Number',
+        'Please enter a valid bank account number.',
+      );
+      return;
+    }
+
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+      Alert.alert(
+        'Invalid IFSC',
+        'Please enter a valid IFSC code.',
+      );
       return;
     }
 
     try {
       setLoading(true);
+
       const response = await fetch(
-        `${API_BASE_URL}/owners/${user._id}/bank-details`,
+        buildApiUrl(
+          `/owners/${encodeURIComponent(
+            user._id,
+          )}/bank-details`,
+        ),
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
-            accountHolderName: bankDetails.accountHolderName.trim(),
-            accountNumber: bankDetails.accountNumber.trim(),
-            ifscCode: bankDetails.ifscCode.trim().toUpperCase(),
+            accountHolderName: holder,
+            accountNumber: account,
+            ifscCode: ifsc,
           }),
         },
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to save bank details.');
-      }
+      await parseApiResponse(response);
 
       setShowBankModal(false);
+
       await fetchBankDetails();
-      Alert.alert('Bank Details Saved', 'Your payout bank details have been saved successfully.');
-    } catch (error: any) {
-      Alert.alert('Save Failed', error.message || 'Failed to save bank details.');
+
+      Alert.alert(
+        'Bank Details Saved',
+        'Your payout bank details have been saved successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Save Failed',
+        getErrorMessage(
+          error,
+          'Failed to save bank details.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  /* DELETE BANK */
+  /* =======================================================
+     DELETE BANK
+  ======================================================= */
+
   const handleDeleteBankDetails = () => {
-    if (!bankDetails.accountHolderName) return;
+    if (!bankDetails.accountHolderName) {
+      return;
+    }
 
     Alert.alert(
       'Delete Bank Details',
       'Are you sure you want to remove your payout bank account details?\n\nYou can add them again later.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
+
               const response = await fetch(
-                `${API_BASE_URL}/owners/${user._id}/bank-details`,
+                buildApiUrl(
+                  `/owners/${encodeURIComponent(
+                    user._id,
+                  )}/bank-details`,
+                ),
                 {
                   method: 'DELETE',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
                 },
               );
 
-              const data = await response.json();
+              const data =
+                await parseApiResponse(response);
 
-              if (!response.ok) {
-                throw new Error(data.message || 'Failed to delete bank details.');
+              if (!mountedRef.current) {
+                return;
               }
 
               setBankDetails({
@@ -964,11 +1606,24 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               });
 
               setShowBankModal(false);
-              Alert.alert('Bank Details Deleted', data.message || 'Bank details deleted successfully.');
-            } catch (error: any) {
-              Alert.alert('Delete Failed', error.message || 'Failed to delete bank details.');
+
+              Alert.alert(
+                'Bank Details Deleted',
+                data?.message ||
+                  'Bank details deleted successfully.',
+              );
+            } catch (error) {
+              Alert.alert(
+                'Delete Failed',
+                getErrorMessage(
+                  error,
+                  'Failed to delete bank details.',
+                ),
+              );
             } finally {
-              setLoading(false);
+              if (mountedRef.current) {
+                setLoading(false);
+              }
             }
           },
         },
@@ -976,47 +1631,80 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* DELETE OWNER ACCOUNT */
-  const performDeleteOwnerAccount = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/owners/${user._id}/account`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
+  /* =======================================================
+     DELETE OWNER ACCOUNT
+  ======================================================= */
 
-      const data = await response.json();
+  const performDeleteOwnerAccount =
+    async () => {
+      try {
+        setLoading(true);
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete owner account.');
+        const response = await fetch(
+          buildApiUrl(
+            `/owners/${encodeURIComponent(
+              user._id,
+            )}/account`,
+          ),
+          {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        const data =
+          await parseApiResponse(response);
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        setTurfs([]);
+        setTurfCourts({});
+
+        setBankDetails({
+          accountHolderName: '',
+          accountNumber: '',
+          ifscCode: '',
+        });
+
+        Alert.alert(
+          'Account Deleted',
+          data?.message ||
+            'Your owner account and associated turf data have been deleted.',
+          [
+            {
+              text: 'OK',
+              onPress: () => onLogout?.(),
+            },
+          ],
+        );
+      } catch (error) {
+        Alert.alert(
+          'Account Deletion Failed',
+          getErrorMessage(
+            error,
+            'Failed to delete your owner account.',
+          ),
+        );
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
-
-      setTurfs([]);
-      setTurfCourts({});
-      setBankDetails({
-        accountHolderName: '',
-        accountNumber: '',
-        ifscCode: '',
-      });
-
-      Alert.alert(
-        'Account Deleted',
-        data.message || 'Your owner account and associated turf data have been deleted.',
-        [{ text: 'OK', onPress: () => onLogout?.() }],
-      );
-    } catch (error: any) {
-      Alert.alert('Account Deletion Failed', error.message || 'Failed to delete your owner account.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   const handleDeleteOwnerAccount = () => {
     Alert.alert(
       'Delete Owner Account',
       `This will permanently delete:\n\n• Your owner account\n• All your turfs\n• All courts belonging to those turfs\n• Your bank details\n\nThis action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
         {
           text: 'Continue',
           style: 'destructive',
@@ -1025,11 +1713,15 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               'Final Confirmation',
               `Are you absolutely sure you want to permanently delete "${user.name}"'s owner account?`,
               [
-                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
                 {
                   text: 'YES, DELETE ACCOUNT',
                   style: 'destructive',
-                  onPress: performDeleteOwnerAccount,
+                  onPress:
+                    performDeleteOwnerAccount,
                 },
               ],
             );
@@ -1039,12 +1731,26 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* LOGOUT */
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
+
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => onLogout?.() },
-    ]);
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => onLogout?.(),
+        },
+      ],
+    );
   };
 
   /* =========================================================
@@ -1056,66 +1762,113 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <View style={styles.pageHeader}>
-          <Text style={styles.pageHeaderBadge}>🏟️ OWNER</Text>
+          <Text style={styles.pageHeaderBadge}>
+            🏟️ OWNER
+          </Text>
+
           <Text style={styles.title}>Profile</Text>
+
           <Text style={styles.pageHeaderSubtitle}>
             Manage your turfs, courts and payouts
           </Text>
         </View>
 
-        {/* PROFILE CARD */}
+        {/* =================================================
+            PROFILE CARD
+        ================================================= */}
+
         <View style={styles.profileCard}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {user.name?.charAt(0)?.toUpperCase() || 'O'}
+                {user.name
+                  ?.charAt(0)
+                  ?.toUpperCase() || 'O'}
               </Text>
             </View>
+
             <View style={styles.avatarBadge}>
-              <Text style={styles.avatarBadgeText}>🏆</Text>
+              <Text style={styles.avatarBadgeText}>
+                🏆
+              </Text>
             </View>
           </View>
 
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.email}>{user.email}</Text>
+          <Text style={styles.name}>
+            {user.name || 'Owner'}
+          </Text>
+
+          <Text style={styles.email}>
+            {user.email || 'No email added'}
+          </Text>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue}>{user.phone || 'Not added'}</Text>
+            <Text style={styles.infoLabel}>
+              Phone
+            </Text>
+
+            <Text style={styles.infoValue}>
+              {user.phone || 'Not added'}
+            </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Account Type</Text>
+            <Text style={styles.infoLabel}>
+              Account Type
+            </Text>
+
             <View style={styles.rolePill}>
-              <Text style={styles.rolePillText}>TURF OWNER</Text>
+              <Text style={styles.rolePillText}>
+                TURF OWNER
+              </Text>
             </View>
           </View>
 
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => setShowEditProfile(true)}
+            onPress={() =>
+              setShowEditProfile(true)
+            }
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>EDIT PROFILE</Text>
+            <Text style={styles.primaryButtonText}>
+              EDIT PROFILE
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => setShowPasswordModal(true)}
+            onPress={() =>
+              setShowPasswordModal(true)
+            }
             activeOpacity={0.85}
           >
-            <Text style={styles.secondaryButtonText}>CHANGE PASSWORD</Text>
+            <Text style={styles.secondaryButtonText}>
+              CHANGE PASSWORD
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* TURFS HEADER */}
+        {/* =================================================
+            TURFS HEADER
+        ================================================= */}
+
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>My Listed Turfs</Text>
-            <View style={styles.sectionTitleAccent} />
+            <Text style={styles.sectionTitle}>
+              My Listed Turfs
+            </Text>
+
+            <View
+              style={styles.sectionTitleAccent}
+            />
           </View>
 
           <TouchableOpacity
@@ -1123,25 +1876,42 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
             onPress={handleAddTurf}
             activeOpacity={0.85}
           >
-            <Text style={styles.addButtonText}>+ ADD TURF</Text>
+            <Text style={styles.addButtonText}>
+              + ADD TURF
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* TURF LIST */}
+        {/* =================================================
+            TURF LIST
+        ================================================= */}
+
         {fetchingData ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading your turfs...</Text>
+            <ActivityIndicator
+              size="small"
+              color={COLORS.primary}
+            />
+
+            <Text style={styles.loadingText}>
+              Loading your turfs...
+            </Text>
           </View>
         ) : turfs.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconWrapper}>
-              <Text style={styles.emptyIcon}>🏟️</Text>
+              <Text style={styles.emptyIcon}>
+                🏟️
+              </Text>
             </View>
 
-            <Text style={styles.emptyTitle}>No turfs listed</Text>
+            <Text style={styles.emptyTitle}>
+              No turfs listed
+            </Text>
+
             <Text style={styles.emptyText}>
-              Add your first turf to start accepting bookings.
+              Add your first turf to start
+              accepting bookings.
             </Text>
 
             <TouchableOpacity
@@ -1149,154 +1919,386 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               onPress={handleAddTurf}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryButtonText}>ADD YOUR FIRST TURF</Text>
+              <Text
+                style={styles.primaryButtonText}
+              >
+                ADD YOUR FIRST TURF
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           turfs.map((turf) => {
-            const courts = turfCourts[turf._id] || [];
-            const isExpanded = expandedTurfId === turf._id;
-            const statusColors = getTurfStatusColors(turf.status);
+            const courts =
+              turfCourts[turf._id] || [];
+
+            const isExpanded =
+              expandedTurfId === turf._id;
+
+            const statusColors =
+              getTurfStatusColors(turf.status);
 
             const imageUrl =
-              turf.images?.find((image) => image.isPrimary)?.url ||
+              turf.images?.find(
+                (image) => image.isPrimary,
+              )?.url ||
               turf.images?.[0]?.url;
 
             return (
-              <View key={turf._id} style={styles.turfCard}>
+              <View
+                key={turf._id}
+                style={styles.turfCard}
+              >
                 {/* IMAGE */}
+
                 {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} style={styles.turfImage} />
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.turfImage}
+                    resizeMode="cover"
+                  />
                 ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Text style={styles.placeholderIcon}>⚽</Text>
-                    <Text style={styles.placeholderText}>No Image</Text>
+                  <View
+                    style={styles.imagePlaceholder}
+                  >
+                    <Text
+                      style={styles.placeholderIcon}
+                    >
+                      ⚽
+                    </Text>
+
+                    <Text
+                      style={styles.placeholderText}
+                    >
+                      No Image
+                    </Text>
                   </View>
                 )}
 
                 {/* STATUS */}
+
                 <View
                   style={[
                     styles.turfStatusPill,
                     {
-                      backgroundColor: statusColors.bg,
-                      borderColor: statusColors.border,
+                      backgroundColor:
+                        statusColors.bg,
+                      borderColor:
+                        statusColors.border,
                     },
                   ]}
                 >
                   <View
-                    style={[styles.statusDot, { backgroundColor: statusColors.dot }]}
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor:
+                          statusColors.dot,
+                      },
+                    ]}
                   />
-                  <Text style={[styles.turfStatusText, { color: statusColors.text }]}>
-                    {String(turf.status || 'active').toUpperCase()}
+
+                  <Text
+                    style={[
+                      styles.turfStatusText,
+                      {
+                        color:
+                          statusColors.text,
+                      },
+                    ]}
+                  >
+                    {String(
+                      turf.status || 'active',
+                    ).toUpperCase()}
                   </Text>
                 </View>
 
                 {/* CONTENT */}
-                <View style={styles.turfContent}>
-                  <Text style={styles.turfName}>{turf.name}</Text>
 
-                  <Text style={styles.turfCity}>📍 {turf.city}</Text>
-                  <Text style={styles.turfAddress}>{turf.address}</Text>
+                <View style={styles.turfContent}>
+                  <Text
+                    style={styles.turfName}
+                    numberOfLines={2}
+                  >
+                    {turf.name}
+                  </Text>
+
+                  <Text style={styles.turfCity}>
+                    📍 {turf.city}
+                  </Text>
+
+                  <Text
+                    style={styles.turfAddress}
+                    numberOfLines={3}
+                  >
+                    {turf.address}
+                  </Text>
 
                   {/* ACTIONS */}
-                  <View style={styles.turfActionGrid}>
+
+                  <View
+                    style={styles.turfActionGrid}
+                  >
                     <TouchableOpacity
                       style={styles.manageButton}
-                      onPress={() => handleToggleTurf(turf._id)}
+                      onPress={() =>
+                        handleToggleTurf(
+                          turf._id,
+                        )
+                      }
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.manageButtonText}>
-                        {isExpanded ? 'HIDE COURTS' : 'MANAGE COURTS'}
+                      <Text
+                        style={
+                          styles.manageButtonText
+                        }
+                      >
+                        {isExpanded
+                          ? 'HIDE COURTS'
+                          : 'MANAGE COURTS'}
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.editButton}
-                      onPress={() => handleEditTurf(turf)}
+                      onPress={() =>
+                        handleEditTurf(turf)
+                      }
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.editButtonText}>EDIT</Text>
+                      <Text
+                        style={
+                          styles.editButtonText
+                        }
+                      >
+                        EDIT
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.deleteTurfButton}
-                      onPress={() => handleDeleteTurf(turf)}
+                      style={
+                        styles.deleteTurfButton
+                      }
+                      onPress={() =>
+                        handleDeleteTurf(turf)
+                      }
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.deleteTurfButtonText}>DELETE</Text>
+                      <Text
+                        style={
+                          styles.deleteTurfButtonText
+                        }
+                      >
+                        DELETE
+                      </Text>
                     </TouchableOpacity>
                   </View>
 
                   {/* COURTS */}
+
                   {isExpanded && (
-                    <View style={styles.courtsContainer}>
-                      <View style={styles.courtHeader}>
-                        <Text style={styles.courtTitle}>Courts</Text>
+                    <View
+                      style={
+                        styles.courtsContainer
+                      }
+                    >
+                      <View
+                        style={styles.courtHeader}
+                      >
+                        <Text
+                          style={styles.courtTitle}
+                        >
+                          Courts
+                        </Text>
 
                         <TouchableOpacity
-                          onPress={() => handleAddCourt(turf._id)}
+                          onPress={() =>
+                            handleAddCourt(
+                              turf._id,
+                            )
+                          }
                           activeOpacity={0.8}
-                          style={styles.addCourtButton}
+                          style={
+                            styles.addCourtButton
+                          }
                         >
-                          <Text style={styles.addCourtText}>+ Add Court</Text>
+                          <Text
+                            style={
+                              styles.addCourtText
+                            }
+                          >
+                            + Add Court
+                          </Text>
                         </TouchableOpacity>
                       </View>
 
                       {courts.length === 0 ? (
-                        <View style={styles.noCourtsBox}>
-                          <Text style={styles.noCourtsIcon}>🏟️</Text>
-                          <Text style={styles.noCourtText}>No courts added yet.</Text>
+                        <View
+                          style={
+                            styles.noCourtsBox
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.noCourtsIcon
+                            }
+                          >
+                            🏟️
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.noCourtText
+                            }
+                          >
+                            No courts added yet.
+                          </Text>
                         </View>
                       ) : (
                         courts.map((court) => (
-                          <View key={court._id} style={styles.courtCard}>
-                            <View style={styles.courtInfo}>
-                              <View style={styles.courtNameRow}>
-                                <Text style={styles.courtName}>{court.name}</Text>
+                          <View
+                            key={court._id}
+                            style={
+                              styles.courtCard
+                            }
+                          >
+                            <View
+                              style={
+                                styles.courtInfo
+                              }
+                            >
+                              <View
+                                style={
+                                  styles.courtNameRow
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.courtName
+                                  }
+                                  numberOfLines={2}
+                                >
+                                  {court.name}
+                                </Text>
 
-                                <View style={styles.sportPill}>
-                                  <Text style={styles.sportPillText}>
+                                <View
+                                  style={
+                                    styles.sportPill
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.sportPillText
+                                    }
+                                  >
                                     {court.sport}
                                   </Text>
                                 </View>
                               </View>
 
-                              <Text style={styles.courtPrice}>
-                                ₹{court.pricePerHour}/hour
+                              <Text
+                                style={
+                                  styles.courtPrice
+                                }
+                              >
+                                ₹
+                                {Number(
+                                  court.pricePerHour ||
+                                    0,
+                                ).toLocaleString(
+                                  'en-IN',
+                                )}
+                                /hour
                               </Text>
 
                               {court.hasNightPricing && (
                                 <>
-                                  <View style={styles.nightPriceBadge}>
-                                    <Text style={styles.nightPriceBadgeText}>
-                                      🌙 Night ₹{court.nightPricePerHour}/hr
+                                  <View
+                                    style={
+                                      styles.nightPriceBadge
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.nightPriceBadgeText
+                                      }
+                                    >
+                                      🌙 Night ₹
+                                      {Number(
+                                        court.nightPricePerHour ||
+                                          0,
+                                      ).toLocaleString(
+                                        'en-IN',
+                                      )}
+                                      /hr
                                     </Text>
                                   </View>
 
-                                  <Text style={styles.nightTimeText}>
-                                    {formatHour(court.nightStartHour)} —{' '}
-                                    {formatHour(court.nightEndHour)}
+                                  <Text
+                                    style={
+                                      styles.nightTimeText
+                                    }
+                                  >
+                                    {formatHour(
+                                      court.nightStartHour,
+                                    )}{' '}
+                                    —{' '}
+                                    {formatHour(
+                                      court.nightEndHour,
+                                    )}
                                   </Text>
                                 </>
                               )}
                             </View>
 
-                            <View style={styles.courtActions}>
+                            <View
+                              style={
+                                styles.courtActions
+                              }
+                            >
                               <TouchableOpacity
-                                style={styles.smallEditButton}
-                                onPress={() => handleEditCourt(turf._id, court)}
-                                activeOpacity={0.85}
+                                style={
+                                  styles.smallEditButton
+                                }
+                                onPress={() =>
+                                  handleEditCourt(
+                                    turf._id,
+                                    court,
+                                  )
+                                }
+                                activeOpacity={
+                                  0.85
+                                }
                               >
-                                <Text style={styles.editCourtText}>Edit</Text>
+                                <Text
+                                  style={
+                                    styles.editCourtText
+                                  }
+                                >
+                                  Edit
+                                </Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity
-                                style={styles.smallDeleteButton}
-                                onPress={() => handleDeleteCourt(turf._id, court)}
-                                activeOpacity={0.85}
+                                style={
+                                  styles.smallDeleteButton
+                                }
+                                onPress={() =>
+                                  handleDeleteCourt(
+                                    turf._id,
+                                    court,
+                                  )
+                                }
+                                activeOpacity={
+                                  0.85
+                                }
                               >
-                                <Text style={styles.deleteCourtText}>Delete</Text>
+                                <Text
+                                  style={
+                                    styles.deleteCourtText
+                                  }
+                                >
+                                  Delete
+                                </Text>
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -1310,24 +2312,44 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           })
         )}
 
-        {/* BANK SECTION */}
+        {/* =================================================
+            BANK
+        ================================================= */}
+
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Bank Account</Text>
-            <View style={styles.sectionTitleAccent} />
+            <Text style={styles.sectionTitle}>
+              Bank Account
+            </Text>
+
+            <View
+              style={styles.sectionTitleAccent}
+            />
           </View>
         </View>
 
         <View style={styles.bankCard}>
           <View style={styles.bankHeaderRow}>
             <View style={styles.bankIconCircle}>
-              <Text style={styles.bankIconText}>🏦</Text>
+              <Text style={styles.bankIconText}>
+                🏦
+              </Text>
             </View>
 
             <View style={styles.bankHeaderText}>
-              <Text style={styles.bankHeaderTitle}>Payout Account</Text>
-              <Text style={styles.bankHeaderSubtitle}>
-                Where your earnings get transferred
+              <Text
+                style={styles.bankHeaderTitle}
+              >
+                Payout Account
+              </Text>
+
+              <Text
+                style={
+                  styles.bankHeaderSubtitle
+                }
+              >
+                Where your earnings get
+                transferred
               </Text>
             </View>
           </View>
@@ -1335,36 +2357,55 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           {bankDetails.accountHolderName ? (
             <>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Account Holder</Text>
+                <Text style={styles.infoLabel}>
+                  Account Holder
+                </Text>
+
                 <Text style={styles.infoValue}>
                   {bankDetails.accountHolderName}
                 </Text>
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Account Number</Text>
+                <Text style={styles.infoLabel}>
+                  Account Number
+                </Text>
+
                 <Text style={styles.infoValue}>
-                  {maskAccountNumber(bankDetails.accountNumber)}
+                  {maskAccountNumber(
+                    bankDetails.accountNumber,
+                  )}
                 </Text>
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>IFSC</Text>
-                <Text style={styles.infoValue}>{bankDetails.ifscCode}</Text>
+                <Text style={styles.infoLabel}>
+                  IFSC
+                </Text>
+
+                <Text style={styles.infoValue}>
+                  {bankDetails.ifscCode}
+                </Text>
               </View>
             </>
           ) : (
             <View style={styles.noBankBox}>
-              <Text style={styles.noBankIcon}>💳</Text>
+              <Text style={styles.noBankIcon}>
+                💳
+              </Text>
+
               <Text style={styles.emptyText}>
-                No bank account details added yet.
+                No bank account details added
+                yet.
               </Text>
             </View>
           )}
 
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => setShowBankModal(true)}
+            onPress={() =>
+              setShowBankModal(true)
+            }
             activeOpacity={0.85}
           >
             <Text style={styles.primaryButtonText}>
@@ -1380,22 +2421,46 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               onPress={handleDeleteBankDetails}
               activeOpacity={0.85}
             >
-              <Text style={styles.deleteBankButtonText}>DELETE BANK DETAILS</Text>
+              <Text
+                style={
+                  styles.deleteBankButtonText
+                }
+              >
+                DELETE BANK DETAILS
+              </Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* DANGER ZONE */}
+        {/* =================================================
+            DANGER ZONE
+        ================================================= */}
+
         <View style={styles.dangerSection}>
           <View style={styles.dangerHeaderRow}>
             <View style={styles.dangerIconCircle}>
-              <Text style={styles.dangerIcon}>⚠️</Text>
+              <Text style={styles.dangerIcon}>
+                ⚠️
+              </Text>
             </View>
 
-            <View style={styles.dangerHeaderText}>
-              <Text style={styles.dangerSectionTitle}>Danger Zone</Text>
-              <Text style={styles.dangerSectionDescription}>
-                Permanently delete your owner account and associated turf data.
+            <View
+              style={styles.dangerHeaderText}
+            >
+              <Text
+                style={styles.dangerSectionTitle}
+              >
+                Danger Zone
+              </Text>
+
+              <Text
+                style={
+                  styles.dangerSectionDescription
+                }
+              >
+                Permanently delete your owner
+                account and associated turf
+                data.
               </Text>
             </View>
           </View>
@@ -1407,69 +2472,108 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color={COLORS.dangerText} />
+              <ActivityIndicator
+                color={COLORS.dangerText}
+              />
             ) : (
-              <Text style={styles.deleteAccountButtonText}>
+              <Text
+                style={
+                  styles.deleteAccountButtonText
+                }
+              >
                 DELETE OWNER ACCOUNT
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* LOGOUT */}
+        {/* =================================================
+            LOGOUT
+        ================================================= */}
+
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
           activeOpacity={0.85}
         >
-          <Text style={styles.logoutText}>LOGOUT</Text>
+          <Text style={styles.logoutText}>
+            LOGOUT
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
       {/* =====================================================
           EDIT PROFILE MODAL
       ===================================================== */}
+
       <Modal
         visible={showEditProfile}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowEditProfile(false)}
+        onRequestClose={() =>
+          setShowEditProfile(false)
+        }
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={styles.modalScroll}
+            contentContainerStyle={
+              styles.modalScroll
+            }
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalBadge}>👤 PROFILE</Text>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
 
-              <Text style={styles.fieldLabel}>NAME</Text>
+              <Text style={styles.modalBadge}>
+                👤 PROFILE
+              </Text>
+
+              <Text style={styles.modalTitle}>
+                Edit Profile
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                NAME
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Name"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={name}
                 onChangeText={setName}
+                autoCapitalize="words"
               />
 
-              <Text style={styles.fieldLabel}>EMAIL</Text>
+              <Text style={styles.fieldLabel}>
+                EMAIL
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Email"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
 
-              <Text style={styles.fieldLabel}>PHONE</Text>
+              <Text style={styles.fieldLabel}>
+                PHONE
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Phone"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -1482,18 +2586,30 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
                 ) : (
-                  <Text style={styles.primaryButtonText}>SAVE CHANGES</Text>
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    SAVE CHANGES
+                  </Text>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowEditProfile(false)}
+                onPress={() =>
+                  setShowEditProfile(false)
+                }
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1503,43 +2619,70 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       {/* =====================================================
           PASSWORD MODAL
       ===================================================== */}
+
       <Modal
         visible={showPasswordModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowPasswordModal(false)}
+        onRequestClose={() =>
+          setShowPasswordModal(false)
+        }
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={styles.modalScroll}
+            contentContainerStyle={
+              styles.modalScroll
+            }
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalBadge}>🔒 SECURITY</Text>
-              <Text style={styles.modalTitle}>Change Password</Text>
 
-              <Text style={styles.fieldLabel}>CURRENT PASSWORD</Text>
+              <Text style={styles.modalBadge}>
+                🔒 SECURITY
+              </Text>
+
+              <Text style={styles.modalTitle}>
+                Change Password
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                CURRENT PASSWORD
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter current password"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 secureTextEntry
                 value={currentPassword}
-                onChangeText={setCurrentPassword}
+                onChangeText={
+                  setCurrentPassword
+                }
+                autoCapitalize="none"
               />
 
-              <Text style={styles.fieldLabel}>NEW PASSWORD</Text>
+              <Text style={styles.fieldLabel}>
+                NEW PASSWORD
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter new password"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 secureTextEntry
                 value={newPassword}
                 onChangeText={setNewPassword}
+                autoCapitalize="none"
               />
 
-              <Text style={styles.helperText}>Minimum 6 characters</Text>
+              <Text style={styles.helperText}>
+                Minimum 6 characters
+              </Text>
 
               <TouchableOpacity
                 style={styles.primaryButton}
@@ -1548,18 +2691,30 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
                 ) : (
-                  <Text style={styles.primaryButtonText}>CHANGE PASSWORD</Text>
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    CHANGE PASSWORD
+                  </Text>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowPasswordModal(false)}
+                onPress={() =>
+                  setShowPasswordModal(false)
+                }
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1569,6 +2724,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       {/* =====================================================
           TURF MODAL
       ===================================================== */}
+
       <Modal
         visible={showTurfModal}
         transparent
@@ -1577,128 +2733,255 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={styles.modalScroll}
+            contentContainerStyle={
+              styles.modalScroll
+            }
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalBadge}>🏟️ TURF</Text>
-              <Text style={styles.modalTitle}>
-                {selectedTurf ? 'Edit Turf' : 'Add Turf'}
+
+              <Text style={styles.modalBadge}>
+                🏟️ TURF
               </Text>
 
-              <Text style={styles.fieldLabel}>TURF NAME</Text>
+              <Text style={styles.modalTitle}>
+                {selectedTurf
+                  ? 'Edit Turf'
+                  : 'Add Turf'}
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                TURF NAME
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter turf name"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={turfName}
                 onChangeText={setTurfName}
               />
 
-              <Text style={styles.fieldLabel}>DESCRIPTION</Text>
+              <Text style={styles.fieldLabel}>
+                DESCRIPTION
+              </Text>
+
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[
+                  styles.input,
+                  styles.textArea,
+                ]}
                 placeholder="Enter turf description"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={turfDescription}
                 onChangeText={setTurfDescription}
                 multiline
                 textAlignVertical="top"
               />
 
-              <Text style={styles.fieldLabel}>ADDRESS</Text>
+              <Text style={styles.fieldLabel}>
+                ADDRESS
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter address"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={turfAddress}
                 onChangeText={setTurfAddress}
               />
 
-              <Text style={styles.fieldLabel}>CITY</Text>
+              <Text style={styles.fieldLabel}>
+                CITY
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter city"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={turfCity}
                 onChangeText={setTurfCity}
+                autoCapitalize="words"
               />
 
               {/* OPERATING HOURS */}
-              <View style={styles.hoursSectionTitleRow}>
-                <Text style={styles.hoursSectionTitle}>Operating Hours</Text>
-                <View style={styles.sectionTitleAccent} />
+
+              <View
+                style={
+                  styles.hoursSectionTitleRow
+                }
+              >
+                <Text
+                  style={
+                    styles.hoursSectionTitle
+                  }
+                >
+                  Operating Hours
+                </Text>
+
+                <View
+                  style={
+                    styles.sectionTitleAccent
+                  }
+                />
               </View>
 
-              <Text style={styles.hoursDescription}>
-                Set the opening and closing time for each day.
+              <Text
+                style={styles.hoursDescription}
+              >
+                Set the opening and closing time
+                for each day.
               </Text>
 
-              {operatingHours.map((hour, index) => (
-                <View key={hour.day} style={styles.operatingHourCard}>
-                  <View style={styles.dayHeader}>
-                    <Text style={styles.dayName}>{hour.day}</Text>
-
-                    <View style={styles.openStatusRow}>
+              {operatingHours.map(
+                (hour, index) => (
+                  <View
+                    key={hour.day}
+                    style={
+                      styles.operatingHourCard
+                    }
+                  >
+                    <View
+                      style={styles.dayHeader}
+                    >
                       <Text
-                        style={[
-                          styles.statusText,
-                          !hour.isClosed && styles.statusTextOpen,
-                        ]}
+                        style={styles.dayName}
                       >
-                        {hour.isClosed ? 'CLOSED' : 'OPEN'}
+                        {hour.day}
                       </Text>
 
-                      <Switch
-                        value={!hour.isClosed}
-                        onValueChange={(value) =>
-                          updateOperatingHour(index, 'isClosed', !value)
+                      <View
+                        style={
+                          styles.openStatusRow
                         }
-                        trackColor={{
-                          false: COLORS.border,
-                          true: COLORS.primaryMuted,
-                        }}
-                        thumbColor={
-                          hour.isClosed ? COLORS.textMuted : COLORS.primary
-                        }
-                      />
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            !hour.isClosed &&
+                              styles.statusTextOpen,
+                          ]}
+                        >
+                          {hour.isClosed
+                            ? 'CLOSED'
+                            : 'OPEN'}
+                        </Text>
+
+                        <Switch
+                          value={!hour.isClosed}
+                          onValueChange={(value) =>
+                            updateOperatingHour(
+                              index,
+                              'isClosed',
+                              !value,
+                            )
+                          }
+                          trackColor={{
+                            false:
+                              COLORS.border,
+                            true:
+                              COLORS.primaryMuted,
+                          }}
+                          thumbColor={
+                            hour.isClosed
+                              ? COLORS.textMuted
+                              : COLORS.primary
+                          }
+                        />
+                      </View>
                     </View>
+
+                    {!hour.isClosed && (
+                      <View
+                        style={styles.timeRow}
+                      >
+                        <View
+                          style={styles.timeBox}
+                        >
+                          <Text
+                            style={
+                              styles.timeLabel
+                            }
+                          >
+                            OPENING
+                          </Text>
+
+                          <TouchableOpacity
+                            style={
+                              styles.timeButton
+                            }
+                            onPress={() =>
+                              openTimePicker(
+                                index,
+                                'opening',
+                              )
+                            }
+                            activeOpacity={0.85}
+                          >
+                            <Text
+                              style={
+                                styles.timeButtonText
+                              }
+                            >
+                              {hour.openingTime}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text
+                          style={
+                            styles.timeSeparator
+                          }
+                        >
+                          →
+                        </Text>
+
+                        <View
+                          style={styles.timeBox}
+                        >
+                          <Text
+                            style={
+                              styles.timeLabel
+                            }
+                          >
+                            CLOSING
+                          </Text>
+
+                          <TouchableOpacity
+                            style={
+                              styles.timeButton
+                            }
+                            onPress={() =>
+                              openTimePicker(
+                                index,
+                                'closing',
+                              )
+                            }
+                            activeOpacity={0.85}
+                          >
+                            <Text
+                              style={
+                                styles.timeButtonText
+                              }
+                            >
+                              {hour.closingTime}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
                   </View>
-
-                  {!hour.isClosed && (
-                    <View style={styles.timeRow}>
-                      <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>OPENING</Text>
-                        <TouchableOpacity
-                          style={styles.timeButton}
-                          onPress={() => openTimePicker(index, 'opening')}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.timeButtonText}>
-                            {hour.openingTime}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.timeSeparator}>→</Text>
-
-                      <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>CLOSING</Text>
-                        <TouchableOpacity
-                          style={styles.timeButton}
-                          onPress={() => openTimePicker(index, 'closing')}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.timeButtonText}>
-                            {hour.closingTime}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
+                ),
+              )}
 
               <TouchableOpacity
                 style={styles.primaryButton}
@@ -1707,10 +2990,18 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
                 ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {selectedTurf ? 'UPDATE TURF' : 'SAVE TURF'}
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    {selectedTurf
+                      ? 'UPDATE TURF'
+                      : 'SAVE TURF'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1720,7 +3011,9 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 onPress={closeTurfModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1728,23 +3021,30 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       </Modal>
 
       {/* TURF TIME PICKER */}
-      {showTimePicker && selectedHourIndex !== null && (
-        <DateTimePicker
-          value={timeStringToDate(
-            operatingHours[selectedHourIndex][
-              timePickerMode === 'opening' ? 'openingTime' : 'closingTime'
-            ],
-          )}
-          mode="time"
-          is24Hour
-          display="default"
-          onChange={handleTimeChange}
-        />
-      )}
+
+      {showTimePicker &&
+        selectedHourIndex !== null && (
+          <DateTimePicker
+            value={timeStringToDate(
+              operatingHours[
+                selectedHourIndex
+              ][
+                timePickerMode === 'opening'
+                  ? 'openingTime'
+                  : 'closingTime'
+              ],
+            )}
+            mode="time"
+            is24Hour
+            display="default"
+            onChange={handleTimeChange}
+          />
+        )}
 
       {/* =====================================================
           COURT MODAL
       ===================================================== */}
+
       <Modal
         visible={showCourtModal}
         transparent
@@ -1756,125 +3056,283 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={styles.modalScroll}
+            contentContainerStyle={
+              styles.modalScroll
+            }
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalBadge}>⚽ COURT</Text>
-              <Text style={styles.modalTitle}>
-                {selectedCourt ? 'Edit Court' : 'Add Court'}
+
+              <Text style={styles.modalBadge}>
+                ⚽ COURT
               </Text>
 
-              <Text style={styles.fieldLabel}>COURT NAME</Text>
+              <Text style={styles.modalTitle}>
+                {selectedCourt
+                  ? 'Edit Court'
+                  : 'Add Court'}
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                COURT NAME
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Court 1"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={courtName}
                 onChangeText={setCourtName}
               />
 
-              <Text style={styles.fieldLabel}>SPORT</Text>
+              <Text style={styles.fieldLabel}>
+                SPORT
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Football, Cricket"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={courtSport}
                 onChangeText={setCourtSport}
               />
 
-              <Text style={styles.fieldLabel}>NORMAL PRICE PER HOUR</Text>
+              <Text style={styles.fieldLabel}>
+                NORMAL PRICE PER HOUR
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Enter base price"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={courtPrice}
                 onChangeText={setCourtPrice}
                 keyboardType="numeric"
               />
 
               {/* NIGHT PRICING */}
-              <View style={styles.nightPricingCard}>
-                <View style={styles.nightPricingHeader}>
-                  <View style={styles.nightPricingTitleContainer}>
-                    <Text style={styles.nightPricingTitle}>🌙 Night Pricing</Text>
-                    <Text style={styles.nightPricingDescription}>
-                      Use a different hourly price during selected hours.
+
+              <View
+                style={
+                  styles.nightPricingCard
+                }
+              >
+                <View
+                  style={
+                    styles.nightPricingHeader
+                  }
+                >
+                  <View
+                    style={
+                      styles.nightPricingTitleContainer
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.nightPricingTitle
+                      }
+                    >
+                      🌙 Night Pricing
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.nightPricingDescription
+                      }
+                    >
+                      Use a different hourly
+                      price during selected
+                      hours.
                     </Text>
                   </View>
 
                   <Switch
-                    value={courtHasNightPricing}
-                    onValueChange={setCourtHasNightPricing}
+                    value={
+                      courtHasNightPricing
+                    }
+                    onValueChange={
+                      setCourtHasNightPricing
+                    }
                     trackColor={{
-                      false: COLORS.border,
-                      true: COLORS.warningBorder,
+                      false:
+                        COLORS.border,
+                      true:
+                        COLORS.warningBorder,
                     }}
                     thumbColor={
-                      courtHasNightPricing ? COLORS.warning : COLORS.textMuted
+                      courtHasNightPricing
+                        ? COLORS.warning
+                        : COLORS.textMuted
                     }
                   />
                 </View>
 
                 {courtHasNightPricing && (
                   <>
-                    <Text style={styles.fieldLabel}>NIGHT PRICE PER HOUR</Text>
+                    <Text
+                      style={styles.fieldLabel}
+                    >
+                      NIGHT PRICE PER HOUR
+                    </Text>
+
                     <TextInput
                       style={styles.input}
                       placeholder="e.g. 700"
-                      placeholderTextColor={COLORS.placeholder}
+                      placeholderTextColor={
+                        COLORS.placeholder
+                      }
                       value={courtNightPrice}
-                      onChangeText={setCourtNightPrice}
+                      onChangeText={
+                        setCourtNightPrice
+                      }
                       keyboardType="numeric"
                     />
 
-                    <Text style={styles.fieldLabel}>NIGHT PRICING STARTS</Text>
+                    <Text
+                      style={styles.fieldLabel}
+                    >
+                      NIGHT PRICING STARTS
+                    </Text>
+
                     <TouchableOpacity
-                      style={styles.timeButtonLarge}
-                      onPress={() => openCourtTimePicker('nightStart')}
+                      style={
+                        styles.timeButtonLarge
+                      }
+                      onPress={() =>
+                        openCourtTimePicker(
+                          'nightStart',
+                        )
+                      }
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.timeButtonLargeLabel}>START TIME</Text>
-                      <Text style={styles.timeButtonLargeValue}>
+                      <Text
+                        style={
+                          styles.timeButtonLargeLabel
+                        }
+                      >
+                        START TIME
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timeButtonLargeValue
+                        }
+                      >
                         {courtNightStartTime}
                       </Text>
                     </TouchableOpacity>
 
-                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
+                    <Text
+                      style={[
+                        styles.fieldLabel,
+                        { marginTop: 12 },
+                      ]}
+                    >
                       NIGHT PRICING ENDS
                     </Text>
+
                     <TouchableOpacity
-                      style={styles.timeButtonLarge}
-                      onPress={() => openCourtTimePicker('nightEnd')}
+                      style={
+                        styles.timeButtonLarge
+                      }
+                      onPress={() =>
+                        openCourtTimePicker(
+                          'nightEnd',
+                        )
+                      }
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.timeButtonLargeLabel}>END TIME</Text>
-                      <Text style={styles.timeButtonLargeValue}>
+                      <Text
+                        style={
+                          styles.timeButtonLargeLabel
+                        }
+                      >
+                        END TIME
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timeButtonLargeValue
+                        }
+                      >
                         {courtNightEndTime}
                       </Text>
                     </TouchableOpacity>
 
                     {/* PREVIEW */}
-                    <View style={styles.pricingPreview}>
-                      <Text style={styles.pricingPreviewTitle}>PRICING PREVIEW</Text>
 
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Normal</Text>
-                        <Text style={styles.previewValue}>
-                          ₹{courtPrice || '0'}/hr
+                    <View
+                      style={
+                        styles.pricingPreview
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.pricingPreviewTitle
+                        }
+                      >
+                        PRICING PREVIEW
+                      </Text>
+
+                      <View
+                        style={styles.previewRow}
+                      >
+                        <Text
+                          style={
+                            styles.previewLabel
+                          }
+                        >
+                          Normal
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.previewValue
+                          }
+                        >
+                          ₹
+                          {courtPrice || '0'}
+                          /hr
                         </Text>
                       </View>
 
-                      <View style={styles.previewRow}>
-                        <Text style={styles.previewLabel}>Night</Text>
-                        <Text style={styles.nightPreviewValue}>
-                          ₹{courtNightPrice || '0'}/hr
+                      <View
+                        style={styles.previewRow}
+                      >
+                        <Text
+                          style={
+                            styles.previewLabel
+                          }
+                        >
+                          Night
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.nightPreviewValue
+                          }
+                        >
+                          ₹
+                          {courtNightPrice ||
+                            '0'}
+                          /hr
                         </Text>
                       </View>
 
-                      <Text style={styles.previewTime}>
-                        {courtNightStartTime} → {courtNightEndTime}
+                      <Text
+                        style={
+                          styles.previewTime
+                        }
+                      >
+                        {courtNightStartTime} →
+                        {courtNightEndTime}
                       </Text>
                     </View>
                   </>
@@ -1888,25 +3346,47 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
                 ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {selectedCourt ? 'UPDATE COURT' : 'SAVE COURT'}
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    {selectedCourt
+                      ? 'UPDATE COURT'
+                      : 'SAVE COURT'}
                   </Text>
                 )}
               </TouchableOpacity>
 
               {selectedCourt && (
                 <TouchableOpacity
-                  style={styles.deleteFullButton}
+                  style={
+                    styles.deleteFullButton
+                  }
                   onPress={() => {
-                    if (!selectedTurfId) return;
-                    handleDeleteCourt(selectedTurfId, selectedCourt);
+                    if (!selectedTurfId) {
+                      return;
+                    }
+
+                    handleDeleteCourt(
+                      selectedTurfId,
+                      selectedCourt,
+                    );
                   }}
                   disabled={loading}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.deleteFullButtonText}>DELETE COURT</Text>
+                  <Text
+                    style={
+                      styles.deleteFullButtonText
+                    }
+                  >
+                    DELETE COURT
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -1918,7 +3398,9 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1926,104 +3408,170 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       </Modal>
 
       {/* COURT TIME PICKER */}
+
       {showCourtTimePicker && (
         <DateTimePicker
           value={timeStringToDate(
-            courtTimePickerMode === 'nightStart'
+            courtTimePickerMode ===
+              'nightStart'
               ? courtNightStartTime
               : courtNightEndTime,
           )}
           mode="time"
           is24Hour
           display="default"
-          onChange={handleCourtTimeChange}
+          onChange={
+            handleCourtTimeChange
+          }
         />
       )}
 
       {/* =====================================================
           BANK MODAL
       ===================================================== */}
+
       <Modal
         visible={showBankModal}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowBankModal(false)}
+        onRequestClose={() =>
+          setShowBankModal(false)
+        }
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={styles.modalScroll}
+            contentContainerStyle={
+              styles.modalScroll
+            }
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalBadge}>🏦 BANK</Text>
-              <Text style={styles.modalTitle}>Bank Account Details</Text>
 
-              <Text style={styles.fieldLabel}>ACCOUNT HOLDER NAME</Text>
+              <Text style={styles.modalBadge}>
+                🏦 BANK
+              </Text>
+
+              <Text style={styles.modalTitle}>
+                Bank Account Details
+              </Text>
+
+              <Text style={styles.fieldLabel}>
+                ACCOUNT HOLDER NAME
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Account Holder Name"
-                placeholderTextColor={COLORS.placeholder}
-                value={bankDetails.accountHolderName}
-                onChangeText={(value) =>
-                  setBankDetails((previous) => ({
-                    ...previous,
-                    accountHolderName: value,
-                  }))
+                placeholderTextColor={
+                  COLORS.placeholder
                 }
+                value={
+                  bankDetails.accountHolderName
+                }
+                onChangeText={(value) =>
+                  setBankDetails(
+                    (previous) => ({
+                      ...previous,
+                      accountHolderName:
+                        value,
+                    }),
+                  )
+                }
+                autoCapitalize="words"
               />
 
-              <Text style={styles.fieldLabel}>ACCOUNT NUMBER</Text>
+              <Text style={styles.fieldLabel}>
+                ACCOUNT NUMBER
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="Account Number"
-                placeholderTextColor={COLORS.placeholder}
-                value={bankDetails.accountNumber}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
+                value={
+                  bankDetails.accountNumber
+                }
                 onChangeText={(value) =>
-                  setBankDetails((previous) => ({
-                    ...previous,
-                    accountNumber: value,
-                  }))
+                  setBankDetails(
+                    (previous) => ({
+                      ...previous,
+                      accountNumber:
+                        value.replace(
+                          /\D/g,
+                          '',
+                        ),
+                    }),
+                  )
                 }
                 keyboardType="numeric"
               />
 
-              <Text style={styles.fieldLabel}>IFSC CODE</Text>
+              <Text style={styles.fieldLabel}>
+                IFSC CODE
+              </Text>
+
               <TextInput
                 style={styles.input}
                 placeholder="IFSC Code"
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={
+                  COLORS.placeholder
+                }
                 value={bankDetails.ifscCode}
                 onChangeText={(value) =>
-                  setBankDetails((previous) => ({
-                    ...previous,
-                    ifscCode: value.toUpperCase(),
-                  }))
+                  setBankDetails(
+                    (previous) => ({
+                      ...previous,
+                      ifscCode:
+                        value.toUpperCase(),
+                    }),
+                  )
                 }
                 autoCapitalize="characters"
+                autoCorrect={false}
               />
 
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={handleSaveBankDetails}
+                onPress={
+                  handleSaveBankDetails
+                }
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color={COLORS.white} />
+                  <ActivityIndicator
+                    color={COLORS.white}
+                  />
                 ) : (
-                  <Text style={styles.primaryButtonText}>SAVE BANK DETAILS</Text>
+                  <Text
+                    style={
+                      styles.primaryButtonText
+                    }
+                  >
+                    SAVE BANK DETAILS
+                  </Text>
                 )}
               </TouchableOpacity>
 
               {bankDetails.accountHolderName && (
                 <TouchableOpacity
-                  style={styles.deleteFullButton}
-                  onPress={handleDeleteBankDetails}
+                  style={
+                    styles.deleteFullButton
+                  }
+                  onPress={
+                    handleDeleteBankDetails
+                  }
                   disabled={loading}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.deleteFullButtonText}>
+                  <Text
+                    style={
+                      styles.deleteFullButtonText
+                    }
+                  >
                     DELETE BANK DETAILS
                   </Text>
                 </TouchableOpacity>
@@ -2031,10 +3579,14 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setShowBankModal(false)}
+                onPress={() =>
+                  setShowBankModal(false)
+                }
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -2047,7 +3599,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 export default OwnerProfileScreen;
 
 /* =========================================================
-   STYLES - WHITE & LIGHT GREEN THEME
+   STYLES
 ========================================================= */
 
 const styles = StyleSheet.create({
@@ -2061,9 +3613,7 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
 
-  /* =======================================================
-     HEADER
-  ======================================================= */
+  /* HEADER */
 
   pageHeader: {
     marginBottom: 24,
@@ -2099,9 +3649,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  /* =======================================================
-     PROFILE CARD
-  ======================================================= */
+  /* PROFILE */
 
   profileCard: {
     backgroundColor: COLORS.card,
@@ -2111,7 +3659,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 16,
     elevation: 3,
@@ -2131,7 +3682,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
@@ -2166,7 +3720,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.textPrimary,
     textAlign: 'center',
-    letterSpacing: 0.2,
   },
 
   email: {
@@ -2218,9 +3771,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* =======================================================
-     BUTTONS
-  ======================================================= */
+  /* BUTTONS */
 
   primaryButton: {
     backgroundColor: COLORS.primary,
@@ -2231,7 +3782,10 @@ const styles = StyleSheet.create({
     marginTop: 18,
     minHeight: 52,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 4,
@@ -2279,9 +3833,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* =======================================================
-     SECTIONS
-  ======================================================= */
+  /* SECTIONS */
 
   sectionHeader: {
     flexDirection: 'row',
@@ -2319,7 +3871,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginLeft: 10,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
@@ -2332,9 +3887,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
+  /* LOADING */
 
   loadingBox: {
     backgroundColor: COLORS.primarySoft,
@@ -2353,9 +3906,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* =======================================================
-     EMPTY STATE
-  ======================================================= */
+  /* EMPTY */
 
   emptyCard: {
     backgroundColor: COLORS.primarySoft,
@@ -2397,9 +3948,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  /* =======================================================
-     TURF CARD
-  ======================================================= */
+  /* TURF */
 
   turfCard: {
     backgroundColor: COLORS.card,
@@ -2409,7 +3958,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
     shadowOpacity: 0.06,
     shadowRadius: 14,
     elevation: 3,
@@ -2453,7 +4005,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: COLORS.white,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 3,
@@ -2480,7 +4035,6 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '900',
     color: COLORS.textPrimary,
-    letterSpacing: 0.2,
   },
 
   turfCity: {
@@ -2499,7 +4053,6 @@ const styles = StyleSheet.create({
 
   turfActionGrid: {
     flexDirection: 'row',
-    gap: 8,
     marginTop: 18,
   },
 
@@ -2513,6 +4066,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 8,
   },
 
   manageButtonText: {
@@ -2520,6 +4074,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     letterSpacing: 0.7,
+    textAlign: 'center',
   },
 
   editButton: {
@@ -2530,6 +4085,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
   },
 
   editButtonText: {
@@ -2558,9 +4114,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.7,
   },
 
-  /* =======================================================
-     COURTS
-  ======================================================= */
+  /* COURTS */
 
   courtsContainer: {
     marginTop: 18,
@@ -2640,13 +4194,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
   },
 
   courtName: {
     fontSize: 16,
     fontWeight: '900',
     color: COLORS.textPrimary,
+    marginRight: 8,
   },
 
   sportPill: {
@@ -2698,7 +4252,6 @@ const styles = StyleSheet.create({
 
   courtActions: {
     alignItems: 'flex-end',
-    gap: 8,
   },
 
   smallEditButton: {
@@ -2708,6 +4261,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
+    marginBottom: 8,
   },
 
   editCourtText: {
@@ -2731,9 +4285,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 
-  /* =======================================================
-     BANK
-  ======================================================= */
+  /* BANK */
 
   bankCard: {
     backgroundColor: COLORS.card,
@@ -2743,7 +4295,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
@@ -2820,9 +4375,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  /* =======================================================
-     DANGER ZONE
-  ======================================================= */
+  /* DANGER */
 
   dangerSection: {
     backgroundColor: COLORS.dangerSoft,
@@ -2892,9 +4445,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
+  /* LOGOUT */
 
   logoutButton: {
     borderWidth: 1.5,
@@ -2913,9 +4464,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
 
-  /* =======================================================
-     MODALS
-  ======================================================= */
+  /* MODALS */
 
   modalOverlay: {
     flex: 1,
@@ -2938,7 +4487,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
     shadowOpacity: 0.15,
     shadowRadius: 24,
     elevation: 10,
@@ -3013,9 +4565,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  /* =======================================================
-     OPERATING HOURS
-  ======================================================= */
+  /* OPERATING HOURS */
 
   hoursSectionTitleRow: {
     flexDirection: 'row',
@@ -3117,9 +4667,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* =======================================================
-     NIGHT PRICING
-  ======================================================= */
+  /* NIGHT PRICING */
 
   nightPricingCard: {
     backgroundColor: COLORS.warningSoft,
@@ -3227,9 +4775,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  /* =======================================================
-     FULL DELETE BUTTON
-  ======================================================= */
+  /* DELETE */
 
   deleteFullButton: {
     marginTop: 12,

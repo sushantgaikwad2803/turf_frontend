@@ -13,10 +13,33 @@ import {
 } from 'react-native';
 
 /* =========================================================
-   API
+   API CONFIGURATION
 ========================================================= */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+const RAW_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+if (!RAW_API_BASE_URL) {
+  throw new Error(
+    'EXPO_PUBLIC_API_URL is missing. Please check your .env file.',
+  );
+}
+
+// Remove accidental whitespace and trailing slashes.
+const API_BASE_URL = RAW_API_BASE_URL.trim().replace(/\/+$/, '');
+
+// Make sure Android always receives a valid absolute URL.
+const NORMALIZED_API_BASE_URL = /^https?:\/\//i.test(API_BASE_URL)
+  ? API_BASE_URL
+  : `https://${API_BASE_URL}`;
+
+const getApiUrl = (endpoint: string): string => {
+  const cleanEndpoint = endpoint.trim().replace(/^\/+/, '');
+  return `${NORMALIZED_API_BASE_URL}/${cleanEndpoint}`;
+};
+
+// console.log('========================================');
+// console.log('TURFBOOK API BASE URL:', NORMALIZED_API_BASE_URL);
+// console.log('========================================');
 
 /* =========================================================
    THEME COLORS
@@ -195,7 +218,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       const cleanIdentifier = identifier.trim();
       const cleanPassword = loginPassword.trim();
 
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(getApiUrl('auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,7 +288,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       const safeRole: 'customer' | 'owner' =
         role === 'owner' ? 'owner' : 'customer';
 
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await fetch(getApiUrl('auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

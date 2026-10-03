@@ -7,12 +7,16 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,10 +31,44 @@ import type {
 } from '../../App';
 
 /* =========================================================
-   CONFIG
+   API CONFIGURATION
 ========================================================= */
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+const RAW_API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+/**
+ * Normalizes the API URL.
+ *
+ * Accepts:
+ * https://example.com/api
+ * example.com/api
+ * https://example.com
+ *
+ * Returns:
+ * https://example.com/api
+ */
+const normalizeApiUrl = (url?: string): string => {
+  if (!url || !url.trim()) {
+    return '';
+  }
+
+  let normalized = url.trim();
+
+  // Remove trailing slashes
+  normalized = normalized.replace(/\/+$/, '');
+
+  // Add HTTPS if protocol is missing
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+
+  // Remove duplicate /api if user accidentally configured it twice
+  normalized = normalized.replace(/\/api\/api$/i, '/api');
+
+  return normalized;
+};
+
+const API_BASE_URL = normalizeApiUrl(RAW_API_URL);
 
 /* =========================================================
    THEME COLORS
@@ -85,12 +123,19 @@ const COLORS = {
    TYPES
 ========================================================= */
 
-type TurfStatus = 'active' | 'inactive' | 'maintenance';
+type TurfStatus =
+  | 'active'
+  | 'inactive'
+  | 'maintenance';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'AdminDashboard'> & {
-  user: User;
-  onLogout: () => void;
-};
+type Props =
+  NativeStackScreenProps<
+    RootStackParamList,
+    'AdminDashboard'
+  > & {
+    user: User;
+    onLogout: () => void;
+  };
 
 interface AdminOverview {
   totalUsers: number;
@@ -147,16 +192,24 @@ interface PaymentSummary {
 
 interface AdminDashboardData {
   success: boolean;
+
   overview: AdminOverview;
+
   users: UserSummary;
+
   turfs: TurfSummary;
+
   courts: CourtSummary;
+
   bookings: BookingSummary;
+
   payments: PaymentSummary;
+
   content: {
     reviews: number;
     coupons: number;
   };
+
   recentUsers: Array<{
     _id: string;
     name: string;
@@ -165,44 +218,71 @@ interface AdminDashboardData {
     role: string;
     createdAt?: string;
   }>;
+
   recentTurfs: Array<{
     _id: string;
     name: string;
     city: string;
     address: string;
     status: TurfStatus | string;
+
     owner?: {
       _id: string;
       name: string;
       email: string;
       phone?: string;
     } | null;
+
     createdAt?: string;
   }>;
+
   recentBookings: Array<{
     _id: string;
+
     bookingDate: string;
+
     startTime: string;
+
     endTime: string;
+
     finalAmount: number;
+
     status: string;
+
     user?: {
       _id: string;
       name: string;
       email: string;
       phone?: string;
     } | null;
+
     turf?: {
       _id: string;
       name: string;
       city: string;
     } | null;
+
     court?: {
       _id: string;
       name: string;
       sport: string;
     } | null;
   }>;
+}
+
+interface AdminBankDetails {
+  _id?: string;
+  accountType?: 'admin';
+  owner?: string | null;
+  gatewayAccountId?: string;
+  accountHolderName: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  bankName?: string;
+  branchName?: string;
+  isVerified: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /* =========================================================
@@ -214,11 +294,15 @@ const formatCurrency = (value: number): string => {
 };
 
 const formatDate = (value?: string): string => {
-  if (!value) return '--';
+  if (!value) {
+    return '--';
+  }
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return '--';
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
 
   return date.toLocaleDateString('en-IN', {
     day: '2-digit',
@@ -227,218 +311,908 @@ const formatDate = (value?: string): string => {
   });
 };
 
+/**
+ * Safely parse JSON.
+ * Sometimes Railway/proxy/server errors return HTML/text instead of JSON.
+ */
+const parseResponse = async (
+  response: Response,
+): Promise<any> => {
+  const contentType =
+    response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      error:
+        text ||
+        `Server returned ${response.status}`,
+    };
+  }
+};
+
+/**
+ * Creates a readable network error.
+ */
+const getNetworkErrorMessage = (
+  error: unknown,
+): string => {
+  if (error instanceof TypeError) {
+    return (
+      'Unable to connect to the backend.\n\n' +
+      'Please check:\n' +
+      '• Railway backend is running\n' +
+      '• EXPO_PUBLIC_API_URL contains https://\n' +
+      '• The API endpoint is correct\n' +
+      '• Your device has internet access'
+    );
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unable to connect to the backend.';
+};
+
 /* =========================================================
    COMPONENT
 ========================================================= */
 
-const AdminDashboardScreen: React.FC<Props> = ({ user, onLogout }) => {
-  const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [updatingTurfId, setUpdatingTurfId] = useState<string | null>(null);
+const AdminDashboardScreen: React.FC<Props> = ({
+  user,
+  onLogout,
+}) => {
+  const [dashboard, setDashboard] =
+    useState<AdminDashboardData | null>(null);
 
-  /* FETCH DASHBOARD */
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [updatingTurfId, setUpdatingTurfId] =
+    useState<string | null>(null);
+
+  /* =========================================================
+     ADMIN BANK DETAILS
+  ========================================================= */
+
+  const [adminBank, setAdminBank] =
+    useState<AdminBankDetails | null>(null);
+
+  const [bankModalVisible, setBankModalVisible] =
+    useState(false);
+
+  const [bankLoading, setBankLoading] =
+    useState(false);
+
+  const [bankSaving, setBankSaving] =
+    useState(false);
+
+  const [bankDeleting, setBankDeleting] =
+    useState(false);
+
+  const [bankError, setBankError] =
+    useState<string | null>(null);
+
+  const [bankForm, setBankForm] = useState({
+    accountHolderName: '',
+    accountNumber: '',
+    ifscCode: '',
+    bankName: '',
+    branchName: '',
+    gatewayAccountId: '',
+  });
+
+  /* =========================================================
+     FETCH DASHBOARD
+  ========================================================= */
+
   const fetchDashboard = useCallback(
-    async (showLoader = true): Promise<void> => {
+    async (
+      showLoader = true,
+    ): Promise<void> => {
       try {
-        if (showLoader) setLoading(true);
+        if (showLoader) {
+          setLoading(true);
+        }
+
         setError(null);
 
-        if (!user?._id) {
-          throw new Error('Admin user ID is missing.');
+        /* -----------------------------------------
+           Validate API URL
+        ----------------------------------------- */
+
+        if (!API_BASE_URL) {
+          throw new Error(
+            'Backend API URL is not configured.\n\n' +
+            'Set this in your .env file:\n\n' +
+            'EXPO_PUBLIC_API_URL=https://your-backend.up.railway.app/api',
+          );
         }
 
-        const response = await fetch(
-          `${API_BASE_URL}/admin/dashboard?adminId=${encodeURIComponent(
-            user._id
-          )}`
+        /* -----------------------------------------
+           Validate user
+        ----------------------------------------- */
+
+        if (!user?._id) {
+          throw new Error(
+            'Admin user ID is missing.',
+          );
+        }
+
+        /* -----------------------------------------
+           Build URL
+        ----------------------------------------- */
+
+        const endpoint =
+          `${API_BASE_URL}/admin/dashboard` +
+          `?adminId=${encodeURIComponent(user._id)}`;
+
+        console.log(
+          '[AdminDashboard] API:',
+          endpoint,
         );
 
-        const data = await response.json();
+        /* -----------------------------------------
+           Request
+        ----------------------------------------- */
+
+        const response = await fetch(
+          endpoint,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        /* -----------------------------------------
+           Parse response
+        ----------------------------------------- */
+
+        const data =
+          await parseResponse(response);
+
+        console.log(
+          '[AdminDashboard] Status:',
+          response.status,
+        );
+
+        /* -----------------------------------------
+           HTTP error
+        ----------------------------------------- */
 
         if (!response.ok) {
-          throw new Error(data?.error || 'Failed to load admin dashboard.');
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            `Server error: ${response.status}`,
+          );
         }
 
+        /* -----------------------------------------
+           API error
+        ----------------------------------------- */
+
         if (!data?.success) {
-          throw new Error(data?.error || 'Failed to load dashboard.');
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            'Failed to load admin dashboard.',
+          );
         }
+
+        /* -----------------------------------------
+           Save dashboard
+        ----------------------------------------- */
 
         setDashboard(data);
       } catch (requestError) {
-        console.error('Admin dashboard fetch error:', requestError);
+        console.error(
+          '[AdminDashboard] Fetch error:',
+          requestError,
+        );
+
         setError(
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to load dashboard.'
+          getNetworkErrorMessage(
+            requestError,
+          ),
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [user?._id]
+    [user?._id],
   );
 
-  /* INITIAL LOAD */
+  /* =========================================================
+     ADMIN BANK DETAILS - FETCH
+  ========================================================= */
+
+  const fetchAdminBankDetails = useCallback(
+    async (showLoader = false): Promise<void> => {
+      try {
+        if (!API_BASE_URL || !user?._id) {
+          return;
+        }
+
+        if (showLoader) {
+          setBankLoading(true);
+        }
+
+        setBankError(null);
+
+        const endpoint =
+          `${API_BASE_URL}/admin/bank-details` +
+          `?adminId=${encodeURIComponent(user._id)}`;
+
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await parseResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            `Server error: ${response.status}`,
+          );
+        }
+
+        if (!data?.success) {
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            'Failed to load admin bank details.',
+          );
+        }
+
+        setAdminBank(data?.bankDetails || null);
+      } catch (requestError) {
+        console.error(
+          '[AdminDashboard] Admin bank fetch error:',
+          requestError,
+        );
+
+        setBankError(
+          getNetworkErrorMessage(requestError),
+        );
+      } finally {
+        setBankLoading(false);
+      }
+    },
+    [user?._id],
+  );
+
+  /* =========================================================
+     ADMIN BANK DETAILS - OPEN ADD/EDIT
+  ========================================================= */
+
+  const openBankModal = useCallback(() => {
+    setBankError(null);
+
+    setBankForm({
+      accountHolderName:
+        adminBank?.accountHolderName || '',
+      accountNumber:
+        adminBank?.accountNumber || '',
+      ifscCode:
+        adminBank?.ifscCode || '',
+      bankName:
+        adminBank?.bankName || '',
+      branchName:
+        adminBank?.branchName || '',
+      gatewayAccountId:
+        adminBank?.gatewayAccountId || '',
+    });
+
+    setBankModalVisible(true);
+  }, [adminBank]);
+
+  /* =========================================================
+     ADMIN BANK DETAILS - SAVE
+  ========================================================= */
+
+  const saveAdminBankDetails = useCallback(
+    async (): Promise<void> => {
+      try {
+        if (!API_BASE_URL) {
+          Alert.alert(
+            'Configuration Error',
+            'Backend API URL is missing.',
+          );
+          return;
+        }
+
+        if (!user?._id) {
+          Alert.alert(
+            'Error',
+            'Admin user ID is missing.',
+          );
+          return;
+        }
+
+        const holder =
+          bankForm.accountHolderName.trim();
+
+        const account =
+          bankForm.accountNumber
+            .trim()
+            .replace(/\s+/g, '');
+
+        const ifsc =
+          bankForm.ifscCode
+            .trim()
+            .toUpperCase();
+
+        const bankName =
+          bankForm.bankName.trim();
+
+        const branchName =
+          bankForm.branchName.trim();
+
+        const gatewayAccountId =
+          bankForm.gatewayAccountId.trim();
+
+        if (holder.length < 2) {
+          Alert.alert(
+            'Invalid Account Holder',
+            'Please enter the account holder name.',
+          );
+          return;
+        }
+
+        if (!/^\d{6,30}$/.test(account)) {
+          Alert.alert(
+            'Invalid Account Number',
+            'Account number must contain 6 to 30 digits.',
+          );
+          return;
+        }
+
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+          Alert.alert(
+            'Invalid IFSC',
+            'Please enter a valid Indian IFSC code.',
+          );
+          return;
+        }
+
+        setBankSaving(true);
+        setBankError(null);
+
+        const endpoint =
+          `${API_BASE_URL}/admin/bank-details`;
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            adminId: user._id,
+            accountHolderName: holder,
+            accountNumber: account,
+            ifscCode: ifsc,
+            bankName: bankName || undefined,
+            branchName: branchName || undefined,
+            gatewayAccountId:
+              gatewayAccountId || undefined,
+          }),
+        });
+
+        const data = await parseResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            `Server error: ${response.status}`,
+          );
+        }
+
+        if (!data?.success) {
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            'Failed to save admin bank details.',
+          );
+        }
+
+        setAdminBank(
+          data?.bankDetails || null,
+        );
+
+        setBankModalVisible(false);
+
+        Alert.alert(
+          'Bank Details Saved',
+          data?.message ||
+            'Admin bank details have been saved successfully.',
+        );
+      } catch (requestError) {
+        console.error(
+          '[AdminDashboard] Admin bank save error:',
+          requestError,
+        );
+
+        const message =
+          getNetworkErrorMessage(requestError);
+
+        setBankError(message);
+
+        Alert.alert(
+          'Save Failed',
+          message,
+        );
+      } finally {
+        setBankSaving(false);
+      }
+    },
+    [bankForm, user?._id],
+  );
+
+  /* =========================================================
+     ADMIN BANK DETAILS - DELETE
+  ========================================================= */
+
+  const deleteAdminBankDetails = useCallback(() => {
+    if (!adminBank) {
+      return;
+    }
+
+    Alert.alert(
+      'Delete Bank Details',
+      'This will remove the admin settlement bank account from TurfBook. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!API_BASE_URL || !user?._id) {
+                Alert.alert(
+                  'Error',
+                  'Backend API URL or admin ID is missing.',
+                );
+                return;
+              }
+
+              setBankDeleting(true);
+
+              const endpoint =
+                `${API_BASE_URL}/admin/bank-details` +
+                `?adminId=${encodeURIComponent(user._id)}`;
+
+              const response = await fetch(endpoint, {
+                method: 'DELETE',
+                headers: {
+                  Accept: 'application/json',
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              const data =
+                await parseResponse(response);
+
+              if (!response.ok) {
+                throw new Error(
+                  data?.error ||
+                  data?.message ||
+                  `Server error: ${response.status}`,
+                );
+              }
+
+              if (!data?.success) {
+                throw new Error(
+                  data?.error ||
+                  data?.message ||
+                  'Failed to delete admin bank details.',
+                );
+              }
+
+              setAdminBank(null);
+
+              Alert.alert(
+                'Deleted',
+                data?.message ||
+                  'Admin bank details deleted successfully.',
+              );
+            } catch (requestError) {
+              console.error(
+                '[AdminDashboard] Admin bank delete error:',
+                requestError,
+              );
+
+              Alert.alert(
+                'Delete Failed',
+                getNetworkErrorMessage(
+                  requestError,
+                ),
+              );
+            } finally {
+              setBankDeleting(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [adminBank, user?._id]);
+
+  /* =========================================================
+     INITIAL LOAD
+  ========================================================= */
+
   useEffect(() => {
     fetchDashboard();
-  }, [fetchDashboard]);
+    fetchAdminBankDetails();
+  }, [
+    fetchDashboard,
+    fetchAdminBankDetails,
+  ]);
 
-  /* REFRESH */
+  /* =========================================================
+     REFRESH
+  ========================================================= */
+
   const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchDashboard(false);
-  }, [fetchDashboard]);
+    if (refreshing) {
+      return;
+    }
 
-  /* UPDATE TURF STATUS */
+    setRefreshing(true);
+
+    fetchDashboard(false);
+  }, [
+    fetchDashboard,
+    refreshing,
+  ]);
+
+  /* =========================================================
+     UPDATE TURF STATUS
+  ========================================================= */
+
   const updateTurfStatus = useCallback(
-    async (turfId: string, status: TurfStatus): Promise<void> => {
+    async (
+      turfId: string,
+      status: TurfStatus,
+    ): Promise<void> => {
       try {
+        if (!API_BASE_URL) {
+          Alert.alert(
+            'Configuration Error',
+            'Backend API URL is missing.',
+          );
+
+          return;
+        }
+
         if (!user?._id) {
-          Alert.alert('Error', 'Admin user ID is missing.');
+          Alert.alert(
+            'Error',
+            'Admin user ID is missing.',
+          );
+
           return;
         }
 
         if (!turfId) {
-          Alert.alert('Error', 'Turf ID is missing.');
+          Alert.alert(
+            'Error',
+            'Turf ID is missing.',
+          );
+
           return;
         }
 
         setUpdatingTurfId(turfId);
 
-        const response = await fetch(
-          `${API_BASE_URL}/admin/turfs/${encodeURIComponent(turfId)}/status`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ adminId: user._id, status }),
-          }
+        const endpoint =
+          `${API_BASE_URL}/admin/turfs/` +
+          `${encodeURIComponent(turfId)}/status`;
+
+        console.log(
+          '[AdminDashboard] Updating turf:',
+          endpoint,
         );
 
-        const data = await response.json();
+        const response = await fetch(
+          endpoint,
+          {
+            method: 'PUT',
+
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+
+            body: JSON.stringify({
+              adminId: user._id,
+              status,
+            }),
+          },
+        );
+
+        const data =
+          await parseResponse(response);
 
         if (!response.ok) {
-          throw new Error(data?.error || 'Failed to update turf status.');
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            'Failed to update turf status.',
+          );
         }
 
         if (!data?.success) {
-          throw new Error(data?.error || 'Failed to update turf status.');
+          throw new Error(
+            data?.error ||
+            data?.message ||
+            'Failed to update turf status.',
+          );
         }
 
-        const title =
-          status === 'active'
-            ? 'Turf Activated'
-            : status === 'inactive'
-            ? 'Turf Deactivated'
-            : 'Turf Under Maintenance';
+        let title = 'Turf Updated';
+
+        if (status === 'active') {
+          title = 'Turf Activated';
+        } else if (status === 'inactive') {
+          title = 'Turf Deactivated';
+        } else if (status === 'maintenance') {
+          title = 'Turf Under Maintenance';
+        }
 
         Alert.alert(
           title,
-          data?.message || 'Turf status updated successfully.'
+          data?.message ||
+            'Turf status updated successfully.',
         );
 
         await fetchDashboard(false);
       } catch (requestError) {
-        console.error('Update turf status error:', requestError);
+        console.error(
+          '[AdminDashboard] Turf update error:',
+          requestError,
+        );
+
         Alert.alert(
           'Update Failed',
-          requestError instanceof Error
-            ? requestError.message
-            : 'Unable to update turf status.'
+          getNetworkErrorMessage(
+            requestError,
+          ),
         );
       } finally {
         setUpdatingTurfId(null);
       }
     },
-    [user?._id, fetchDashboard]
+    [
+      user?._id,
+      fetchDashboard,
+    ],
   );
 
-  /* ACTIVATE TURF */
+  /* =========================================================
+     ACTIVATE TURF
+  ========================================================= */
+
   const handleActivateTurf = useCallback(
-    (turfId: string, turfName: string) => {
+    (
+      turfId: string,
+      turfName: string,
+    ) => {
       Alert.alert(
         'Activate Turf',
-        `Are you sure you want to activate "${turfName}"?\n\nOnce activated, this turf will become visible to customers on the Home screen.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Activate', onPress: () => updateTurfStatus(turfId, 'active') },
-        ]
-      );
-    },
-    [updateTurfStatus]
-  );
 
-  /* DEACTIVATE TURF */
-  const handleDeactivateTurf = useCallback(
-    (turfId: string, turfName: string) => {
-      Alert.alert(
-        'Deactivate Turf',
-        `Are you sure you want to deactivate "${turfName}"?\n\nThis turf will no longer be visible to customers.`,
+        `Are you sure you want to activate "${turfName}"?\n\n` +
+          'Once activated, this turf will become visible to customers on the Home screen.',
+
         [
-          { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Deactivate',
-            style: 'destructive',
-            onPress: () => updateTurfStatus(turfId, 'inactive'),
+            text: 'Cancel',
+            style: 'cancel',
           },
-        ]
-      );
-    },
-    [updateTurfStatus]
-  );
 
-  /* MAINTENANCE */
-  const handleMaintenanceTurf = useCallback(
-    (turfId: string, turfName: string) => {
-      Alert.alert(
-        'Move to Maintenance',
-        `Are you sure you want to move "${turfName}" to maintenance?\n\nCustomers will not see this turf while it is not active.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Maintenance',
-            onPress: () => updateTurfStatus(turfId, 'maintenance'),
+            text: 'Activate',
+            onPress: () =>
+              updateTurfStatus(
+                turfId,
+                'active',
+              ),
           },
-        ]
+        ],
       );
     },
-    [updateTurfStatus]
+    [updateTurfStatus],
   );
 
-  /* LOGOUT */
+  /* =========================================================
+     DEACTIVATE TURF
+  ========================================================= */
+
+  const handleDeactivateTurf =
+    useCallback(
+      (
+        turfId: string,
+        turfName: string,
+      ) => {
+        Alert.alert(
+          'Deactivate Turf',
+
+          `Are you sure you want to deactivate "${turfName}"?\n\n` +
+            'This turf will no longer be visible to customers.',
+
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+
+            {
+              text: 'Deactivate',
+
+              style: 'destructive',
+
+              onPress: () =>
+                updateTurfStatus(
+                  turfId,
+                  'inactive',
+                ),
+            },
+          ],
+        );
+      },
+      [updateTurfStatus],
+    );
+
+  /* =========================================================
+     MAINTENANCE
+  ========================================================= */
+
+  const handleMaintenanceTurf =
+    useCallback(
+      (
+        turfId: string,
+        turfName: string,
+      ) => {
+        Alert.alert(
+          'Move to Maintenance',
+
+          `Are you sure you want to move "${turfName}" to maintenance?\n\n` +
+            'Customers will not see this turf while it is not active.',
+
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+
+            {
+              text: 'Maintenance',
+
+              onPress: () =>
+                updateTurfStatus(
+                  turfId,
+                  'maintenance',
+                ),
+            },
+          ],
+        );
+      },
+      [updateTurfStatus],
+    );
+
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: onLogout },
-    ]);
-  };
-
-  /* MANAGEMENT ACTION */
-  const showComingSoon = (title: string) => {
     Alert.alert(
-      title,
-      'This management section will be connected to its detailed screen next.',
-      [{ text: 'OK' }]
+      'Logout',
+      'Are you sure you want to logout?',
+
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: onLogout,
+        },
+      ],
     );
   };
 
-  /* LOADING */
+  /* =========================================================
+     MANAGEMENT ACTION
+  ========================================================= */
+
+  const showComingSoon = (
+    title: string,
+  ) => {
+    Alert.alert(
+      title,
+      'This management section will be connected to its detailed screen next.',
+      [
+        {
+          text: 'OK',
+        },
+      ],
+    );
+  };
+
+  /* =========================================================
+     LOADING
+  ========================================================= */
+
   if (loading && !dashboard) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={COLORS.bg}
+        />
 
-        <View style={styles.loadingContainer}>
-          <View style={styles.loadingLogo}>
-            <Text style={styles.loadingLogoText}>T</Text>
+        <View
+          style={styles.loadingContainer}
+        >
+          <View
+            style={styles.loadingLogo}
+          >
+            <Text
+              style={
+                styles.loadingLogoText
+              }
+            >
+              T
+            </Text>
           </View>
 
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+          />
 
-          <Text style={styles.loadingTitle}>Loading Admin Dashboard</Text>
-          <Text style={styles.loadingSubtitle}>
+          <Text
+            style={styles.loadingTitle}
+          >
+            Loading Admin Dashboard
+          </Text>
+
+          <Text
+            style={styles.loadingSubtitle}
+          >
             Fetching platform statistics...
           </Text>
         </View>
@@ -446,41 +1220,85 @@ const AdminDashboardScreen: React.FC<Props> = ({ user, onLogout }) => {
     );
   }
 
-  /* ERROR */
+  /* =========================================================
+     ERROR
+  ========================================================= */
+
   if (error && !dashboard) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={COLORS.bg}
+        />
 
-        <View style={styles.errorContainer}>
-          <View style={styles.errorIcon}>
-            <Text style={styles.errorIconText}>!</Text>
+        <View
+          style={styles.errorContainer}
+        >
+          <View
+            style={styles.errorIcon}
+          >
+            <Text
+              style={styles.errorIconText}
+            >
+              !
+            </Text>
           </View>
 
-          <Text style={styles.errorTitle}>Unable to Load Dashboard</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
+          <Text
+            style={styles.errorTitle}
+          >
+            Unable to Load Dashboard
+          </Text>
+
+          <Text
+            style={styles.errorMessage}
+          >
+            {error}
+          </Text>
 
           <TouchableOpacity
             style={styles.retryButton}
             activeOpacity={0.85}
-            onPress={() => fetchDashboard()}
+            onPress={() =>
+              fetchDashboard()
+            }
           >
-            <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+            <Text
+              style={
+                styles.retryButtonText
+              }
+            >
+              TRY AGAIN
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.errorLogoutButton}
+            style={
+              styles.errorLogoutButton
+            }
             activeOpacity={0.8}
             onPress={handleLogout}
           >
-            <Text style={styles.errorLogoutText}>Logout</Text>
+            <Text
+              style={
+                styles.errorLogoutText
+              }
+            >
+              Logout
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  /* SAFE DATA */
+  /* =========================================================
+     SAFE DATA
+  ========================================================= */
+
   const overview = dashboard?.overview;
   const users = dashboard?.users;
   const turfs = dashboard?.turfs;
@@ -494,8 +1312,13 @@ const AdminDashboardScreen: React.FC<Props> = ({ user, onLogout }) => {
   ========================================================= */
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+    <SafeAreaView
+      style={styles.safeArea}
+    >
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={COLORS.bg}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -507,666 +1330,1733 @@ const AdminDashboardScreen: React.FC<Props> = ({ user, onLogout }) => {
             tintColor={COLORS.primary}
           />
         }
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={
+          styles.scrollContent
+        }
       >
+
         {/* HEADER */}
+
         <View style={styles.header}>
-          <View style={styles.headerBadgeRow}>
-            <Text style={styles.headerBadge}>🏆 TURFBOOK ADMIN</Text>
+          <View
+            style={styles.headerBadgeRow}
+          >
+            <Text
+              style={styles.headerBadge}
+            >
+              🏆 TURFBOOK ADMIN
+            </Text>
           </View>
 
-          <Text style={styles.headerTitle}>Admin Dashboard</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text
+            style={styles.headerTitle}
+          >
+            Admin Dashboard
+          </Text>
+
+          <Text
+            style={styles.headerSubtitle}
+          >
             Platform overview & management
           </Text>
 
-          <View style={styles.adminBadge}>
-            <Text style={styles.adminBadgeText}>ADMIN</Text>
+          <View
+            style={styles.adminBadge}
+          >
+            <Text
+              style={styles.adminBadgeText}
+            >
+              ADMIN
+            </Text>
           </View>
         </View>
 
         {/* WELCOME CARD */}
-        <View style={styles.welcomeCard}>
-          <View style={styles.avatarWrapper}>
+
+        <View
+          style={styles.welcomeCard}
+        >
+          <View
+            style={styles.avatarWrapper}
+          >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user.name ? user.name.charAt(0).toUpperCase() : 'A'}
+              <Text
+                style={styles.avatarText}
+              >
+                {user.name
+                  ? user.name
+                      .charAt(0)
+                      .toUpperCase()
+                  : 'A'}
               </Text>
             </View>
 
-            <View style={styles.avatarBadge}>
-              <Text style={styles.avatarBadgeText}>🏆</Text>
+            <View
+              style={styles.avatarBadge}
+            >
+              <Text
+                style={
+                  styles.avatarBadgeText
+                }
+              >
+                🏆
+              </Text>
             </View>
           </View>
 
-          <View style={styles.welcomeContent}>
-            <Text style={styles.welcomeLabel}>WELCOME BACK</Text>
-            <Text style={styles.welcomeName} numberOfLines={1}>
+          <View
+            style={styles.welcomeContent}
+          >
+            <Text
+              style={styles.welcomeLabel}
+            >
+              WELCOME BACK
+            </Text>
+
+            <Text
+              style={styles.welcomeName}
+              numberOfLines={1}
+            >
               {user.name}
             </Text>
-            <Text style={styles.welcomeEmail} numberOfLines={1}>
+
+            <Text
+              style={styles.welcomeEmail}
+              numberOfLines={1}
+            >
               {user.email}
             </Text>
           </View>
 
-          <View style={styles.onlineBadge}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>LIVE</Text>
+          <View
+            style={styles.onlineBadge}
+          >
+            <View
+              style={styles.onlineDot}
+            />
+
+            <Text
+              style={styles.onlineText}
+            >
+              LIVE
+            </Text>
           </View>
         </View>
 
         {/* PLATFORM OVERVIEW */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Platform Overview</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Live platform statistics
-          </Text>
-        </View>
+        <SectionHeader
+          title="Platform Overview"
+          subtitle="Live platform statistics"
+        />
 
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Text style={styles.statIconText}>👥</Text>
-            </View>
 
-            <Text style={styles.statValue}>{overview?.totalUsers ?? 0}</Text>
-            <Text style={styles.statTitle}>Total Users</Text>
-            <Text style={styles.statMeta}>
-              {users?.customers ?? 0} customers • {users?.owners ?? 0} owners
-            </Text>
-          </View>
+          <StatCard
+            icon="👥"
+            value={
+              overview?.totalUsers ?? 0
+            }
+            title="Total Users"
+            meta={`${users?.customers ?? 0} customers • ${
+              users?.owners ?? 0
+            } owners`}
+          />
 
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Text style={styles.statIconText}>🏟️</Text>
-            </View>
+          <StatCard
+            icon="🏟️"
+            value={
+              overview?.totalTurfs ?? 0
+            }
+            title="Total Turfs"
+            meta={`${turfs?.active ?? 0} active`}
+          />
 
-            <Text style={styles.statValue}>{overview?.totalTurfs ?? 0}</Text>
-            <Text style={styles.statTitle}>Total Turfs</Text>
-            <Text style={styles.statMeta}>{turfs?.active ?? 0} active</Text>
-          </View>
+          <StatCard
+            icon="📅"
+            value={
+              overview?.totalBookings ?? 0
+            }
+            title="Total Bookings"
+            meta={`${
+              overview?.todaysBookings ?? 0
+            } today`}
+          />
 
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Text style={styles.statIconText}>📅</Text>
-            </View>
+          <StatCard
+            icon="₹"
+            value={formatCurrency(
+              overview?.platformRevenue ??
+                0,
+            )}
+            title="Platform Revenue"
+            meta={`Today ${formatCurrency(
+              overview?.todaysRevenue ??
+                0,
+            )}`}
+            small
+          />
 
-            <Text style={styles.statValue}>
-              {overview?.totalBookings ?? 0}
-            </Text>
-            <Text style={styles.statTitle}>Total Bookings</Text>
-            <Text style={styles.statMeta}>
-              {overview?.todaysBookings ?? 0} today
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Text style={styles.statIconText}>₹</Text>
-            </View>
-
-            <Text style={styles.statValueSmall}>
-              {formatCurrency(overview?.platformRevenue ?? 0)}
-            </Text>
-            <Text style={styles.statTitle}>Platform Revenue</Text>
-            <Text style={styles.statMeta}>
-              Today {formatCurrency(overview?.todaysRevenue ?? 0)}
-            </Text>
-          </View>
         </View>
 
         {/* REVENUE */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Revenue</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Payment collection summary
-          </Text>
-        </View>
+        <SectionHeader
+          title="Revenue"
+          subtitle="Payment collection summary"
+        />
 
-        <View style={styles.revenueCard}>
-          <View style={styles.revenueMain}>
-            <Text style={styles.revenueLabel}>TOTAL GROSS COLLECTION</Text>
-            <Text style={styles.revenueValue}>
-              {formatCurrency(payments?.grossRevenue ?? 0)}
+        <View
+          style={styles.revenueCard}
+        >
+          <View
+            style={styles.revenueMain}
+          >
+            <Text
+              style={styles.revenueLabel}
+            >
+              TOTAL GROSS COLLECTION
+            </Text>
+
+            <Text
+              style={styles.revenueValue}
+            >
+              {formatCurrency(
+                payments?.grossRevenue ??
+                  0,
+              )}
             </Text>
           </View>
 
-          <View style={styles.revenueDivider} />
+          <View
+            style={styles.revenueDivider}
+          />
 
-          <View style={styles.revenueRow}>
+          <View
+            style={styles.revenueRow}
+          >
             <View>
-              <Text style={styles.revenueRowLabel}>Platform Revenue</Text>
-              <Text style={styles.revenueRowValue}>
-                {formatCurrency(payments?.platformRevenue ?? 0)}
+              <Text
+                style={
+                  styles.revenueRowLabel
+                }
+              >
+                Platform Revenue
+              </Text>
+
+              <Text
+                style={
+                  styles.revenueRowValue
+                }
+              >
+                {formatCurrency(
+                  payments?.platformRevenue ??
+                    0,
+                )}
               </Text>
             </View>
 
-            <View style={styles.revenueRight}>
-              <Text style={styles.revenueRowLabel}>Owner Amount</Text>
-              <Text style={styles.revenueRowValue}>
-                {formatCurrency(payments?.ownerAmount ?? 0)}
+            <View
+              style={styles.revenueRight}
+            >
+              <Text
+                style={
+                  styles.revenueRowLabel
+                }
+              >
+                Owner Amount
+              </Text>
+
+              <Text
+                style={
+                  styles.revenueRowValue
+                }
+              >
+                {formatCurrency(
+                  payments?.ownerAmount ??
+                    0,
+                )}
               </Text>
             </View>
           </View>
 
-          <View style={styles.revenueMonthBox}>
-            <Text style={styles.revenueMonthTitle}>THIS MONTH</Text>
-            <Text style={styles.revenueMonthValue}>
-              {formatCurrency(payments?.thisMonth?.platformRevenue ?? 0)}
+          <View
+            style={styles.revenueMonthBox}
+          >
+            <Text
+              style={
+                styles.revenueMonthTitle
+              }
+            >
+              THIS MONTH
+            </Text>
+
+            <Text
+              style={
+                styles.revenueMonthValue
+              }
+            >
+              {formatCurrency(
+                payments?.thisMonth
+                  ?.platformRevenue ??
+                  0,
+              )}
             </Text>
           </View>
         </View>
 
         {/* BOOKING STATUS */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Booking Overview</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>Current booking status</Text>
-        </View>
+        <SectionHeader
+          title="Booking Overview"
+          subtitle="Current booking status"
+        />
 
-        <View style={styles.bookingStatusGrid}>
-          <View style={styles.bookingStatusCard}>
-            <View style={styles.bookingStatusHeader}>
-              <View style={styles.bookingStatusDotPending} />
-              <Text style={styles.bookingStatusValue}>
-                {bookings?.pending ?? 0}
-              </Text>
-            </View>
-            <Text style={styles.bookingStatusLabel}>Pending</Text>
-          </View>
+        <View
+          style={
+            styles.bookingStatusGrid
+          }
+        >
+          <BookingStatusCard
+            dotStyle={
+              styles.bookingStatusDotPending
+            }
+            value={
+              bookings?.pending ?? 0
+            }
+            label="Pending"
+          />
 
-          <View style={styles.bookingStatusCard}>
-            <View style={styles.bookingStatusHeader}>
-              <View style={styles.bookingStatusDotConfirmed} />
-              <Text style={styles.bookingStatusValue}>
-                {bookings?.confirmed ?? 0}
-              </Text>
-            </View>
-            <Text style={styles.bookingStatusLabel}>Confirmed</Text>
-          </View>
+          <BookingStatusCard
+            dotStyle={
+              styles.bookingStatusDotConfirmed
+            }
+            value={
+              bookings?.confirmed ?? 0
+            }
+            label="Confirmed"
+          />
 
-          <View style={styles.bookingStatusCard}>
-            <View style={styles.bookingStatusHeader}>
-              <View style={styles.bookingStatusDotCompleted} />
-              <Text style={styles.bookingStatusValue}>
-                {bookings?.completed ?? 0}
-              </Text>
-            </View>
-            <Text style={styles.bookingStatusLabel}>Completed</Text>
-          </View>
+          <BookingStatusCard
+            dotStyle={
+              styles.bookingStatusDotCompleted
+            }
+            value={
+              bookings?.completed ?? 0
+            }
+            label="Completed"
+          />
 
-          <View style={styles.bookingStatusCard}>
-            <View style={styles.bookingStatusHeader}>
-              <View style={styles.bookingStatusDotCancelled} />
-              <Text style={styles.bookingStatusValue}>
-                {bookings?.cancelled ?? 0}
-              </Text>
-            </View>
-            <Text style={styles.bookingStatusLabel}>Cancelled</Text>
-          </View>
+          <BookingStatusCard
+            dotStyle={
+              styles.bookingStatusDotCancelled
+            }
+            value={
+              bookings?.cancelled ?? 0
+            }
+            label="Cancelled"
+          />
         </View>
 
         {/* PLATFORM DETAILS */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Platform Details</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Current platform inventory
-          </Text>
-        </View>
+        <SectionHeader
+          title="Platform Details"
+          subtitle="Current platform inventory"
+        />
 
-        <View style={styles.detailsCard}>
-          <DetailRow label="Customers" value={users?.customers ?? 0} />
-          <View style={styles.detailDivider} />
+        <View
+          style={styles.detailsCard}
+        >
+          <DetailRow
+            label="Customers"
+            value={users?.customers ?? 0}
+          />
 
-          <DetailRow label="Owners" value={users?.owners ?? 0} />
-          <View style={styles.detailDivider} />
+          <View
+            style={styles.detailDivider}
+          />
 
-          <DetailRow label="Courts" value={courts?.total ?? 0} />
-          <View style={styles.detailDivider} />
+          <DetailRow
+            label="Owners"
+            value={users?.owners ?? 0}
+          />
 
-          <DetailRow label="Active Courts" value={courts?.active ?? 0} />
-          <View style={styles.detailDivider} />
+          <View
+            style={styles.detailDivider}
+          />
 
-          <DetailRow label="Active Turfs" value={turfs?.active ?? 0} />
-          <View style={styles.detailDivider} />
+          <DetailRow
+            label="Courts"
+            value={courts?.total ?? 0}
+          />
+
+          <View
+            style={styles.detailDivider}
+          />
+
+          <DetailRow
+            label="Active Courts"
+            value={courts?.active ?? 0}
+          />
+
+          <View
+            style={styles.detailDivider}
+          />
+
+          <DetailRow
+            label="Active Turfs"
+            value={turfs?.active ?? 0}
+          />
+
+          <View
+            style={styles.detailDivider}
+          />
 
           <DetailRow
             label="Inactive / Pending Turfs"
             value={turfs?.inactive ?? 0}
           />
-          <View style={styles.detailDivider} />
+
+          <View
+            style={styles.detailDivider}
+          />
 
           <DetailRow
             label="Maintenance Turfs"
-            value={turfs?.maintenance ?? 0}
+            value={
+              turfs?.maintenance ?? 0
+            }
           />
-          <View style={styles.detailDivider} />
 
-          <DetailRow label="Reviews" value={content?.reviews ?? 0} />
-          <View style={styles.detailDivider} />
+          <View
+            style={styles.detailDivider}
+          />
 
-          <DetailRow label="Coupons" value={content?.coupons ?? 0} />
+          <DetailRow
+            label="Reviews"
+            value={
+              content?.reviews ?? 0
+            }
+          />
+
+          <View
+            style={styles.detailDivider}
+          />
+
+          <DetailRow
+            label="Coupons"
+            value={
+              content?.coupons ?? 0
+            }
+          />
         </View>
 
         {/* MANAGEMENT */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Management</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Manage TurfBook platform
-          </Text>
-        </View>
+        <SectionHeader
+          title="Management"
+          subtitle="Manage TurfBook platform"
+        />
 
-        <View style={styles.managementCard}>
+        <View
+          style={styles.managementCard}
+        >
           <ManagementItem
             icon="👥"
             title="User Management"
             subtitle="View and manage customers, owners and admins"
-            onPress={() => showComingSoon('User Management')}
+            onPress={() =>
+              showComingSoon(
+                'User Management',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="🏟️"
             title="Turf Management"
             subtitle="Manage registered turfs, courts and owners"
-            onPress={() => showComingSoon('Turf Management')}
+            onPress={() =>
+              showComingSoon(
+                'Turf Management',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="📅"
             title="Booking Management"
             subtitle="Monitor booking activity and statuses"
-            onPress={() => showComingSoon('Booking Management')}
+            onPress={() =>
+              showComingSoon(
+                'Booking Management',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="💳"
             title="Payments & Payouts"
             subtitle="Monitor payments, fees and owner settlements"
-            onPress={() => showComingSoon('Payments & Payouts')}
+            onPress={() =>
+              showComingSoon(
+                'Payments & Payouts',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="⭐"
             title="Reviews & Reports"
             subtitle="Review feedback and platform content"
-            onPress={() => showComingSoon('Reviews & Reports')}
+            onPress={() =>
+              showComingSoon(
+                'Reviews & Reports',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="🎟️"
             title="Coupons"
             subtitle="Manage promotional coupon campaigns"
-            onPress={() => showComingSoon('Coupons')}
+            onPress={() =>
+              showComingSoon('Coupons')
+            }
           />
         </View>
 
         {/* RECENT USERS */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Recent Users</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Latest registered accounts
-          </Text>
-        </View>
+        <SectionHeader
+          title="Recent Users"
+          subtitle="Latest registered accounts"
+        />
 
-        <View style={styles.listCard}>
-          {dashboard?.recentUsers?.length ? (
-            dashboard.recentUsers.map((recentUser, index) => (
-              <React.Fragment key={recentUser._id}>
-                <View style={styles.userRow}>
-                  <View style={styles.smallAvatar}>
-                    <Text style={styles.smallAvatarText}>
-                      {recentUser.name?.charAt(0).toUpperCase() || 'U'}
-                    </Text>
+        <View
+          style={styles.listCard}
+        >
+          {dashboard?.recentUsers
+            ?.length ? (
+            dashboard.recentUsers.map(
+              (
+                recentUser,
+                index,
+              ) => (
+                <React.Fragment
+                  key={
+                    recentUser._id
+                  }
+                >
+                  <View
+                    style={
+                      styles.userRow
+                    }
+                  >
+                    <View
+                      style={
+                        styles.smallAvatar
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.smallAvatarText
+                        }
+                      >
+                        {recentUser.name
+                          ?.charAt(0)
+                          .toUpperCase() ||
+                          'U'}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.listContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.listTitle
+                        }
+                        numberOfLines={
+                          1
+                        }
+                      >
+                        {
+                          recentUser.name
+                        }
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.listSubtitle
+                        }
+                        numberOfLines={
+                          1
+                        }
+                      >
+                        {
+                          recentUser.email
+                        }
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.roleBadge
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.roleBadgeText
+                        }
+                      >
+                        {String(
+                          recentUser.role,
+                        ).toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.listContent}>
-                    <Text style={styles.listTitle} numberOfLines={1}>
-                      {recentUser.name}
-                    </Text>
-                    <Text style={styles.listSubtitle} numberOfLines={1}>
-                      {recentUser.email}
-                    </Text>
-                  </View>
-
-                  <View style={styles.roleBadge}>
-                    <Text style={styles.roleBadgeText}>
-                      {String(recentUser.role).toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                {index < dashboard.recentUsers.length - 1 && (
-                  <View style={styles.listDivider} />
-                )}
-              </React.Fragment>
-            ))
+                  {index <
+                    dashboard
+                      .recentUsers
+                      .length -
+                      1 && (
+                    <View
+                      style={
+                        styles.listDivider
+                      }
+                    />
+                  )}
+                </React.Fragment>
+              ),
+            )
           ) : (
             <EmptyList text="No users found." />
           )}
         </View>
 
         {/* RECENT TURFS */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Recent Turfs</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Approve and manage turf registrations
-          </Text>
-        </View>
+        <SectionHeader
+          title="Recent Turfs"
+          subtitle="Approve and manage turf registrations"
+        />
 
-        <View style={styles.listCard}>
-          {dashboard?.recentTurfs?.length ? (
-            dashboard.recentTurfs.map((turf, index) => {
-              const isUpdating = updatingTurfId === turf._id;
-              const turfStatus = turf.status;
+        <View
+          style={styles.listCard}
+        >
+          {dashboard?.recentTurfs
+            ?.length ? (
+            dashboard.recentTurfs.map(
+              (turf, index) => {
+                const isUpdating =
+                  updatingTurfId ===
+                  turf._id;
 
-              return (
-                <React.Fragment key={turf._id}>
-                  <View style={styles.turfRow}>
-                    <View style={styles.turfIcon}>
-                      <Text style={styles.turfIconText}>🏟️</Text>
-                    </View>
+                const turfStatus =
+                  turf.status;
 
-                    <View style={styles.turfMainContent}>
-                      <Text style={styles.listTitle} numberOfLines={1}>
-                        {turf.name}
-                      </Text>
-
-                      <Text style={styles.listSubtitle} numberOfLines={1}>
-                        {turf.city} • {turf.owner?.name || 'Unknown owner'}
-                      </Text>
-
-                      <View style={styles.turfStatusRow}>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            turfStatus === 'active'
-                              ? styles.statusActive
-                              : turfStatus === 'maintenance'
-                              ? styles.statusMaintenance
-                              : styles.statusInactive,
-                          ]}
+                return (
+                  <React.Fragment
+                    key={turf._id}
+                  >
+                    <View
+                      style={
+                        styles.turfRow
+                      }
+                    >
+                      <View
+                        style={
+                          styles.turfIcon
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.turfIconText
+                          }
                         >
-                          <Text
+                          🏟️
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.turfMainContent
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.listTitle
+                          }
+                          numberOfLines={
+                            1
+                          }
+                        >
+                          {turf.name}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.listSubtitle
+                          }
+                          numberOfLines={
+                            1
+                          }
+                        >
+                          {turf.city} •{' '}
+                          {turf.owner
+                            ?.name ||
+                            'Unknown owner'}
+                        </Text>
+
+                        <View
+                          style={
+                            styles.turfStatusRow
+                          }
+                        >
+                          <View
                             style={[
-                              styles.statusText,
-                              turfStatus === 'active'
-                                ? styles.statusTextActive
-                                : turfStatus === 'maintenance'
-                                ? styles.statusTextMaintenance
-                                : styles.statusTextInactive,
+                              styles.statusBadge,
+
+                              turfStatus ===
+                              'active'
+                                ? styles.statusActive
+                                : turfStatus ===
+                                  'maintenance'
+                                ? styles.statusMaintenance
+                                : styles.statusInactive,
                             ]}
                           >
-                            {String(turfStatus).toUpperCase()}
-                          </Text>
-                        </View>
+                            <Text
+                              style={[
+                                styles.statusText,
 
-                        {turfStatus === 'inactive' && (
-                          <TouchableOpacity
-                            style={styles.activateButton}
-                            activeOpacity={0.85}
-                            disabled={isUpdating}
-                            onPress={() =>
-                              handleActivateTurf(turf._id, turf.name)
-                            }
-                          >
-                            {isUpdating ? (
-                              <ActivityIndicator
-                                size="small"
-                                color={COLORS.white}
-                              />
-                            ) : (
-                              <Text style={styles.activateButtonText}>
-                                ACTIVATE
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        )}
+                                turfStatus ===
+                                'active'
+                                  ? styles.statusTextActive
+                                  : turfStatus ===
+                                    'maintenance'
+                                  ? styles.statusTextMaintenance
+                                  : styles.statusTextInactive,
+                              ]}
+                            >
+                              {String(
+                                turfStatus,
+                              ).toUpperCase()}
+                            </Text>
+                          </View>
 
-                        {turfStatus === 'active' && (
-                          <>
+                          {/* INACTIVE */}
+
+                          {turfStatus ===
+                            'inactive' && (
                             <TouchableOpacity
-                              style={styles.deactivateButton}
-                              activeOpacity={0.85}
-                              disabled={isUpdating}
+                              style={
+                                styles.activateButton
+                              }
+                              activeOpacity={
+                                0.85
+                              }
+                              disabled={
+                                isUpdating
+                              }
                               onPress={() =>
-                                handleDeactivateTurf(turf._id, turf.name)
+                                handleActivateTurf(
+                                  turf._id,
+                                  turf.name,
+                                )
                               }
                             >
                               {isUpdating ? (
                                 <ActivityIndicator
                                   size="small"
-                                  color={COLORS.dangerText}
+                                  color={
+                                    COLORS.white
+                                  }
                                 />
                               ) : (
-                                <Text style={styles.deactivateButtonText}>
-                                  DEACTIVATE
+                                <Text
+                                  style={
+                                    styles.activateButtonText
+                                  }
+                                >
+                                  ACTIVATE
                                 </Text>
                               )}
                             </TouchableOpacity>
+                          )}
 
+                          {/* ACTIVE */}
+
+                          {turfStatus ===
+                            'active' && (
+                            <>
+                              <TouchableOpacity
+                                style={
+                                  styles.deactivateButton
+                                }
+                                activeOpacity={
+                                  0.85
+                                }
+                                disabled={
+                                  isUpdating
+                                }
+                                onPress={() =>
+                                  handleDeactivateTurf(
+                                    turf._id,
+                                    turf.name,
+                                  )
+                                }
+                              >
+                                {isUpdating ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color={
+                                      COLORS.dangerText
+                                    }
+                                  />
+                                ) : (
+                                  <Text
+                                    style={
+                                      styles.deactivateButtonText
+                                    }
+                                  >
+                                    DEACTIVATE
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={
+                                  styles.maintenanceButton
+                                }
+                                activeOpacity={
+                                  0.85
+                                }
+                                disabled={
+                                  isUpdating
+                                }
+                                onPress={() =>
+                                  handleMaintenanceTurf(
+                                    turf._id,
+                                    turf.name,
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.maintenanceButtonText
+                                  }
+                                >
+                                  MAINTENANCE
+                                </Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          {/* MAINTENANCE */}
+
+                          {turfStatus ===
+                            'maintenance' && (
                             <TouchableOpacity
-                              style={styles.maintenanceButton}
-                              activeOpacity={0.85}
-                              disabled={isUpdating}
+                              style={
+                                styles.activateButton
+                              }
+                              activeOpacity={
+                                0.85
+                              }
+                              disabled={
+                                isUpdating
+                              }
                               onPress={() =>
-                                handleMaintenanceTurf(turf._id, turf.name)
+                                handleActivateTurf(
+                                  turf._id,
+                                  turf.name,
+                                )
                               }
                             >
-                              <Text style={styles.maintenanceButtonText}>
-                                MAINTENANCE
-                              </Text>
+                              {isUpdating ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color={
+                                    COLORS.white
+                                  }
+                                />
+                              ) : (
+                                <Text
+                                  style={
+                                    styles.activateButtonText
+                                  }
+                                >
+                                  ACTIVATE
+                                </Text>
+                              )}
                             </TouchableOpacity>
-                          </>
-                        )}
-
-                        {turfStatus === 'maintenance' && (
-                          <TouchableOpacity
-                            style={styles.activateButton}
-                            activeOpacity={0.85}
-                            disabled={isUpdating}
-                            onPress={() =>
-                              handleActivateTurf(turf._id, turf.name)
-                            }
-                          >
-                            {isUpdating ? (
-                              <ActivityIndicator
-                                size="small"
-                                color={COLORS.white}
-                              />
-                            ) : (
-                              <Text style={styles.activateButtonText}>
-                                ACTIVATE
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        )}
+                          )}
+                        </View>
                       </View>
                     </View>
-                  </View>
 
-                  {index < dashboard.recentTurfs.length - 1 && (
-                    <View style={styles.listDivider} />
-                  )}
-                </React.Fragment>
-              );
-            })
+                    {index <
+                      dashboard
+                        .recentTurfs
+                        .length -
+                        1 && (
+                      <View
+                        style={
+                          styles.listDivider
+                        }
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              },
+            )
           ) : (
             <EmptyList text="No turfs found." />
           )}
         </View>
 
         {/* RECENT BOOKINGS */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Recent Bookings</Text>
-            <View style={styles.sectionTitleAccent} />
-          </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Latest booking activity
-          </Text>
-        </View>
+        <SectionHeader
+          title="Recent Bookings"
+          subtitle="Latest booking activity"
+        />
 
-        <View style={styles.listCard}>
-          {dashboard?.recentBookings?.length ? (
-            dashboard.recentBookings.map((booking, index) => (
-              <React.Fragment key={booking._id}>
-                <View style={styles.bookingRow}>
-                  <View style={styles.bookingIcon}>
-                    <Text style={styles.bookingIconText}>📅</Text>
-                  </View>
-
-                  <View style={styles.listContent}>
-                    <Text style={styles.listTitle} numberOfLines={1}>
-                      {booking.user?.name || 'Customer'}
-                    </Text>
-                    <Text style={styles.listSubtitle} numberOfLines={1}>
-                      {booking.turf?.name || 'Turf'} •{' '}
-                      {booking.court?.name || 'Court'}
-                    </Text>
-                    <Text style={styles.bookingDate}>
-                      {formatDate(booking.bookingDate)} • {booking.startTime} -{' '}
-                      {booking.endTime}
-                    </Text>
-                  </View>
-
-                  <View style={styles.bookingRight}>
-                    <Text style={styles.bookingAmount}>
-                      {formatCurrency(booking.finalAmount)}
-                    </Text>
+        <View
+          style={styles.listCard}
+        >
+          {dashboard?.recentBookings
+            ?.length ? (
+            dashboard.recentBookings.map(
+              (
+                booking,
+                index,
+              ) => (
+                <React.Fragment
+                  key={booking._id}
+                >
+                  <View
+                    style={
+                      styles.bookingRow
+                    }
+                  >
                     <View
-                      style={[
-                        styles.bookingStatusPill,
-                        booking.status === 'confirmed'
-                          ? styles.bookingStatusConfirmed
-                          : booking.status === 'completed'
-                          ? styles.bookingStatusCompleted
-                          : booking.status === 'cancelled'
-                          ? styles.bookingStatusCancelled
-                          : styles.bookingStatusPending,
-                      ]}
+                      style={
+                        styles.bookingIcon
+                      }
                     >
                       <Text
-                        style={[
-                          styles.bookingStatusText,
-                          booking.status === 'confirmed'
-                            ? styles.confirmed
-                            : booking.status === 'completed'
-                            ? styles.completed
-                            : booking.status === 'cancelled'
-                            ? styles.cancelled
-                            : styles.pending,
-                        ]}
+                        style={
+                          styles.bookingIconText
+                        }
                       >
-                        {String(booking.status).toUpperCase()}
+                        📅
                       </Text>
                     </View>
-                  </View>
-                </View>
 
-                {index < dashboard.recentBookings.length - 1 && (
-                  <View style={styles.listDivider} />
-                )}
-              </React.Fragment>
-            ))
+                    <View
+                      style={
+                        styles.listContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.listTitle
+                        }
+                        numberOfLines={
+                          1
+                        }
+                      >
+                        {booking.user
+                          ?.name ||
+                          'Customer'}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.listSubtitle
+                        }
+                        numberOfLines={
+                          1
+                        }
+                      >
+                        {booking.turf
+                          ?.name ||
+                          'Turf'}{' '}
+                        •{' '}
+                        {booking.court
+                          ?.name ||
+                          'Court'}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.bookingDate
+                        }
+                      >
+                        {formatDate(
+                          booking.bookingDate,
+                        )}{' '}
+                        •{' '}
+                        {
+                          booking.startTime
+                        }{' '}
+                        -{' '}
+                        {
+                          booking.endTime
+                        }
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.bookingRight
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.bookingAmount
+                        }
+                      >
+                        {formatCurrency(
+                          booking.finalAmount,
+                        )}
+                      </Text>
+
+                      <View
+                        style={[
+                          styles.bookingStatusPill,
+
+                          booking.status ===
+                          'confirmed'
+                            ? styles.bookingStatusConfirmed
+                            : booking.status ===
+                              'completed'
+                            ? styles.bookingStatusCompleted
+                            : booking.status ===
+                              'cancelled'
+                            ? styles.bookingStatusCancelled
+                            : styles.bookingStatusPending,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.bookingStatusText,
+
+                            booking.status ===
+                            'confirmed'
+                              ? styles.confirmed
+                              : booking.status ===
+                                'completed'
+                              ? styles.completed
+                              : booking.status ===
+                                'cancelled'
+                              ? styles.cancelled
+                              : styles.pending,
+                          ]}
+                        >
+                          {String(
+                            booking.status,
+                          ).toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {index <
+                    dashboard
+                      .recentBookings
+                      .length -
+                      1 && (
+                    <View
+                      style={
+                        styles.listDivider
+                      }
+                    />
+                  )}
+                </React.Fragment>
+              ),
+            )
           ) : (
             <EmptyList text="No recent bookings found." />
           )}
         </View>
 
-        {/* PLATFORM */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Platform</Text>
-            <View style={styles.sectionTitleAccent} />
+        {/* ADMIN BANK ACCOUNT */}
+
+        <SectionHeader
+          title="Admin Bank Account"
+          subtitle="Settlement account for TurfBook platform revenue"
+        />
+
+        <View style={styles.bankCard}>
+          <View style={styles.bankCardHeader}>
+            <View style={styles.bankIconCircle}>
+              <Text style={styles.bankIconText}>🏦</Text>
+            </View>
+
+            <View style={styles.bankCardHeaderContent}>
+              <Text style={styles.bankCardTitle}>
+                {adminBank
+                  ? 'Admin settlement account'
+                  : 'No admin bank account added'}
+              </Text>
+
+              <Text style={styles.bankCardSubtitle}>
+                {adminBank
+                  ? 'Used for platform settlement and financial operations.'
+                  : 'Add your TurfBook admin bank account to enable settlement setup.'}
+              </Text>
+            </View>
           </View>
 
-          <Text style={styles.sectionSubtitle}>
-            Configuration & analytics
-          </Text>
+          {bankLoading ? (
+            <View style={styles.bankLoadingRow}>
+              <ActivityIndicator
+                size="small"
+                color={COLORS.primary}
+              />
+              <Text style={styles.bankLoadingText}>
+                Loading bank details...
+              </Text>
+            </View>
+          ) : adminBank ? (
+            <View style={styles.bankDetailsBox}>
+              <BankDetailRow
+                label="Account Holder"
+                value={
+                  adminBank.accountHolderName ||
+                  '--'
+                }
+              />
+
+              <BankDetailRow
+                label="Bank"
+                value={
+                  adminBank.bankName ||
+                  '--'
+                }
+              />
+
+              <BankDetailRow
+                label="Branch"
+                value={
+                  adminBank.branchName ||
+                  '--'
+                }
+              />
+
+              <BankDetailRow
+                label="Account Number"
+                value={maskAccountNumber(
+                  adminBank.accountNumber,
+                )}
+              />
+
+              <BankDetailRow
+                label="IFSC"
+                value={
+                  adminBank.ifscCode ||
+                  '--'
+                }
+              />
+
+              <BankDetailRow
+                label="Gateway Account"
+                value={
+                  adminBank.gatewayAccountId
+                    ? adminBank.gatewayAccountId
+                    : 'Not connected'
+                }
+              />
+
+              <View style={styles.bankVerificationRow}>
+                <View
+                  style={[
+                    styles.bankVerificationPill,
+                    adminBank.isVerified
+                      ? styles.bankVerified
+                      : styles.bankNotVerified,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.bankVerificationDot,
+                      adminBank.isVerified
+                        ? styles.bankVerifiedDot
+                        : styles.bankNotVerifiedDot,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.bankVerificationText,
+                      adminBank.isVerified
+                        ? styles.bankVerifiedText
+                        : styles.bankNotVerifiedText,
+                    ]}
+                  >
+                    {adminBank.isVerified
+                      ? 'VERIFIED'
+                      : 'NOT VERIFIED'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.bankActionRow}>
+                <TouchableOpacity
+                  style={styles.bankEditButton}
+                  activeOpacity={0.85}
+                  onPress={openBankModal}
+                  disabled={bankDeleting}
+                >
+                  <Text style={styles.bankEditButtonText}>
+                    EDIT BANK
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.bankDeleteButton}
+                  activeOpacity={0.85}
+                  onPress={deleteAdminBankDetails}
+                  disabled={bankDeleting}
+                >
+                  {bankDeleting ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={COLORS.dangerText}
+                    />
+                  ) : (
+                    <Text
+                      style={styles.bankDeleteButtonText}
+                    >
+                      DELETE
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.addBankButton}
+              activeOpacity={0.85}
+              onPress={openBankModal}
+            >
+              <Text style={styles.addBankButtonIcon}>
+                +
+              </Text>
+
+              <View style={styles.addBankButtonContent}>
+                <Text style={styles.addBankButtonTitle}>
+                  ADD BANK ACCOUNT
+                </Text>
+
+                <Text style={styles.addBankButtonSubtitle}>
+                  Add account holder, bank, account number and IFSC
+                </Text>
+              </View>
+
+              <Text style={styles.addBankButtonArrow}>
+                ›
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!!bankError && (
+            <View style={styles.bankErrorBox}>
+              <Text style={styles.bankErrorText}>
+                {bankError}
+              </Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.managementCard}>
+        {/* PLATFORM */}
+
+        <SectionHeader
+          title="Platform"
+          subtitle="Configuration & analytics"
+        />
+
+        <View
+          style={styles.managementCard}
+        >
           <ManagementItem
             icon="⚙️"
             title="Platform Settings"
             subtitle="Configure TurfBook platform settings"
-            onPress={() => showComingSoon('Platform Settings')}
+            onPress={() =>
+              showComingSoon(
+                'Platform Settings',
+              )
+            }
           />
-          <View style={styles.divider} />
+
+          <View
+            style={styles.divider}
+          />
 
           <ManagementItem
             icon="📊"
             title="Analytics"
             subtitle="View detailed platform performance"
-            onPress={() => showComingSoon('Analytics')}
+            onPress={() =>
+              showComingSoon(
+                'Analytics',
+              )
+            }
           />
         </View>
 
+        {/* ADMIN BANK MODAL */}
+
+        <Modal
+          visible={bankModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => {
+            if (!bankSaving) {
+              setBankModalVisible(false);
+            }
+          }}
+        >
+          <KeyboardAvoidingView
+            style={styles.bankModalOverlay}
+            behavior={
+              Platform.OS === 'ios'
+                ? 'padding'
+                : undefined
+            }
+          >
+            <View style={styles.bankModalCard}>
+              <View style={styles.bankModalHeader}>
+                <View>
+                  <Text style={styles.bankModalTitle}>
+                    {adminBank
+                      ? 'Edit Admin Bank'
+                      : 'Add Admin Bank'}
+                  </Text>
+
+                  <Text style={styles.bankModalSubtitle}>
+                    Enter the account that belongs to TurfBook administration.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.bankModalClose}
+                  onPress={() => {
+                    if (!bankSaving) {
+                      setBankModalVisible(false);
+                    }
+                  }}
+                  disabled={bankSaving}
+                >
+                  <Text style={styles.bankModalCloseText}>
+                    ×
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={
+                  styles.bankModalScroll
+                }
+              >
+                <BankInput
+                  label="Account Holder Name *"
+                  value={
+                    bankForm.accountHolderName
+                  }
+                  placeholder="e.g. TurfBook Technologies"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      accountHolderName: value,
+                    }))
+                  }
+                  autoCapitalize="words"
+                />
+
+                <BankInput
+                  label="Bank Name"
+                  value={bankForm.bankName}
+                  placeholder="e.g. HDFC Bank"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      bankName: value,
+                    }))
+                  }
+                  autoCapitalize="words"
+                />
+
+                <BankInput
+                  label="Branch Name"
+                  value={bankForm.branchName}
+                  placeholder="e.g. Sangli Main Branch"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      branchName: value,
+                    }))
+                  }
+                  autoCapitalize="words"
+                />
+
+                <BankInput
+                  label="Account Number *"
+                  value={bankForm.accountNumber}
+                  placeholder="Enter bank account number"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      accountNumber: value.replace(
+                        /[^0-9]/g,
+                        '',
+                      ),
+                    }))
+                  }
+                  keyboardType="number-pad"
+                  secureTextEntry
+                />
+
+                <BankInput
+                  label="IFSC Code *"
+                  value={bankForm.ifscCode}
+                  placeholder="e.g. HDFC0001234"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      ifscCode:
+                        value
+                          .toUpperCase()
+                          .replace(
+                            /[^A-Z0-9]/g,
+                            '',
+                          ),
+                    }))
+                  }
+                  autoCapitalize="characters"
+                  maxLength={11}
+                />
+
+                <BankInput
+                  label="Gateway Account ID"
+                  value={bankForm.gatewayAccountId}
+                  placeholder="Optional until payout onboarding"
+                  onChangeText={(value) =>
+                    setBankForm((current) => ({
+                      ...current,
+                      gatewayAccountId: value,
+                    }))
+                  }
+                  autoCapitalize="none"
+                />
+
+                <View style={styles.bankSecurityNote}>
+                  <Text style={styles.bankSecurityIcon}>
+                    🔒
+                  </Text>
+
+                  <Text style={styles.bankSecurityText}>
+                    Bank details are used only for TurfBook
+                    administrative settlement. Do not enter a
+                    fake gateway account ID. Leave it empty until
+                    your real payout provider account is created.
+                  </Text>
+                </View>
+
+                {!!bankError && (
+                  <View style={styles.bankModalError}>
+                    <Text style={styles.bankModalErrorText}>
+                      {bankError}
+                    </Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.bankSaveButton,
+                    bankSaving &&
+                      styles.bankSaveButtonDisabled,
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={saveAdminBankDetails}
+                  disabled={bankSaving}
+                >
+                  {bankSaving ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={COLORS.white}
+                    />
+                  ) : (
+                    <Text style={styles.bankSaveButtonText}>
+                      {adminBank
+                        ? 'UPDATE BANK DETAILS'
+                        : 'SAVE BANK DETAILS'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.bankCancelButton}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (!bankSaving) {
+                      setBankModalVisible(false);
+                    }
+                  }}
+                  disabled={bankSaving}
+                >
+                  <Text style={styles.bankCancelButtonText}>
+                    CANCEL
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
         {/* LOGOUT */}
+
         <TouchableOpacity
           style={styles.logoutButton}
           activeOpacity={0.85}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutIcon}>⇥</Text>
-          <Text style={styles.logoutText}>LOGOUT</Text>
+          <Text
+            style={styles.logoutIcon}
+          >
+            ⇥
+          </Text>
+
+          <Text
+            style={styles.logoutText}
+          >
+            LOGOUT
+          </Text>
         </TouchableOpacity>
 
         {/* FOOTER */}
-        <Text style={styles.footer}>TurfBook Admin Panel</Text>
-        <Text style={styles.footerVersion}>
+
+        <Text style={styles.footer}>
+          TurfBook Admin Panel
+        </Text>
+
+        <Text
+          style={styles.footerVersion}
+        >
           Platform Management • v1.0
         </Text>
 
-        <View style={styles.footerSpace} />
+        <View
+          style={styles.footerSpace}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
 /* =========================================================
-   SUB COMPONENTS
+   SECTION HEADER
 ========================================================= */
 
-const DetailRow = ({ label, value }: { label: string; value: number }) => (
-  <View style={styles.detailRow}>
-    <Text style={styles.detailLabel}>{label}</Text>
-    <Text style={styles.detailValue}>{value}</Text>
+const SectionHeader = ({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) => {
+  return (
+    <View
+      style={styles.sectionHeader}
+    >
+      <View
+        style={styles.sectionTitleRow}
+      >
+        <Text
+          style={styles.sectionTitle}
+        >
+          {title}
+        </Text>
+
+        <View
+          style={
+            styles.sectionTitleAccent
+          }
+        />
+      </View>
+
+      <Text
+        style={styles.sectionSubtitle}
+      >
+        {subtitle}
+      </Text>
+    </View>
+  );
+};
+
+/* =========================================================
+   STAT CARD
+========================================================= */
+
+const StatCard = ({
+  icon,
+  value,
+  title,
+  meta,
+  small = false,
+}: {
+  icon: string;
+  value: number | string;
+  title: string;
+  meta: string;
+  small?: boolean;
+}) => {
+  return (
+    <View
+      style={styles.statCard}
+    >
+      <View
+        style={styles.statIcon}
+      >
+        <Text
+          style={styles.statIconText}
+        >
+          {icon}
+        </Text>
+      </View>
+
+      <Text
+        style={
+          small
+            ? styles.statValueSmall
+            : styles.statValue
+        }
+      >
+        {value}
+      </Text>
+
+      <Text
+        style={styles.statTitle}
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={styles.statMeta}
+      >
+        {meta}
+      </Text>
+    </View>
+  );
+};
+
+/* =========================================================
+   BOOKING STATUS CARD
+========================================================= */
+
+const BookingStatusCard = ({
+  dotStyle,
+  value,
+  label,
+}: {
+  dotStyle: any;
+  value: number;
+  label: string;
+}) => {
+  return (
+    <View
+      style={
+        styles.bookingStatusCard
+      }
+    >
+      <View
+        style={
+          styles.bookingStatusHeader
+        }
+      >
+        <View style={dotStyle} />
+
+        <Text
+          style={
+            styles.bookingStatusValue
+          }
+        >
+          {value}
+        </Text>
+      </View>
+
+      <Text
+        style={
+          styles.bookingStatusLabel
+        }
+      >
+        {label}
+      </Text>
+    </View>
+  );
+};
+
+/* =========================================================
+   DETAIL ROW
+========================================================= */
+
+const DetailRow = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) => (
+  <View
+    style={styles.detailRow}
+  >
+    <Text
+      style={styles.detailLabel}
+    >
+      {label}
+    </Text>
+
+    <Text
+      style={styles.detailValue}
+    >
+      {value}
+    </Text>
   </View>
 );
+
+/* =========================================================
+   MANAGEMENT ITEM
+========================================================= */
 
 const ManagementItem = ({
   title,
@@ -1185,30 +3075,151 @@ const ManagementItem = ({
       activeOpacity={0.8}
       onPress={onPress}
     >
-      <View style={styles.managementIcon}>
-        <Text style={styles.managementIconText}>{icon}</Text>
+      <View
+        style={styles.managementIcon}
+      >
+        <Text
+          style={
+            styles.managementIconText
+          }
+        >
+          {icon}
+        </Text>
       </View>
 
-      <View style={styles.managementContent}>
-        <Text style={styles.managementTitle}>{title}</Text>
-        <Text style={styles.managementSubtitle}>{subtitle}</Text>
+      <View
+        style={styles.managementContent}
+      >
+        <Text
+          style={styles.managementTitle}
+        >
+          {title}
+        </Text>
+
+        <Text
+          style={
+            styles.managementSubtitle
+          }
+        >
+          {subtitle}
+        </Text>
       </View>
 
-      <Text style={styles.arrow}>›</Text>
+      <Text style={styles.arrow}>
+        ›
+      </Text>
     </TouchableOpacity>
   );
 };
 
-const EmptyList = ({ text }: { text: string }) => {
+/* =========================================================
+   EMPTY LIST
+========================================================= */
+
+const EmptyList = ({
+  text,
+}: {
+  text: string;
+}) => {
   return (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconCircle}>
-        <Text style={styles.emptyIconText}>📭</Text>
+    <View
+      style={styles.emptyContainer}
+    >
+      <View
+        style={
+          styles.emptyIconCircle
+        }
+      >
+        <Text
+          style={
+            styles.emptyIconText
+          }
+        >
+          📭
+        </Text>
       </View>
-      <Text style={styles.emptyText}>{text}</Text>
+
+      <Text
+        style={styles.emptyText}
+      >
+        {text}
+      </Text>
     </View>
   );
 };
+
+const maskAccountNumber = (
+  accountNumber?: string,
+): string => {
+  if (!accountNumber) {
+    return '--';
+  }
+
+  if (accountNumber.length <= 4) {
+    return accountNumber;
+  }
+
+  return `•••• ${accountNumber.slice(-4)}`;
+};
+
+const BankDetailRow = ({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) => (
+  <View style={styles.bankDetailRow}>
+    <Text style={styles.bankDetailLabel}>
+      {label}
+    </Text>
+
+    <Text
+      style={styles.bankDetailValue}
+      numberOfLines={1}
+    >
+      {value}
+    </Text>
+  </View>
+);
+
+const BankInput = ({
+  label,
+  value,
+  placeholder,
+  onChangeText,
+  keyboardType,
+  secureTextEntry,
+  autoCapitalize,
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChangeText: (value: string) => void;
+  keyboardType?: 'default' | 'number-pad';
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  maxLength?: number;
+}) => (
+  <View style={styles.bankInputGroup}>
+    <Text style={styles.bankInputLabel}>
+      {label}
+    </Text>
+
+    <TextInput
+      value={value}
+      placeholder={placeholder}
+      placeholderTextColor={COLORS.placeholder}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType || 'default'}
+      secureTextEntry={secureTextEntry}
+      autoCapitalize={autoCapitalize || 'sentences'}
+      maxLength={maxLength}
+      style={styles.bankInput}
+    />
+  </View>
+);
 
 /* =========================================================
    STYLES
@@ -1239,9 +3250,11 @@ const styles = StyleSheet.create({
 
   headerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
     color: COLORS.primaryDark,
     fontSize: 10,
     fontWeight: '900',
@@ -1274,7 +3287,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
@@ -1300,7 +3316,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -1318,7 +3337,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 6,
@@ -1378,12 +3400,14 @@ const styles = StyleSheet.create({
   onlineBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   onlineDot: {
@@ -1455,7 +3479,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
@@ -1465,12 +3492,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   statIconText: {
@@ -1516,7 +3545,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -1571,14 +3603,16 @@ const styles = StyleSheet.create({
 
   revenueMonthBox: {
     marginTop: 16,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   revenueMonthTitle: {
@@ -1675,7 +3709,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -1715,7 +3752,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -1733,11 +3773,13 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   managementIconText: {
@@ -1787,7 +3829,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 3,
@@ -1827,11 +3872,13 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   smallAvatarText: {
@@ -1844,11 +3891,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   turfIconText: {
@@ -1859,11 +3908,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   bookingIconText: {
@@ -1906,11 +3957,13 @@ const styles = StyleSheet.create({
 
   roleBadge: {
     borderRadius: 10,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   roleBadgeText: {
@@ -1927,7 +3980,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     flexWrap: 'wrap',
-    rowGap: 6,
   },
 
   statusBadge: {
@@ -1938,17 +3990,21 @@ const styles = StyleSheet.create({
   },
 
   statusActive: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.borderSoft,
+    backgroundColor:
+      COLORS.primarySoft,
+    borderColor:
+      COLORS.borderSoft,
   },
 
   statusInactive: {
-    backgroundColor: COLORS.cardSoft,
+    backgroundColor:
+      COLORS.cardSoft,
     borderColor: COLORS.border,
   },
 
   statusMaintenance: {
-    backgroundColor: COLORS.warningSoft,
+    backgroundColor:
+      COLORS.warningSoft,
     borderColor: '#FDE68A',
   },
 
@@ -1992,14 +4048,16 @@ const styles = StyleSheet.create({
   deactivateButton: {
     marginLeft: 7,
     minHeight: 25,
-    backgroundColor: COLORS.dangerSoft,
+    backgroundColor:
+      COLORS.dangerSoft,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
+    borderColor:
+      COLORS.dangerBorder,
   },
 
   deactivateButtonText: {
@@ -2012,7 +4070,8 @@ const styles = StyleSheet.create({
   maintenanceButton: {
     marginLeft: 7,
     minHeight: 25,
-    backgroundColor: COLORS.warningSoft,
+    backgroundColor:
+      COLORS.warningSoft,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -2051,22 +4110,28 @@ const styles = StyleSheet.create({
   },
 
   bookingStatusConfirmed: {
-    backgroundColor: COLORS.primarySoft,
-    borderColor: COLORS.borderSoft,
+    backgroundColor:
+      COLORS.primarySoft,
+    borderColor:
+      COLORS.borderSoft,
   },
 
   bookingStatusCompleted: {
-    backgroundColor: COLORS.infoSoft,
+    backgroundColor:
+      COLORS.infoSoft,
     borderColor: '#BFDBFE',
   },
 
   bookingStatusCancelled: {
-    backgroundColor: COLORS.dangerSoft,
-    borderColor: COLORS.dangerBorder,
+    backgroundColor:
+      COLORS.dangerSoft,
+    borderColor:
+      COLORS.dangerBorder,
   },
 
   bookingStatusPending: {
-    backgroundColor: COLORS.warningSoft,
+    backgroundColor:
+      COLORS.warningSoft,
     borderColor: '#FDE68A',
   },
 
@@ -2103,12 +4168,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   emptyIconText: {
@@ -2121,6 +4188,438 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  /* ADMIN BANK */
+
+  bankCard: {
+    marginHorizontal: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  bankCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  bankIconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  bankIconText: {
+    fontSize: 24,
+  },
+
+  bankCardHeaderContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  bankCardTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  bankCardSubtitle: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+
+  bankLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryFaint,
+  },
+
+  bankLoadingText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+
+  bankDetailsBox: {
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+  },
+
+  bankDetailRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingVertical: 7,
+  },
+
+  bankDetailLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    flex: 0.9,
+  },
+
+  bankDetailValue: {
+    color: COLORS.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+    flex: 1.4,
+    textAlign: 'right',
+  },
+
+  bankVerificationRow: {
+    marginTop: 12,
+  },
+
+  bankVerificationPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+
+  bankVerified: {
+    backgroundColor: COLORS.primarySoft,
+    borderColor: COLORS.borderSoft,
+  },
+
+  bankNotVerified: {
+    backgroundColor: COLORS.warningSoft,
+    borderColor: '#FDE68A',
+  },
+
+  bankVerificationDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+
+  bankVerifiedDot: {
+    backgroundColor: COLORS.primary,
+  },
+
+  bankNotVerifiedDot: {
+    backgroundColor: COLORS.warning,
+  },
+
+  bankVerificationText: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  bankVerifiedText: {
+    color: COLORS.primaryDark,
+  },
+
+  bankNotVerifiedText: {
+    color: COLORS.warningText,
+  },
+
+  bankActionRow: {
+    flexDirection: 'row',
+    marginTop: 14,
+  },
+
+  bankEditButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 11,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+
+  bankEditButtonText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  bankDeleteButton: {
+    width: 96,
+    minHeight: 44,
+    borderRadius: 11,
+    backgroundColor: COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+
+  bankDeleteButtonText: {
+    color: COLORS.dangerText,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  addBankButton: {
+    marginTop: 16,
+    minHeight: 68,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: COLORS.primarySoft,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+
+  addBankButtonIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 36,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+
+  addBankButtonContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  addBankButtonTitle: {
+    color: COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  addBankButtonSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 3,
+  },
+
+  addBankButtonArrow: {
+    color: COLORS.primaryDark,
+    fontSize: 26,
+    fontWeight: '300',
+    marginLeft: 8,
+  },
+
+  bankErrorBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+  },
+
+  bankErrorText: {
+    color: COLORS.dangerText,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+
+  bankModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+
+  bankModalCard: {
+    maxHeight: '92%',
+    backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 18,
+  },
+
+  bankModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+
+  bankModalTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 19,
+    fontWeight: '900',
+  },
+
+  bankModalSubtitle: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 4,
+    maxWidth: 290,
+  },
+
+  bankModalClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+  },
+
+  bankModalCloseText: {
+    color: COLORS.textSecondary,
+    fontSize: 27,
+    fontWeight: '400',
+    lineHeight: 30,
+  },
+
+  bankModalScroll: {
+    padding: 18,
+    paddingBottom: 30,
+  },
+
+  bankInputGroup: {
+    marginBottom: 14,
+  },
+
+  bankInputLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 7,
+  },
+
+  bankInput: {
+    minHeight: 48,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    color: COLORS.textPrimary,
+    paddingHorizontal: 13,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  bankSecurityNote: {
+    flexDirection: 'row',
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: COLORS.infoSoft,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+
+  bankSecurityIcon: {
+    fontSize: 15,
+    marginRight: 8,
+  },
+
+  bankSecurityText: {
+    flex: 1,
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+
+  bankModalError: {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: COLORS.dangerSoft,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+  },
+
+  bankModalErrorText: {
+    color: COLORS.dangerText,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+
+  bankSaveButton: {
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  bankSaveButtonDisabled: {
+    opacity: 0.65,
+  },
+
+  bankSaveButtonText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.9,
+  },
+
+  bankCancelButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 7,
+  },
+
+  bankCancelButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+
   /* LOGOUT */
 
   logoutButton: {
@@ -2129,8 +4628,10 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: COLORS.dangerBorder,
-    backgroundColor: COLORS.dangerSoft,
+    borderColor:
+      COLORS.dangerBorder,
+    backgroundColor:
+      COLORS.dangerSoft,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2169,7 +4670,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 22,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 8,
@@ -2210,9 +4714,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: COLORS.dangerSoft,
+    backgroundColor:
+      COLORS.dangerSoft,
     borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
+    borderColor:
+      COLORS.dangerBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
@@ -2247,7 +4753,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 13,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
