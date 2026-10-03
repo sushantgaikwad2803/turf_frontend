@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -85,6 +86,9 @@ interface TurfCourt {
 
   nightStartHour?: number;
   nightEndHour?: number;
+
+  // Full-day / long-booking discount configured per court
+  fullDayDiscountPercent?: number;
 
   status?: string;
 }
@@ -1081,6 +1085,39 @@ const TurfDetailsScreen: React.FC<
   );
 
   /* =======================================================
+     FULL DAY / LONG-BOOKING PACKAGE
+
+     The discount percentage comes from the selected court
+     (`fullDayDiscountPercent`) in the Court schema.
+
+     The customer can choose ANY continuous available range
+     offered by the turf/court, from 1 hour up to 12 hours.
+     The discount is applied to the selected continuous range.
+     Only the currently displayed date is changed;
+     selections on other dates remain untouched.
+  ======================================================= */
+
+  const [
+    fullDayModalVisible,
+    setFullDayModalVisible,
+  ] = useState(false);
+
+  const [
+    fullDayStartMinutes,
+    setFullDayStartMinutes,
+  ] = useState<number | null>(null);
+
+  const [
+    fullDayEndMinutes,
+    setFullDayEndMinutes,
+  ] = useState<number | null>(null);
+
+  const [
+    fullDayDates,
+    setFullDayDates,
+  ] = useState<Record<string, boolean>>({});
+
+  /* =======================================================
      MOUNT
   ======================================================= */
 
@@ -1218,6 +1255,33 @@ const TurfDetailsScreen: React.FC<
       activeCourts,
       selectedCourtId,
     ]);
+
+  /* =======================================================
+     FULL DAY DISCOUNT FROM SELECTED COURT
+
+     The discount percentage comes from the Court schema.
+     It is NOT hard-coded in this screen.
+
+     Examples:
+     4  -> 4%
+     10 -> 10%
+     0  -> no discount
+
+     This must stay below selectedCourt because it reads
+     selectedCourt.fullDayDiscountPercent.
+  ======================================================= */
+
+  const fullDayDiscountPercent = useMemo(() => {
+    const value = Number(
+      selectedCourt?.fullDayDiscountPercent ?? 0
+    );
+
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Math.min(100, Math.max(0, value));
+  }, [selectedCourt]);
 
   /* =======================================================
      SELECTED DAY
@@ -1751,6 +1815,15 @@ const TurfDetailsScreen: React.FC<
         const dateString =
           formatDate(selectedDate);
 
+        /* Manual slot selection disables the Full Day package
+           for this date so the 4% discount cannot be applied
+           accidentally. */
+        setFullDayDates(previous => {
+          const next = { ...previous };
+          delete next[dateString];
+          return next;
+        });
+
         setSelectedSlotsByDate(
           previous => {
             const current =
@@ -1874,51 +1947,24 @@ const TurfDetailsScreen: React.FC<
       selectedSlotsByDate,
     ]);
 
-  const totalPrice =
+  const baseTotalPrice =
     useMemo(() => {
-      /*
-        Current-date slots are available directly.
-        For older dates, selected slot IDs include the
-        start-minute in the booking key, so we calculate
-        their prices from the selected court and date.
-      */
       return selectedDateStrings.reduce(
         (grandTotal, dateString) => {
           const ids =
-            selectedSlotsByDate[
-              dateString
-            ] ?? [];
+            selectedSlotsByDate[dateString] ?? [];
 
           return (
             grandTotal +
             ids.reduce(
-              (
-                dateTotal,
-                bookingKey
-              ) => {
-                const parts =
-                  bookingKey.split(
-                    '_'
-                  );
-
+              (dateTotal, bookingKey) => {
                 const startMinutes =
-                  Number(
-                    parts[
-                      parts.length - 1
-                    ]
-                  );
-
-                const safeMinutes =
-                  Number.isFinite(
-                    startMinutes
-                  )
-                    ? startMinutes
-                    : 0;
+                  getMinutesFromBookingKey(bookingKey) ?? 0;
 
                 return (
                   dateTotal +
                   getSlotPrice(
-                    safeMinutes,
+                    startMinutes,
                     selectedCourt
                   )
                 );
@@ -1934,6 +1980,56 @@ const TurfDetailsScreen: React.FC<
       selectedSlotsByDate,
       selectedCourt,
     ]);
+
+  const fullDayDiscountAmount =
+    useMemo(() => {
+      return selectedDateStrings.reduce(
+        (discountTotal, dateString) => {
+          if (!fullDayDates[dateString]) {
+            return discountTotal;
+          }
+
+          const ids =
+            selectedSlotsByDate[dateString] ?? [];
+
+          const dateSubtotal = ids.reduce(
+            (sum, bookingKey) => {
+              const startMinutes =
+                getMinutesFromBookingKey(bookingKey) ?? 0;
+
+              return (
+                sum +
+                getSlotPrice(
+                  startMinutes,
+                  selectedCourt
+                )
+              );
+            },
+            0
+          );
+
+          return (
+            discountTotal +
+            dateSubtotal *
+              (fullDayDiscountPercent / 100)
+          );
+        },
+        0
+      );
+    }, [
+      selectedDateStrings,
+      selectedSlotsByDate,
+      selectedCourt,
+      fullDayDates,
+      fullDayDiscountPercent,
+    ]);
+
+  const totalPrice =
+    Math.max(
+      0,
+      baseTotalPrice -
+        fullDayDiscountAmount
+    );
 
   const selectedTimeText =
     useMemo(() => {
@@ -2035,6 +2131,8 @@ const TurfDetailsScreen: React.FC<
           {}
         );
 
+        setFullDayDates({});
+
         setBookedSlotKeysByDate(
           {}
         );
@@ -2134,6 +2232,298 @@ const TurfDetailsScreen: React.FC<
     );
 
   /* =======================================================
+     FULL DAY BOOKING HELPERS
+  ======================================================= */
+
+  // Maximum duration allowed for Full Day Booking.
+  // Users can select any continuous range from 1 hour up to 12 hours.
+  const FULL_DAY_MAX_HOURS = 12;
+
+  const getDurationHours = useCallback(
+    (startMinutes: number, endMinutes: number): number => {
+      let duration = endMinutes - startMinutes;
+
+      if (duration <= 0) {
+        duration += 1440;
+      }
+
+      return duration / 60;
+    },
+    []
+  );
+
+  const getFullDayStartOptions = useMemo(() => {
+    return slots.filter(slot => slot.available);
+  }, [slots]);
+
+  const getFullDayEndOptions = useMemo(() => {
+    if (fullDayStartMinutes === null) {
+      return [];
+    }
+
+    const startIndex = slots.findIndex(
+      slot => slot.startMinutes === fullDayStartMinutes
+    );
+
+    if (startIndex < 0) {
+      return [];
+    }
+
+    const options: Slot[] = [];
+
+    /*
+      End time represents the end of the selected final slot.
+
+      Full Day Booking supports any continuous duration from
+      1 hour up to a maximum of 12 hours.
+
+      Example:
+      10:00 -> 15:00 = 5 hours
+      10:00 -> 20:00 = 10 hours
+      10:00 -> 22:00 = 12 hours
+
+      The loop also stops immediately when an unavailable slot
+      is encountered, so the selected range can never contain
+      a gap/booked slot.
+    */
+    for (
+      let index = startIndex;
+      index < slots.length;
+      index++
+    ) {
+      const candidate = slots[index];
+
+      if (!candidate.available) {
+        break;
+      }
+
+      const durationHours =
+        getDurationHours(
+          fullDayStartMinutes,
+          candidate.endMinutes
+        );
+
+      if (durationHours > FULL_DAY_MAX_HOURS) {
+        break;
+      }
+
+      options.push(candidate);
+    }
+
+    return options;
+  }, [
+    slots,
+    fullDayStartMinutes,
+    getDurationHours,
+  ]);
+
+  const openFullDayBooking = useCallback(() => {
+    if (!selectedCourt) {
+      Alert.alert(
+        'Select Court',
+        'Please select a court first.'
+      );
+      return;
+    }
+
+    if (
+      selectedOperatingHour?.isClosed === true ||
+      slots.length === 0
+    ) {
+      Alert.alert(
+        'No Slots',
+        'There are no bookable slots for this date.'
+      );
+      return;
+    }
+
+    const firstAvailableIndex = slots.findIndex(
+      slot => slot.available
+    );
+
+    if (firstAvailableIndex < 0) {
+      Alert.alert(
+        'No Availability',
+        'No continuous available slot is available for this date.'
+      );
+      return;
+    }
+
+    const firstAvailable =
+      slots[firstAvailableIndex];
+
+    // Default to the longest continuous range currently available,
+    // but never more than the 12-hour Full Day limit.
+    // The user can change both start and end times in the modal.
+    let lastAvailableIndex = firstAvailableIndex;
+
+    for (
+      let index = firstAvailableIndex + 1;
+      index < slots.length;
+      index++
+    ) {
+      const candidate = slots[index];
+
+      if (!candidate?.available) {
+        break;
+      }
+
+      const durationHours =
+        getDurationHours(
+          firstAvailable.startMinutes,
+          candidate.endMinutes
+        );
+
+      if (durationHours > FULL_DAY_MAX_HOURS) {
+        break;
+      }
+
+      lastAvailableIndex = index;
+    }
+
+    const endCandidate =
+      slots[lastAvailableIndex];
+
+    setFullDayStartMinutes(
+      firstAvailable.startMinutes
+    );
+
+    setFullDayEndMinutes(
+      endCandidate && endCandidate.available
+        ? endCandidate.endMinutes
+        : firstAvailable.endMinutes
+    );
+
+    setFullDayModalVisible(true);
+  }, [
+    selectedCourt,
+    selectedOperatingHour,
+    slots,
+    getDurationHours,
+  ]);
+
+  const applyFullDayBooking = useCallback(() => {
+    if (
+      fullDayStartMinutes === null ||
+      fullDayEndMinutes === null
+    ) {
+      Alert.alert(
+        'Select Time',
+        'Please select both start time and end time.'
+      );
+      return;
+    }
+
+    const durationHours = getDurationHours(
+      fullDayStartMinutes,
+      fullDayEndMinutes
+    );
+
+    if (durationHours <= 0) {
+      Alert.alert(
+        'Invalid Time Range',
+        'Please select a valid start and end time.'
+      );
+      return;
+    }
+
+    if (durationHours > FULL_DAY_MAX_HOURS) {
+      Alert.alert(
+        'Maximum 12 Hours',
+        'Full Day Booking can be selected for a maximum of 12 continuous hours.'
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(durationHours)
+    ) {
+      Alert.alert(
+        'Invalid Time',
+        'Please select complete one-hour slots.'
+      );
+      return;
+    }
+
+    const startIndex = slots.findIndex(
+      slot => slot.startMinutes === fullDayStartMinutes
+    );
+
+    if (startIndex < 0) {
+      Alert.alert(
+        'Slot Unavailable',
+        'The selected start time is no longer available.'
+      );
+      return;
+    }
+
+    const requiredSlotCount = durationHours;
+    const selectedRange: Slot[] = [];
+
+    for (
+      let index = 0;
+      index < requiredSlotCount;
+      index++
+    ) {
+      const slot = slots[startIndex + index];
+
+      if (!slot || !slot.available) {
+        Alert.alert(
+          'Slots Not Available',
+          'Full Day Booking requires continuous available slots. One of the selected slots is already booked or unavailable.'
+        );
+        return;
+      }
+
+      selectedRange.push(slot);
+    }
+
+    const actualEnd =
+      selectedRange[selectedRange.length - 1]?.endMinutes;
+
+    if (
+      actualEnd === undefined ||
+      getDurationHours(
+        fullDayStartMinutes,
+        actualEnd
+      ) !== durationHours
+    ) {
+      Alert.alert(
+        'Invalid Range',
+        'Please choose a continuous time range.'
+      );
+      return;
+    }
+
+    const dateString =
+      formatDate(selectedDate);
+
+    setSelectedSlotsByDate(
+      previous => ({
+        ...previous,
+        [dateString]: selectedRange.map(
+          slot => slot.id
+        ),
+      })
+    );
+
+    setFullDayDates(
+      previous => ({
+        ...previous,
+        [dateString]: true,
+      })
+    );
+
+    setFullDayModalVisible(false);
+  }, [
+    fullDayStartMinutes,
+    fullDayEndMinutes,
+    getDurationHours,
+    slots,
+    selectedDate,
+  ]);
+
+  /* =======================================================
      BOOK NOW
   ======================================================= */
 
@@ -2175,6 +2565,9 @@ const TurfDetailsScreen: React.FC<
           date: string;
           slots: Slot[];
           slotCount: number;
+          subtotal: number;
+          discountAmount: number;
+          discountPercent: number;
           totalAmount: number;
         }> = [];
 
@@ -2444,7 +2837,7 @@ const TurfDetailsScreen: React.FC<
             return;
           }
 
-          const dateTotal =
+          const dateSubtotal =
             selectedObjects.reduce(
               (sum, slot) =>
                 sum +
@@ -2454,14 +2847,33 @@ const TurfDetailsScreen: React.FC<
               0
             );
 
+          const isFullDayBooking =
+            fullDayDates[dateString] === true;
+
+          const dateDiscount =
+            isFullDayBooking
+              ? dateSubtotal *
+                (fullDayDiscountPercent / 100)
+              : 0;
+
+          const dateTotal =
+            Math.max(
+              0,
+              dateSubtotal -
+                dateDiscount
+            );
+
           refreshedBookings.push({
             date: dateString,
-            slots:
-              selectedObjects,
+            slots: selectedObjects,
             slotCount:
               selectedObjects.length,
-            totalAmount:
-              dateTotal,
+            subtotal: dateSubtotal,
+            discountAmount: dateDiscount,
+            discountPercent: isFullDayBooking
+              ? fullDayDiscountPercent
+              : 0,
+            totalAmount: dateTotal,
           });
         }
 
@@ -2490,6 +2902,22 @@ const TurfDetailsScreen: React.FC<
             (sum, booking) =>
               sum +
               booking.slotCount,
+            0
+          );
+
+        const originalTotal =
+          refreshedBookings.reduce(
+            (sum, booking) =>
+              sum +
+              booking.subtotal,
+            0
+          );
+
+        const totalDiscount =
+          refreshedBookings.reduce(
+            (sum, booking) =>
+              sum +
+              booking.discountAmount,
             0
           );
 
@@ -2523,6 +2951,12 @@ const TurfDetailsScreen: React.FC<
                 ),
               slotCount:
                 booking.slotCount,
+              subtotal:
+                booking.subtotal,
+              discountAmount:
+                booking.discountAmount,
+              discountPercent:
+                booking.discountPercent,
               totalAmount:
                 booking.totalAmount,
             })
@@ -2564,6 +2998,14 @@ const TurfDetailsScreen: React.FC<
 
           totalAmount:
             grandTotal,
+
+          originalTotal,
+          discountAmount:
+            totalDiscount,
+          discountPercent:
+            totalDiscount > 0
+              ? fullDayDiscountPercent
+              : 0,
 
           /*
             Legacy single-booking fields.
@@ -2608,6 +3050,8 @@ const TurfDetailsScreen: React.FC<
         turfId,
         selectedCourtId,
         currentTimeMinutes,
+        fullDayDates,
+        fullDayDiscountPercent,
         loadBookedSlotsForDate,
         navigation,
       ]
@@ -3404,18 +3848,39 @@ const TurfDetailsScreen: React.FC<
             </Text>
           </View>
 
-          {loadingDates[
-            formatDate(
-              selectedDate
-            )
-          ] && (
-            <ActivityIndicator
-              size="small"
-              color={
-                COLORS.primary
-              }
-            />
-          )}
+          <View
+            style={styles.slotHeaderActions}
+          >
+            {loadingDates[
+              formatDate(
+                selectedDate
+              )
+            ] && (
+              <ActivityIndicator
+                size="small"
+                color={
+                  COLORS.primary
+                }
+              />
+            )}
+
+            <TouchableOpacity
+              style={styles.fullDayButton}
+              onPress={openFullDayBooking}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={styles.fullDayButtonText}
+              >
+                FULL DAY
+              </Text>
+              <Text
+                style={styles.fullDayButtonDiscount}
+              >
+                1–12 HOURS • {fullDayDiscountPercent}% OFF
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* =================================================
@@ -3861,15 +4326,27 @@ const TurfDetailsScreen: React.FC<
                 </Text>
               </View>
 
-              <Text
-                style={
-                  styles.selectedTotal
-                }
-              >
-                {formatCurrency(
-                  totalPrice
+              <View style={styles.selectedTotalBox}>
+                {fullDayDiscountAmount > 0 && (
+                  <Text style={styles.selectedOriginalTotal}>
+                    {formatCurrency(baseTotalPrice)}
+                  </Text>
                 )}
-              </Text>
+                <Text
+                  style={
+                    styles.selectedTotal
+                  }
+                >
+                  {formatCurrency(
+                    totalPrice
+                  )}
+                </Text>
+                {fullDayDiscountAmount > 0 && (
+                  <Text style={styles.selectedDiscountText}>
+                    {fullDayDiscountPercent}% OFF • Saved {formatCurrency(fullDayDiscountAmount)}
+                  </Text>
+                )}
+              </View>
             </View>
 
             {selectedDateStrings.map(
@@ -3933,6 +4410,14 @@ const TurfDetailsScreen: React.FC<
                               delete next[
                                 dateString
                               ];
+
+                              setFullDayDates(
+                                current => {
+                                  const nextFullDay = { ...current };
+                                  delete nextFullDay[dateString];
+                                  return nextFullDay;
+                                }
+                              );
 
                               return next;
                             }
@@ -4108,6 +4593,201 @@ const TurfDetailsScreen: React.FC<
       </ScrollView>
 
       {/* =====================================================
+          FULL DAY BOOKING MODAL
+      ===================================================== */}
+      <Modal
+        visible={fullDayModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setFullDayModalVisible(false)
+        }
+      >
+        <View style={styles.fullDayModalOverlay}>
+          <View style={styles.fullDayModalCard}>
+            <View style={styles.fullDayModalHeader}>
+              <View style={styles.fullDayModalHeaderText}>
+                <Text style={styles.fullDayModalTitle}>
+                  Full Day Booking
+                </Text>
+                <Text style={styles.fullDayModalSubtitle}>
+                  Choose your start and end time. Maximum booking duration is 12 continuous hours.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.fullDayCloseButton}
+                onPress={() =>
+                  setFullDayModalVisible(false)
+                }
+              >
+                <Text style={styles.fullDayCloseText}>
+                  ×
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.fullDayOfferBanner}>
+              <Text style={styles.fullDayOfferTitle}>
+                🎉 {fullDayDiscountPercent}% OFF Full Day Booking
+              </Text>
+              <Text style={styles.fullDayOfferText}>
+                Choose your own start and end time. Book any continuous duration from 1 to 12 hours and save the configured discount.
+              </Text>
+            </View>
+
+            <Text style={styles.fullDayFieldLabel}>
+              START TIME
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fullDayTimeList}
+            >
+              {getFullDayStartOptions.map(slot => {
+                const selected =
+                  slot.startMinutes ===
+                  fullDayStartMinutes;
+
+                return (
+                  <TouchableOpacity
+                    key={`start-${slot.id}`}
+                    style={[
+                      styles.fullDayTimeChip,
+                      selected &&
+                        styles.fullDayTimeChipSelected,
+                    ]}
+                    onPress={() => {
+                      setFullDayStartMinutes(
+                        slot.startMinutes
+                      );
+
+                      const nextEnd =
+                        slots.find(
+                          candidate =>
+                            candidate.startMinutes ===
+                            slot.startMinutes + 60
+                        );
+
+                      setFullDayEndMinutes(
+                        nextEnd?.endMinutes ??
+                          slot.endMinutes
+                      );
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.fullDayTimeChipText,
+                        selected &&
+                          styles.fullDayTimeChipTextSelected,
+                      ]}
+                    >
+                      {slot.startTime}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={styles.fullDayFieldLabel}>
+              END TIME
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fullDayTimeList}
+            >
+              {getFullDayEndOptions.map(slot => {
+                const selected =
+                  slot.endMinutes ===
+                  fullDayEndMinutes;
+
+                return (
+                  <TouchableOpacity
+                    key={`end-${slot.id}`}
+                    style={[
+                      styles.fullDayTimeChip,
+                      selected &&
+                        styles.fullDayTimeChipSelected,
+                    ]}
+                    onPress={() =>
+                      setFullDayEndMinutes(
+                        slot.endMinutes
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.fullDayTimeChipText,
+                        selected &&
+                          styles.fullDayTimeChipTextSelected,
+                      ]}
+                    >
+                      {slot.endTime}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.fullDayRangeSummary}>
+              <View>
+                <Text style={styles.fullDayRangeLabel}>
+                  SELECTED RANGE
+                </Text>
+                <Text style={styles.fullDayRangeValue}>
+                  {fullDayStartMinutes !== null
+                    ? formatTime(fullDayStartMinutes)
+                    : '--'}{' '}
+                  →{' '}
+                  {fullDayEndMinutes !== null
+                    ? formatTime(fullDayEndMinutes)
+                    : '--'}
+                </Text>
+              </View>
+
+              <View style={styles.fullDayHoursBadge}>
+                <Text style={styles.fullDayHoursValue}>
+                  {fullDayStartMinutes !== null &&
+                  fullDayEndMinutes !== null
+                    ? getDurationHours(
+                        fullDayStartMinutes,
+                        fullDayEndMinutes
+                      )
+                    : 0}
+                </Text>
+                <Text style={styles.fullDayHoursLabel}>
+                  HOURS
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.fullDayModalActions}>
+              <TouchableOpacity
+                style={styles.fullDayCancelButton}
+                onPress={() =>
+                  setFullDayModalVisible(false)
+                }
+              >
+                <Text style={styles.fullDayCancelText}>
+                  CANCEL
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.fullDayApplyButton}
+                onPress={applyFullDayBooking}
+              >
+                <Text style={styles.fullDayApplyText}>
+                  APPLY {fullDayDiscountPercent}% OFF
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =====================================================
           BOOKING BAR
       ===================================================== */}
 
@@ -4148,6 +4828,12 @@ const TurfDetailsScreen: React.FC<
           >
             {selectedTimeText}
           </Text>
+
+          {fullDayDiscountAmount > 0 && (
+            <Text style={styles.bookingDiscountText}>
+              {fullDayDiscountPercent}% OFF • Saved {formatCurrency(fullDayDiscountAmount)}
+            </Text>
+          )}
 
           <Text
             style={
@@ -5147,6 +5833,326 @@ const styles =
       marginTop: 5,
       textAlign:
         'center',
+    },
+
+    slotHeaderActions: {
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      gap: 8,
+    },
+
+    fullDayButton: {
+      backgroundColor:
+        COLORS.purple,
+      borderRadius: 12,
+      paddingHorizontal: 11,
+      paddingVertical: 8,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    fullDayButtonText: {
+      color:
+        COLORS.white,
+      fontSize: 11,
+      fontWeight:
+        '900',
+    },
+
+    fullDayButtonDiscount: {
+      color:
+        COLORS.white,
+      fontSize: 7,
+      fontWeight:
+        '800',
+      marginTop: 2,
+    },
+
+    fullDayModalOverlay: {
+      flex: 1,
+      backgroundColor:
+        'rgba(0,0,0,0.48)',
+      justifyContent:
+        'flex-end',
+    },
+
+    fullDayModalCard: {
+      backgroundColor:
+        COLORS.white,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 18,
+      paddingTop: 18,
+      paddingBottom: 26,
+    },
+
+    fullDayModalHeader: {
+      flexDirection:
+        'row',
+      alignItems:
+        'flex-start',
+      justifyContent:
+        'space-between',
+    },
+
+    fullDayModalHeaderText: {
+      flex: 1,
+      paddingRight: 10,
+    },
+
+    fullDayModalTitle: {
+      fontSize: 21,
+      fontWeight:
+        '900',
+      color:
+        COLORS.text,
+    },
+
+    fullDayModalSubtitle: {
+      fontSize: 12,
+      lineHeight: 18,
+      color:
+        COLORS.textSecondary,
+      marginTop: 4,
+    },
+
+    fullDayCloseButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor:
+        '#F3F4F6',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    fullDayCloseText: {
+      fontSize: 25,
+      lineHeight: 28,
+      color:
+        COLORS.textSecondary,
+    },
+
+    fullDayOfferBanner: {
+      marginTop: 16,
+      backgroundColor:
+        COLORS.purpleLight,
+      borderRadius: 14,
+      padding: 13,
+      borderWidth: 1,
+      borderColor:
+        '#DDD6FE',
+    },
+
+    fullDayOfferTitle: {
+      color:
+        COLORS.purple,
+      fontSize: 14,
+      fontWeight:
+        '900',
+    },
+
+    fullDayOfferText: {
+      color:
+        COLORS.textSecondary,
+      fontSize: 11,
+      lineHeight: 16,
+      marginTop: 3,
+    },
+
+    fullDayFieldLabel: {
+      fontSize: 11,
+      fontWeight:
+        '900',
+      color:
+        COLORS.textSecondary,
+      marginTop: 18,
+      marginBottom: 8,
+    },
+
+    fullDayTimeList: {
+      paddingRight: 10,
+      gap: 8,
+    },
+
+    fullDayTimeChip: {
+      minWidth: 76,
+      height: 42,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      backgroundColor:
+        COLORS.white,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+      paddingHorizontal: 10,
+    },
+
+    fullDayTimeChipSelected: {
+      backgroundColor:
+        COLORS.primary,
+      borderColor:
+        COLORS.primary,
+    },
+
+    fullDayTimeChipText: {
+      color:
+        COLORS.text,
+      fontSize: 12,
+      fontWeight:
+        '800',
+    },
+
+    fullDayTimeChipTextSelected: {
+      color:
+        COLORS.white,
+    },
+
+    fullDayRangeSummary: {
+      marginTop: 18,
+      borderRadius: 14,
+      backgroundColor:
+        COLORS.background,
+      padding: 13,
+      flexDirection:
+        'row',
+      alignItems:
+        'center',
+      justifyContent:
+        'space-between',
+    },
+
+    fullDayRangeLabel: {
+      fontSize: 9,
+      fontWeight:
+        '900',
+      color:
+        COLORS.textSecondary,
+    },
+
+    fullDayRangeValue: {
+      fontSize: 17,
+      fontWeight:
+        '900',
+      color:
+        COLORS.text,
+      marginTop: 4,
+    },
+
+    fullDayHoursBadge: {
+      minWidth: 58,
+      height: 50,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.primaryLight,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    fullDayHoursValue: {
+      fontSize: 17,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primaryDark,
+    },
+
+    fullDayHoursLabel: {
+      fontSize: 7,
+      fontWeight:
+        '900',
+      color:
+        COLORS.primaryDark,
+    },
+
+    fullDayModalActions: {
+      flexDirection:
+        'row',
+      gap: 10,
+      marginTop: 18,
+    },
+
+    fullDayCancelButton: {
+      flex: 1,
+      height: 50,
+      borderRadius: 12,
+      backgroundColor:
+        '#F3F4F6',
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    fullDayCancelText: {
+      fontSize: 12,
+      fontWeight:
+        '900',
+      color:
+        COLORS.textSecondary,
+    },
+
+    fullDayApplyButton: {
+      flex: 1.4,
+      height: 50,
+      borderRadius: 12,
+      backgroundColor:
+        COLORS.primary,
+      alignItems:
+        'center',
+      justifyContent:
+        'center',
+    },
+
+    fullDayApplyText: {
+      fontSize: 12,
+      fontWeight:
+        '900',
+      color:
+        COLORS.white,
+    },
+
+    selectedTotalBox: {
+      alignItems:
+        'flex-end',
+    },
+
+    selectedOriginalTotal: {
+      fontSize: 11,
+      color:
+        COLORS.textLight,
+      textDecorationLine:
+        'line-through',
+      marginBottom: 1,
+    },
+
+    selectedDiscountText: {
+      fontSize: 9,
+      fontWeight:
+        '800',
+      color:
+        COLORS.purple,
+      marginTop: 2,
+    },
+
+    bookingDiscountText: {
+      fontSize: 9,
+      fontWeight:
+        '800',
+      color:
+        COLORS.purple,
+      marginTop: 1,
     },
 
     selectedCard: {

@@ -112,6 +112,9 @@ export interface Court {
   nightPricePerHour?: number;
   nightStartHour?: number;
   nightEndHour?: number;
+  // Full-day / long-booking discount percentage
+  // Example: 4 means 4% discount.
+  fullDayDiscountPercent?: number;
   status: 'active' | 'inactive' | 'maintenance';
 }
 
@@ -412,6 +415,9 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [courtName, setCourtName] = useState('');
   const [courtSport, setCourtSport] = useState('');
   const [courtPrice, setCourtPrice] = useState('');
+
+  // Full-day / long-booking discount percentage
+  const [courtFullDayDiscountPercent, setCourtFullDayDiscountPercent] = useState('4');
 
   const [courtHasNightPricing, setCourtHasNightPricing] = useState(false);
 
@@ -1151,6 +1157,9 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     setCourtSport('');
     setCourtPrice('');
 
+    // Default Full Day discount = 4%
+    setCourtFullDayDiscountPercent('4');
+
     setCourtHasNightPricing(false);
 
     setCourtNightPrice('');
@@ -1190,6 +1199,12 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       court.pricePerHour !== undefined
         ? String(court.pricePerHour)
         : '',
+    );
+
+    setCourtFullDayDiscountPercent(
+      court.fullDayDiscountPercent !== undefined
+        ? String(court.fullDayDiscountPercent)
+        : '4',
     );
 
     setCourtHasNightPricing(
@@ -1275,6 +1290,26 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       return;
     }
 
+    // =====================================================
+    // FULL-DAY DISCOUNT VALIDATION
+    // =====================================================
+
+    const fullDayDiscountPercent = Number(
+      courtFullDayDiscountPercent.trim(),
+    );
+
+    if (
+      !Number.isFinite(fullDayDiscountPercent) ||
+      fullDayDiscountPercent < 0 ||
+      fullDayDiscountPercent > 100
+    ) {
+      Alert.alert(
+        'Invalid Full Day Discount',
+        'Full Day discount must be between 0% and 100%.',
+      );
+      return;
+    }
+
     let nightPrice: number | undefined;
     let nightStartHour: number | undefined;
     let nightEndHour: number | undefined;
@@ -1334,6 +1369,10 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
         name: courtName.trim(),
         sport: courtSport.trim(),
         pricePerHour: price,
+
+        // Full-day / long-booking discount
+        fullDayDiscountPercent,
+
         hasNightPricing: courtHasNightPricing,
 
         ...(courtHasNightPricing
@@ -3117,6 +3156,55 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 keyboardType="numeric"
               />
 
+              {/* FULL DAY DISCOUNT */}
+
+              <View
+                style={styles.fullDayDiscountCard}
+              >
+                <Text
+                  style={styles.fullDayDiscountTitle}
+                >
+                  🎉 Full Day / Long Booking Discount
+                </Text>
+
+                <Text
+                  style={styles.fullDayDiscountDescription}
+                >
+                  Set the percentage discount applied when a customer uses Full Day booking and selects a continuous time range.
+                </Text>
+
+                <Text style={styles.fieldLabel}>
+                  FULL DAY DISCOUNT (%)
+                </Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 4"
+                  placeholderTextColor={
+                    COLORS.placeholder
+                  }
+                  value={
+                    courtFullDayDiscountPercent
+                  }
+                  onChangeText={(value) => {
+                    const cleaned = value
+                      .replace(/[^0-9.]/g, '');
+
+                    setCourtFullDayDiscountPercent(
+                      cleaned,
+                    );
+                  }}
+                  keyboardType="decimal-pad"
+                  maxLength={6}
+                />
+
+                <Text
+                  style={styles.fullDayDiscountHint}
+                >
+                  Example: 4 means 4% OFF. Enter 0 for no discount. Maximum 100%.
+                </Text>
+              </View>
+
               {/* NIGHT PRICING */}
 
               <View
@@ -4665,6 +4753,39 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginHorizontal: 10,
     marginBottom: 12,
+  },
+
+  /* FULL DAY DISCOUNT */
+
+  fullDayDiscountCard: {
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+
+  fullDayDiscountTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+
+  fullDayDiscountDescription: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+
+  fullDayDiscountHint: {
+    color: COLORS.primaryDark,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 7,
+    fontWeight: '700',
   },
 
   /* NIGHT PRICING */
