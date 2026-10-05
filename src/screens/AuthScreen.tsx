@@ -677,7 +677,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               ) : (
                 <View style={styles.submitButtonContent}>
                   <Text style={styles.submitButtonText}>
-                    {isLogin ? 'KICK OFF' : 'JOIN NOW'}
+                    {isLogin ? 'LOGIN' : 'JOIN NOW'}
                   </Text>
                   <Text style={styles.submitButtonIcon}>→</Text>
                 </View>

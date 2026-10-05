@@ -15,9 +15,8 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import * as ImagePicker from 'expo-image-picker';
-
+import * as Location from 'expo-location';
 import { File, UploadType } from 'expo-file-system';
 
 /* =========================================================
@@ -30,18 +29,13 @@ const RAW_API_BASE_URL =
 const normalizeApiBaseUrl = (value: string): string => {
   let url = value.trim();
 
-  // Remove accidental quotes from .env
   url = url.replace(/^["']|["']$/g, '');
-
-  // Remove trailing slashes
   url = url.replace(/\/+$/, '');
 
-  // Add protocol if it is missing
   if (!/^https?:\/\//i.test(url)) {
     url = `https://${url}`;
   }
 
-  // Make sure /api exists
   if (!/\/api$/i.test(url)) {
     url = `${url}/api`;
   }
@@ -51,11 +45,13 @@ const normalizeApiBaseUrl = (value: string): string => {
 
 const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
 
-/* =========================================================
-   API URL VALIDATION
-========================================================= */
-
 const validateApiUrl = (): void => {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'API URL is missing. Please configure EXPO_PUBLIC_API_URL.',
+    );
+  }
+
   try {
     const parsedUrl = new URL(API_BASE_URL);
 
@@ -63,26 +59,11 @@ const validateApiUrl = (): void => {
       parsedUrl.protocol !== 'http:' &&
       parsedUrl.protocol !== 'https:'
     ) {
-      throw new Error(
-        `Unsupported protocol: ${parsedUrl.protocol}`,
-      );
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
     }
-
-    console.log('========================================');
-    console.log('API URL VALIDATION SUCCESS');
-    console.log('API BASE URL:', API_BASE_URL);
-    console.log('========================================');
-  } catch (error) {
-    console.error('========================================');
-    console.error('INVALID API URL');
-    console.error('API URL:', API_BASE_URL);
-    console.error('ERROR:', error);
-    console.error('========================================');
-
+  } catch {
     throw new Error(
-      `Invalid API URL:\n\n${API_BASE_URL}\n\n` +
-        `Expected format:\n` +
-        `https://your-backend-url/api`,
+      `Invalid API URL:\n\n${API_BASE_URL}\n\nExpected format:\nhttps://your-backend-url/api`,
     );
   }
 };
@@ -92,14 +73,11 @@ console.log('TURFBOOK API CONFIGURATION');
 console.log('RAW API URL:', RAW_API_BASE_URL);
 console.log('FINAL API URL:', API_BASE_URL);
 console.log('TURFS URL:', `${API_BASE_URL}/turfs`);
-console.log(
-  'IMAGE URL:',
-  `${API_BASE_URL}/upload/turf-image`,
-);
+console.log('IMAGE URL:', `${API_BASE_URL}/upload/turf-image`);
 console.log('========================================');
 
 /* =========================================================
-   THEME COLORS
+   THEME
 ========================================================= */
 
 const COLORS = {
@@ -112,17 +90,8 @@ const COLORS = {
 
   accent: '#F97316',
   accentLight: '#FFEDD5',
-  accentSoft: '#FEF3C7',
-  accentText: '#92400E',
-
-  info: '#2563EB',
-  infoLight: '#DBEAFE',
-  infoSoft: '#EFF6FF',
-  infoText: '#1E40AF',
 
   bg: '#FFFFFF',
-  bgSoft: '#F7FDF9',
-
   card: '#FFFFFF',
   cardSoft: '#F9FAFB',
 
@@ -138,16 +107,11 @@ const COLORS = {
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
   dangerBorder: '#FECACA',
-  dangerText: '#DC2626',
 
   warning: '#F59E0B',
   warningSoft: '#FEF3C7',
-  warningBorder: '#FDE68A',
-  warningText: '#92400E',
 
   white: '#FFFFFF',
-
-  overlay: 'rgba(0,0,0,0.45)',
 };
 
 /* =========================================================
@@ -156,9 +120,7 @@ const COLORS = {
 
 interface AddTurfScreenProps {
   navigation: any;
-
   route?: any;
-
   user?: {
     _id?: string;
     id?: string;
@@ -166,6 +128,11 @@ interface AddTurfScreenProps {
     email?: string;
     role?: string;
   };
+}
+
+interface TurfImage {
+  url: string;
+  isPrimary: boolean;
 }
 
 /* =========================================================
@@ -191,48 +158,49 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
   /* =======================================================
      TURF DETAILS
+
+     IMPORTANT:
+     Turf contains only venue-level details.
+     Court-specific details such as:
+       ❌ pricePerHour
+       ❌ sports
+       ❌ openingTime
+       ❌ closingTime
+       ❌ operatingHours
+     are managed by Court.
+
+     Turf location is stored as GeoJSON:
+       location: {
+         type: 'Point',
+         coordinates: [longitude, latitude],
+       }
   ======================================================= */
 
   const [name, setName] = useState('');
-
   const [description, setDescription] = useState('');
-
   const [address, setAddress] = useState('');
-
   const [city, setCity] = useState('');
-
   const [amenities, setAmenities] = useState('');
+
+  /* =======================================================
+     TURF LOCATION
+
+     Backend requires:
+       location.type = "Point"
+       location.coordinates = [longitude, latitude]
+  ======================================================= */
+
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   /* =======================================================
      IMAGE
   ======================================================= */
 
-  const [imageUri, setImageUri] =
-    useState<string | null>(null);
-
-  const [uploadedImageUrl, setUploadedImageUrl] =
-    useState('');
-
-  const [imageUploading, setImageUploading] =
-    useState(false);
-
-  /* =======================================================
-     LOCATION
-  ======================================================= */
-
-  const [latitude, setLatitude] = useState('');
-
-  const [longitude, setLongitude] = useState('');
-
-  /* =======================================================
-     OPERATING HOURS
-  ======================================================= */
-
-  const [openingTime, setOpeningTime] =
-    useState('06:00');
-
-  const [closingTime, setClosingTime] =
-    useState('23:00');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState('');
+  const [imageUploading, setImageUploading] = useState(false);
 
   /* =======================================================
      LOADING
@@ -241,203 +209,14 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
   const [loading, setLoading] = useState(false);
 
   /* =======================================================
-     FORMAT TIME INPUT
+     IMAGE UPLOAD
   ======================================================= */
 
-  const formatTimeInput = (
-    value: string,
-    setter: React.Dispatch<
-      React.SetStateAction<string>
-    >,
-  ) => {
-    const numbersOnly = value
-      .replace(/\D/g, '')
-      .slice(0, 4);
-
-    if (numbersOnly.length <= 2) {
-      setter(numbersOnly);
-      return;
-    }
-
-    setter(
-      `${numbersOnly.slice(0, 2)}:${numbersOnly.slice(
-        2,
-        4,
-      )}`,
-    );
-  };
-
-  /* =======================================================
-     VALIDATE TIME
-  ======================================================= */
-
-  const isValidTime = (time: string): boolean => {
-    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(time);
-  };
-
-  /* =======================================================
-     TIME TO MINUTES
-  ======================================================= */
-
-  const timeToMinutes = (time: string): number => {
-    const [hours, minutes] = time
-      .split(':')
-      .map(Number);
-
-    return hours * 60 + minutes;
-  };
-
-  /* =======================================================
-     FORMAT TIME FOR DISPLAY
-  ======================================================= */
-
-  const formatTimeForDisplay = (
-    time: string,
-  ): string => {
-    if (!isValidTime(time)) {
-      return '--:--';
-    }
-
-    const [hourString, minuteString] =
-      time.split(':');
-
-    let hour = Number(hourString);
-
-    const period = hour >= 12 ? 'PM' : 'AM';
-
-    if (hour === 0) {
-      hour = 12;
-    } else if (hour > 12) {
-      hour -= 12;
-    }
-
-    return `${hour}:${minuteString} ${period}`;
-  };
-
-  /* =======================================================
-     VALIDATE OPERATING HOURS
-  ======================================================= */
-
-  const validateOperatingHours = (): boolean => {
-    if (!openingTime.trim()) {
-      Alert.alert(
-        'Opening Time Required',
-        'Please enter the turf opening time.',
-      );
-
-      return false;
-    }
-
-    if (!closingTime.trim()) {
-      Alert.alert(
-        'Closing Time Required',
-        'Please enter the turf closing time.',
-      );
-
-      return false;
-    }
-
-    if (!isValidTime(openingTime)) {
-      Alert.alert(
-        'Invalid Opening Time',
-        'Please enter a valid time in HH:MM format.\n\nExample: 06:00',
-      );
-
-      return false;
-    }
-
-    if (!isValidTime(closingTime)) {
-      Alert.alert(
-        'Invalid Closing Time',
-        'Please enter a valid time in HH:MM format.\n\nExample: 23:00',
-      );
-
-      return false;
-    }
-
-    const openingMinutes =
-      timeToMinutes(openingTime);
-
-    const closingMinutes =
-      timeToMinutes(closingTime);
-
-    if (closingMinutes <= openingMinutes) {
-      Alert.alert(
-        'Invalid Operating Hours',
-        'Closing time must be later than opening time.',
-      );
-
-      return false;
-    }
-
-    return true;
-  };
-
-  /* =======================================================
-     VALIDATE LOCATION
-  ======================================================= */
-
-  const validateLocation = (): {
-    latitude: number;
-    longitude: number;
-  } | null => {
-    const parsedLatitude = Number(latitude);
-
-    const parsedLongitude = Number(longitude);
-
-    if (
-      !Number.isFinite(parsedLatitude) ||
-      !Number.isFinite(parsedLongitude)
-    ) {
-      Alert.alert(
-        'Location Required',
-        'Please enter valid latitude and longitude.',
-      );
-
-      return null;
-    }
-
-    if (
-      parsedLatitude < -90 ||
-      parsedLatitude > 90
-    ) {
-      Alert.alert(
-        'Invalid Latitude',
-        'Latitude must be between -90 and 90.',
-      );
-
-      return null;
-    }
-
-    if (
-      parsedLongitude < -180 ||
-      parsedLongitude > 180
-    ) {
-      Alert.alert(
-        'Invalid Longitude',
-        'Longitude must be between -180 and 180.',
-      );
-
-      return null;
-    }
-
-    return {
-      latitude: parsedLatitude,
-      longitude: parsedLongitude,
-    };
-  };
-
-  /* =======================================================
-     UPLOAD IMAGE TO BACKEND / CLOUDINARY
-  ======================================================= */
-
-  const uploadImageToCloudinary = async (
+  const uploadImageToBackend = async (
     selectedImageUri: string,
   ): Promise<string> => {
     if (!selectedImageUri) {
-      throw new Error(
-        'No image was selected.',
-      );
+      throw new Error('No image was selected.');
     }
 
     validateApiUrl();
@@ -456,11 +235,8 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       );
     }
 
-    const mimeType =
-      file.type || 'image/jpeg';
-
-    const uploadUrl =
-      `${API_BASE_URL}/upload/turf-image`;
+    const mimeType = file.type || 'image/jpeg';
+    const uploadUrl = `${API_BASE_URL}/upload/turf-image`;
 
     console.log('========================================');
     console.log('IMAGE UPLOAD START');
@@ -474,14 +250,9 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         uploadUrl,
         {
           httpMethod: 'POST',
-
-          uploadType:
-            UploadType.MULTIPART,
-
+          uploadType: UploadType.MULTIPART,
           fieldName: 'image',
-
           mimeType,
-
           headers: {
             Accept: 'application/json',
           },
@@ -504,8 +275,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       ) {
         throw new Error(
           `Image upload failed (${result.status}): ${
-            result.body ||
-            'Unknown server error'
+            result.body || 'Unknown server error'
           }`,
         );
       }
@@ -520,7 +290,13 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         );
       }
 
-      if (!data?.url) {
+      const imageUrl =
+        data?.url ||
+        data?.imageUrl ||
+        data?.secure_url ||
+        data?.image?.url;
+
+      if (!imageUrl) {
         throw new Error(
           data?.error ||
             data?.message ||
@@ -530,10 +306,10 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
       console.log(
         'UPLOADED IMAGE URL:',
-        data.url,
+        imageUrl,
       );
 
-      return data.url;
+      return String(imageUrl);
     } catch (error) {
       console.error(
         'IMAGE UPLOAD ERROR:',
@@ -566,22 +342,16 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           'Permission Required',
           'Please allow photo library access to select a turf image.',
         );
-
         return;
       }
 
       const result =
-        await ImagePicker.launchImageLibraryAsync(
-          {
-            mediaTypes: ['images'],
-
-            allowsEditing: true,
-
-            aspect: [16, 9],
-
-            quality: 0.8,
-          },
-        );
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [16, 9],
+          quality: 0.8,
+        });
 
       if (result.canceled) {
         return;
@@ -594,21 +364,16 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           'Image Error',
           'Could not get the selected image.',
         );
-
         return;
       }
 
       setImageUri(asset.uri);
-
       setUploadedImageUrl('');
-
       setImageUploading(true);
 
       try {
         const imageUrl =
-          await uploadImageToCloudinary(
-            asset.uri,
-          );
+          await uploadImageToBackend(asset.uri);
 
         setUploadedImageUrl(imageUrl);
 
@@ -618,7 +383,6 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         );
       } catch (error) {
         setImageUri(null);
-
         setUploadedImageUrl('');
 
         Alert.alert(
@@ -643,6 +407,169 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
   };
 
   /* =======================================================
+     GET CURRENT LOCATION
+  ======================================================= */
+
+  const getCurrentLocation = async () => {
+    if (locationLoading) {
+      return;
+    }
+
+    try {
+      setLocationLoading(true);
+
+      const permission =
+        await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow location access so the turf can be saved on the map.',
+        );
+        return;
+      }
+
+      const currentLocation =
+        await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+      const nextLatitude =
+        currentLocation.coords.latitude;
+
+      const nextLongitude =
+        currentLocation.coords.longitude;
+
+      if (
+        !Number.isFinite(nextLatitude) ||
+        !Number.isFinite(nextLongitude) ||
+        nextLatitude < -90 ||
+        nextLatitude > 90 ||
+        nextLongitude < -180 ||
+        nextLongitude > 180
+      ) {
+        throw new Error(
+          'The device returned an invalid latitude or longitude.',
+        );
+      }
+
+      setLatitude(nextLatitude);
+      setLongitude(nextLongitude);
+
+      console.log('========================================');
+      console.log('TURF LOCATION CAPTURED');
+      console.log('LATITUDE:', nextLatitude);
+      console.log('LONGITUDE:', nextLongitude);
+      console.log(
+        'GEOJSON:',
+        [nextLongitude, nextLatitude],
+      );
+      console.log('========================================');
+
+      Alert.alert(
+        'Location Captured',
+        'Your current turf location has been selected successfully.',
+      );
+    } catch (error) {
+      console.error(
+        'GET TURF LOCATION ERROR:',
+        error,
+      );
+
+      Alert.alert(
+        'Location Error',
+        error instanceof Error
+          ? error.message
+          : 'Unable to get your current location.',
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  /* =======================================================
+     VALIDATION
+  ======================================================= */
+
+  const validateForm = (): boolean => {
+    if (!name.trim()) {
+      Alert.alert(
+        'Validation Error',
+        'Please enter the turf name.',
+      );
+      return false;
+    }
+
+    if (!address.trim()) {
+      Alert.alert(
+        'Validation Error',
+        'Please enter the turf address.',
+      );
+      return false;
+    }
+
+    if (!city.trim()) {
+      Alert.alert(
+        'Validation Error',
+        'Please enter the city.',
+      );
+      return false;
+    }
+
+    if (!ownerId) {
+      Alert.alert(
+        'Owner ID Required',
+        'Logged-in owner information was not found. Please login again.',
+      );
+      return false;
+    }
+
+    if (
+      latitude === null ||
+      longitude === null ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude)
+    ) {
+      Alert.alert(
+        'Location Required',
+        'Please select the turf location using the "Use Current Location" button.',
+      );
+      return false;
+    }
+
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      Alert.alert(
+        'Invalid Location',
+        'The selected latitude or longitude is outside the valid range.',
+      );
+      return false;
+    }
+
+    if (imageUploading) {
+      Alert.alert(
+        'Please Wait',
+        'The turf image is still uploading.',
+      );
+      return false;
+    }
+
+    if (!uploadedImageUrl) {
+      Alert.alert(
+        'Image Required',
+        'Please select a turf image and wait for the upload to finish.',
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  /* =======================================================
      CREATE TURF
   ======================================================= */
 
@@ -651,82 +578,12 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       return;
     }
 
-    /* -----------------------------------------------
-       VALIDATION
-    ------------------------------------------------ */
-
-    if (!name.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the turf name.',
-      );
-
+    if (!validateForm()) {
       return;
     }
-
-    if (!address.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the turf address.',
-      );
-
-      return;
-    }
-
-    if (!city.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the city.',
-      );
-
-      return;
-    }
-
-    if (!ownerId) {
-      Alert.alert(
-        'Owner ID Required',
-        'Logged-in owner information was not found. Please login again.',
-      );
-
-      return;
-    }
-
-    if (imageUploading) {
-      Alert.alert(
-        'Please Wait',
-        'The turf image is still uploading.',
-      );
-
-      return;
-    }
-
-    if (!uploadedImageUrl) {
-      Alert.alert(
-        'Image Required',
-        'Please select a turf image and wait for the upload to finish.',
-      );
-
-      return;
-    }
-
-    const location =
-      validateLocation();
-
-    if (!location) {
-      return;
-    }
-
-    if (!validateOperatingHours()) {
-      return;
-    }
-
-    /* -----------------------------------------------
-       API
-    ------------------------------------------------ */
 
     try {
       validateApiUrl();
-
       setLoading(true);
 
       const amenityList = amenities
@@ -734,85 +591,96 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         .map((item) => item.trim())
         .filter(Boolean);
 
+      /*
+       * =====================================================
+       * IMPORTANT NEW TURF PAYLOAD
+       *
+       * Only fields that belong to Turf are sent.
+       *
+       * Removed completely because these belong to Court:
+       * ❌ pricePerHour
+       * ❌ sports
+       * ❌ openingTime
+       * ❌ closingTime
+       * ❌ operatingHours
+       *
+       * Required Turf location:
+       * ✅ GeoJSON Point
+       * ✅ coordinates [longitude, latitude]
+       * =====================================================
+       */
+
+      const cleanOwnerId = ownerId.trim();
+
+      console.log('OWNER ID CHECK:', {
+        ownerId: cleanOwnerId,
+        hasOwnerId: Boolean(cleanOwnerId),
+        ownerIdLength: cleanOwnerId.length,
+      });
+
       const payload = {
-        owner: ownerId,
+        owner: cleanOwnerId,
 
         name: name.trim(),
 
-        description:
-          description.trim(),
+        description: description.trim(),
 
         address: address.trim(),
 
         city: city.trim(),
 
         location: {
-          type: 'Point',
-
+          type: 'Point' as const,
           coordinates: [
-            location.longitude,
-            location.latitude,
-          ],
+            longitude,
+            latitude,
+          ] as [number, number],
         },
 
         images: [
           {
             url: uploadedImageUrl,
-
             isPrimary: true,
-          },
+          } satisfies TurfImage,
         ],
 
         amenities: amenityList,
-
-        openingTime:
-          openingTime.trim(),
-
-        closingTime:
-          closingTime.trim(),
       };
 
-      const turfUrl =
-        `${API_BASE_URL}/turfs`;
+      const turfUrl = `${API_BASE_URL}/turfs`;
 
       console.log('========================================');
-
+      console.log('CREATE TURF REQUEST');
+      console.log('API URL:', turfUrl);
       console.log(
-        'CREATE TURF REQUEST',
-      );
-
-      console.log(
-        'API URL:',
-        turfUrl,
+        'LOCATION:',
+        {
+          latitude,
+          longitude,
+          geoJsonCoordinates: [
+            longitude,
+            latitude,
+          ],
+        },
       );
 
       console.log(
         'PAYLOAD:',
-        JSON.stringify(
-          payload,
-          null,
-          2,
-        ),
+        JSON.stringify(payload, null, 2),
       );
-
       console.log('========================================');
 
-      const response =
-        await fetch(turfUrl, {
+      const response = await fetch(
+        turfUrl,
+        {
           method: 'POST',
-
           headers: {
-            'Content-Type':
-              'application/json',
-
-            Accept:
-              'application/json',
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
           },
-
-          body: JSON.stringify(
-            payload,
-          ),
-        });
+          body: JSON.stringify(payload),
+        },
+      );
 
       const responseText =
         await response.text();
@@ -831,38 +699,103 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
       if (responseText.trim()) {
         try {
-          data =
-            JSON.parse(
-              responseText,
-            );
+          data = JSON.parse(responseText);
         } catch {
           data = {};
         }
       }
 
-      /* -----------------------------------------------
+      /* =====================================================
          SERVER ERROR
-      ------------------------------------------------ */
+      ===================================================== */
 
       if (!response.ok) {
+        /*
+         * IMPORTANT:
+         * Your backend returns:
+         *
+         * {
+         *   success: false,
+         *   error: "Failed to create turf.",
+         *   details: "ACTUAL MONGOOSE / SERVER ERROR",
+         *   name: "ValidationError"
+         * }
+         *
+         * Always prefer `details` over the generic `error`
+         * so the real backend problem is visible in the app.
+         */
+        const serverDetails =
+          typeof data?.details === 'string'
+            ? data.details.trim()
+            : '';
+
+        const serverError =
+          typeof data?.error === 'string'
+            ? data.error.trim()
+            : '';
+
         const serverMessage =
-          data?.error ||
-          data?.message ||
-          data?.details ||
-          responseText ||
+          typeof data?.message === 'string'
+            ? data.message.trim()
+            : '';
+
+        const rawResponse =
+          typeof responseText === 'string'
+            ? responseText.trim()
+            : '';
+
+        const bestServerReason =
+          serverDetails ||
+          serverMessage ||
+          serverError ||
+          rawResponse ||
           `Failed to create turf (${response.status}).`;
 
+        console.error(
+          '========================================',
+        );
+        console.error(
+          'CREATE TURF SERVER ERROR DETAILS',
+        );
+        console.error(
+          'HTTP STATUS:',
+          response.status,
+        );
+        console.error(
+          'SERVER ERROR:',
+          serverError || '(none)',
+        );
+        console.error(
+          'SERVER DETAILS:',
+          serverDetails || '(none)',
+        );
+        console.error(
+          'SERVER MESSAGE:',
+          serverMessage || '(none)',
+        );
+        console.error(
+          'SERVER ERROR NAME:',
+          data?.name || '(none)',
+        );
+        console.error(
+          'RAW RESPONSE:',
+          rawResponse || '(empty)',
+        );
+        console.error(
+          '========================================',
+        );
+
         throw new Error(
-          `Server returned ${response.status}: ${serverMessage}`,
+          `Server returned ${response.status}: ${bestServerReason}`,
         );
       }
 
-      /* -----------------------------------------------
+      /* =====================================================
          CREATED TURF
-      ------------------------------------------------ */
+      ===================================================== */
 
       const createdTurf =
-        data?.turf || data;
+        data?.turf || data?.data || data;
 
       const turfId =
         createdTurf?._id ||
@@ -879,35 +812,29 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         turfId,
       );
 
-      /* -----------------------------------------------
+      /* =====================================================
          SUCCESS
-      ------------------------------------------------ */
+      ===================================================== */
 
       Alert.alert(
-        'Turf Created Successfully',
-        'Your turf has been created. Now add the courts.',
+        'Turf Submitted Successfully',
+        'Your turf has been submitted and is waiting for admin approval. You can continue to add courts.',
         [
           {
             text: 'Add Court',
-
             onPress: () => {
               navigation.navigate(
                 'AddCourtScreen',
                 {
                   turfId,
-
-                  turf:
-                    createdTurf,
+                  turf: createdTurf,
                 },
               );
             },
           },
-
           {
             text: 'Done',
-
             style: 'cancel',
-
             onPress: () => {
               navigation.goBack();
             },
@@ -925,21 +852,32 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       );
 
       console.error(
-        'API URL:',
+        'CREATE TURF ERROR MESSAGE:',
+        error instanceof Error
+          ? error.message
+          : String(error),
+      );
+
+      console.error(
+        'CREATE TURF REQUEST URL:',
         `${API_BASE_URL}/turfs`,
+      );
+
+      console.error(
+        'CREATE TURF OWNER ID:',
+        ownerId,
       );
 
       console.error(
         '========================================',
       );
 
-      let message =
-        'Unable to create turf.';
-
-      if (error instanceof Error) {
-        message =
-          error.message;
-      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unable to create turf.';
 
       Alert.alert(
         'Create Turf Failed',
@@ -950,9 +888,9 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
     }
   };
 
-  /* =========================================================
+  /* =======================================================
      RENDER
-  ========================================================= */
+  ======================================================= */
 
   return (
     <SafeAreaView
@@ -971,9 +909,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             styles.scrollContent
           }
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={
-            false
-          }
+          showsVerticalScrollIndicator={false}
         >
           {/* =================================================
               HEADER
@@ -988,9 +924,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
               activeOpacity={0.7}
             >
               <Text
-                style={
-                  styles.backButtonText
-                }
+                style={styles.backButtonText}
               >
                 ‹
               </Text>
@@ -1007,18 +941,14 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
                 }
               >
                 <Text
-                  style={
-                    styles.headerBadge
-                  }
+                  style={styles.headerBadge}
                 >
                   🏟️ NEW TURF
                 </Text>
               </View>
 
               <Text
-                style={
-                  styles.headerTitle
-                }
+                style={styles.headerTitle}
               >
                 Add Turf
               </Text>
@@ -1039,60 +969,11 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           ================================================= */}
 
           <View style={styles.card}>
-            <View
-              style={
-                styles.sectionHeader
-              }
-            >
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionIconText
-                  }
-                >
-                  1
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.sectionHeaderText
-                }
-              >
-                <View
-                  style={
-                    styles.sectionTitleRow
-                  }
-                >
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    Basic Details
-                  </Text>
-
-                  <View
-                    style={
-                      styles.sectionTitleAccent
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Enter information about
-                  your venue
-                </Text>
-              </View>
-            </View>
+            <SectionHeader
+              number="1"
+              title="Basic Details"
+              subtitle="Enter information about your venue"
+            />
 
             <Text style={styles.label}>
               TURF NAME *
@@ -1165,9 +1046,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
             <TextInput
               value={amenities}
-              onChangeText={
-                setAmenities
-              }
+              onChangeText={setAmenities}
               placeholder="Parking, Washroom, Changing Room"
               placeholderTextColor={
                 COLORS.placeholder
@@ -1176,9 +1055,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             />
 
             <Text
-              style={
-                styles.helperText
-              }
+              style={styles.helperText}
             >
               Separate multiple amenities
               with commas.
@@ -1186,69 +1063,141 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           </View>
 
           {/* =================================================
-              IMAGE
+              LOCATION
           ================================================= */}
 
           <View style={styles.card}>
-            <View
-              style={
-                styles.sectionHeader
-              }
-            >
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionIconText
-                  }
-                >
-                  2
+            <SectionHeader
+              number="2"
+              title="Turf Location"
+              subtitle="Select the exact venue location"
+            />
+
+            <View style={styles.locationInfoBox}>
+              <View style={styles.locationInfoIcon}>
+                <Text style={styles.locationInfoIconText}>
+                  📍
                 </Text>
               </View>
 
-              <View
-                style={
-                  styles.sectionHeaderText
-                }
-              >
-                <View
-                  style={
-                    styles.sectionTitleRow
-                  }
-                >
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    Turf Image
-                  </Text>
+              <View style={styles.locationInfoContent}>
+                <Text style={styles.locationInfoTitle}>
+                  Map Location Required
+                </Text>
 
-                  <View
-                    style={
-                      styles.sectionTitleAccent
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Add a clear photo of your
-                  venue
+                <Text style={styles.locationInfoText}>
+                  Your turf location is saved as GeoJSON
+                  coordinates for nearby turf search and maps.
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
               style={[
-                styles.imagePickerButton,
+                styles.locationButton,
+                locationLoading &&
+                  styles.locationButtonDisabled,
+              ]}
+              onPress={getCurrentLocation}
+              disabled={locationLoading}
+              activeOpacity={0.82}
+            >
+              {locationLoading ? (
+                <View style={styles.locationButtonContent}>
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.white}
+                  />
 
+                  <Text style={styles.locationButtonText}>
+                    Getting Location...
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.locationButtonContent}>
+                  <Text style={styles.locationButtonIcon}>
+                    📍
+                  </Text>
+
+                  <Text style={styles.locationButtonText}>
+                    {latitude !== null &&
+                    longitude !== null
+                      ? 'Update Turf Location'
+                      : 'Use Current Location'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {latitude !== null &&
+              longitude !== null && (
+                <View style={styles.coordinatesCard}>
+                  <View style={styles.coordinateRow}>
+                    <Text style={styles.coordinateLabel}>
+                      Latitude
+                    </Text>
+
+                    <Text style={styles.coordinateValue}>
+                      {latitude.toFixed(6)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.coordinateDivider} />
+
+                  <View style={styles.coordinateRow}>
+                    <Text style={styles.coordinateLabel}>
+                      Longitude
+                    </Text>
+
+                    <Text style={styles.coordinateValue}>
+                      {longitude.toFixed(6)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.geoJsonBox}>
+                    <Text style={styles.geoJsonLabel}>
+                      GeoJSON coordinates
+                    </Text>
+
+                    <Text style={styles.geoJsonValue}>
+                      [{longitude.toFixed(6)}, {latitude.toFixed(6)}]
+                    </Text>
+                  </View>
+
+                  <View style={styles.locationSuccessRow}>
+                    <Text style={styles.locationSuccessIcon}>
+                      ✓
+                    </Text>
+
+                    <Text style={styles.locationSuccessText}>
+                      Turf location is ready to submit
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+            {latitude === null &&
+              longitude === null && (
+                <Text style={styles.locationHelperText}>
+                  Location is required before you can create the turf.
+                </Text>
+              )}
+          </View>
+
+          {/* =================================================
+              IMAGE
+          ================================================= */}
+
+          <View style={styles.card}>
+            <SectionHeader
+              number="3"
+              title="Turf Image"
+              subtitle="Add a clear photo of your venue"
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.imagePickerButton,
                 imageUploading &&
                   styles.disabledButton,
               ]}
@@ -1280,14 +1229,10 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
               ) : (
                 <>
                   <View
-                    style={
-                      styles.plusCircle
-                    }
+                    style={styles.plusCircle}
                   >
                     <Text
-                      style={
-                        styles.plusText
-                      }
+                      style={styles.plusText}
                     >
                       +
                     </Text>
@@ -1330,9 +1275,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
                   >
                     <ActivityIndicator
                       size="large"
-                      color={
-                        COLORS.white
-                      }
+                      color={COLORS.white}
                     />
 
                     <Text
@@ -1346,21 +1289,21 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
                 )}
 
                 {!imageUploading &&
-                uploadedImageUrl ? (
-                  <View
-                    style={
-                      styles.imageSuccessBadge
-                    }
-                  >
-                    <Text
+                  uploadedImageUrl && (
+                    <View
                       style={
-                        styles.imageSuccessBadgeText
+                        styles.imageSuccessBadge
                       }
                     >
-                      ✓ UPLOADED
-                    </Text>
-                  </View>
-                ) : null}
+                      <Text
+                        style={
+                          styles.imageSuccessBadgeText
+                        }
+                      >
+                        ✓ UPLOADED
+                      </Text>
+                    </View>
+                  )}
               </View>
             )}
 
@@ -1383,466 +1326,12 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           </View>
 
           {/* =================================================
-              LOCATION
+              STRUCTURE INFO
           ================================================= */}
 
-          <View style={styles.card}>
+          <View style={styles.infoCard}>
             <View
-              style={
-                styles.sectionHeader
-              }
-            >
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionIconText
-                  }
-                >
-                  3
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.sectionHeaderText
-                }
-              >
-                <View
-                  style={
-                    styles.sectionTitleRow
-                  }
-                >
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    Location
-                  </Text>
-
-                  <View
-                    style={
-                      styles.sectionTitleAccent
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Add your turf coordinates
-                  for maps
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={
-                styles.locationInfo
-              }
-            >
-              <View
-                style={
-                  styles.locationInfoIconCircle
-                }
-              >
-                <Text
-                  style={
-                    styles.locationInfoIcon
-                  }
-                >
-                  i
-                </Text>
-              </View>
-
-              <Text
-                style={
-                  styles.locationInfoText
-                }
-              >
-                Enter the exact latitude
-                and longitude of your
-                turf.
-              </Text>
-            </View>
-
-            <Text style={styles.label}>
-              LATITUDE *
-            </Text>
-
-            <TextInput
-              value={latitude}
-              onChangeText={
-                setLatitude
-              }
-              placeholder="Example: 16.8524"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
-              style={styles.input}
-              keyboardType="numbers-and-punctuation"
-            />
-
-            <Text style={styles.label}>
-              LONGITUDE *
-            </Text>
-
-            <TextInput
-              value={longitude}
-              onChangeText={
-                setLongitude
-              }
-              placeholder="Example: 74.5815"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
-              style={styles.input}
-              keyboardType="numbers-and-punctuation"
-            />
-
-            <Text
-              style={
-                styles.helperText
-              }
-            >
-              Coordinates are stored as
-              GeoJSON: [longitude,
-              latitude].
-            </Text>
-          </View>
-
-          {/* =================================================
-              OPERATING HOURS
-          ================================================= */}
-
-          <View style={styles.card}>
-            <View
-              style={
-                styles.sectionHeader
-              }
-            >
-              <View
-                style={
-                  styles.sectionIcon
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionIconText
-                  }
-                >
-                  4
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.sectionHeaderText
-                }
-              >
-                <View
-                  style={
-                    styles.sectionTitleRow
-                  }
-                >
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    Operating Hours
-                  </Text>
-
-                  <View
-                    style={
-                      styles.sectionTitleAccent
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={
-                    styles.sectionSubtitle
-                  }
-                >
-                  Set when your turf is
-                  open
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={
-                styles.hoursInfoBox
-              }
-            >
-              <Text
-                style={
-                  styles.hoursInfoTitle
-                }
-              >
-                Turf-wide timing
-              </Text>
-
-              <Text
-                style={
-                  styles.hoursInfoText
-                }
-              >
-                These opening and closing
-                times will apply to all
-                courts in this turf.
-              </Text>
-            </View>
-
-            <View
-              style={styles.timeRow}
-            >
-              <View
-                style={
-                  styles.timeInputContainer
-                }
-              >
-                <Text
-                  style={
-                    styles.timeLabel
-                  }
-                >
-                  OPENING TIME
-                </Text>
-
-                <TextInput
-                  value={
-                    openingTime
-                  }
-                  onChangeText={
-                    (value) =>
-                      formatTimeInput(
-                        value,
-                        setOpeningTime,
-                      )
-                  }
-                  placeholder="06:00"
-                  placeholderTextColor={
-                    COLORS.placeholder
-                  }
-                  style={
-                    styles.timeInput
-                  }
-                  keyboardType="number-pad"
-                  maxLength={5}
-                  selectTextOnFocus={
-                    false
-                  }
-                />
-
-                <Text
-                  style={
-                    styles.timeHint
-                  }
-                >
-                  {isValidTime(
-                    openingTime,
-                  )
-                    ? formatTimeForDisplay(
-                        openingTime,
-                      )
-                    : 'HH:MM'}
-                </Text>
-              </View>
-
-              <View
-                style={
-                  styles.toContainer
-                }
-              >
-                <View
-                  style={
-                    styles.toCircle
-                  }
-                >
-                  <Text
-                    style={
-                      styles.toText
-                    }
-                  >
-                    →
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={
-                  styles.timeInputContainer
-                }
-              >
-                <Text
-                  style={
-                    styles.timeLabel
-                  }
-                >
-                  CLOSING TIME
-                </Text>
-
-                <TextInput
-                  value={
-                    closingTime
-                  }
-                  onChangeText={
-                    (value) =>
-                      formatTimeInput(
-                        value,
-                        setClosingTime,
-                      )
-                  }
-                  placeholder="23:00"
-                  placeholderTextColor={
-                    COLORS.placeholder
-                  }
-                  style={
-                    styles.timeInput
-                  }
-                  keyboardType="number-pad"
-                  maxLength={5}
-                  selectTextOnFocus={
-                    false
-                  }
-                />
-
-                <Text
-                  style={
-                    styles.timeHint
-                  }
-                >
-                  {isValidTime(
-                    closingTime,
-                  )
-                    ? formatTimeForDisplay(
-                        closingTime,
-                      )
-                    : 'HH:MM'}
-                </Text>
-              </View>
-            </View>
-
-            {isValidTime(
-              openingTime,
-            ) &&
-              isValidTime(
-                closingTime,
-              ) && (
-                <View
-                  style={
-                    styles.schedulePreview
-                  }
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.schedulePreviewLabel
-                      }
-                    >
-                      TURF WILL BE OPEN
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.schedulePreviewValue
-                      }
-                    >
-                      {formatTimeForDisplay(
-                        openingTime,
-                      )}{' '}
-                      –{' '}
-                      {formatTimeForDisplay(
-                        closingTime,
-                      )}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.openBadge
-                    }
-                  >
-                    <View
-                      style={
-                        styles.openDot
-                      }
-                    />
-
-                    <Text
-                      style={
-                        styles.openBadgeText
-                      }
-                    >
-                      OPEN
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-            <View
-              style={
-                styles.defaultHoursBox
-              }
-            >
-              <Text
-                style={
-                  styles.defaultHoursIcon
-                }
-              >
-                ✓
-              </Text>
-
-              <Text
-                style={
-                  styles.defaultHoursText
-                }
-              >
-                Default timing is{' '}
-
-                <Text
-                  style={
-                    styles.defaultHoursBold
-                  }
-                >
-                  06:00 AM – 11:00 PM
-                </Text>
-              </Text>
-            </View>
-
-            <Text
-              style={
-                styles.hoursNote
-              }
-            >
-              Use 24-hour format when
-              entering time. For example,
-              06:00 means 6:00 AM and
-              23:00 means 11:00 PM.
-            </Text>
-          </View>
-
-          {/* =================================================
-              INFO CARD
-          ================================================= */}
-
-          <View
-            style={
-              styles.infoCard
-            }
-          >
-            <View
-              style={
-                styles.infoHeader
-              }
+              style={styles.infoHeader}
             >
               <View
                 style={
@@ -1850,61 +1339,45 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
                 }
               >
                 <Text
-                  style={
-                    styles.infoIcon
-                  }
+                  style={styles.infoIcon}
                 >
                   i
                 </Text>
               </View>
 
               <Text
-                style={
-                  styles.infoTitle
-                }
+                style={styles.infoTitle}
               >
                 Turf & Court Structure
               </Text>
             </View>
 
-            <Text
-              style={
-                styles.infoText
-              }
-            >
+            <Text style={styles.infoText}>
               This screen creates the main
               turf venue.
             </Text>
 
-            <Text
-              style={
-                styles.infoText
-              }
-            >
+            <Text style={styles.infoText}>
               After creating the turf, you
               can add individual courts with
               their sport and hourly price.
             </Text>
 
-            <Text
-              style={
-                styles.infoText
-              }
-            >
-              The turf operating hours will
-              be used when creating and
-              managing court slots.
+            <Text style={styles.infoText}>
+              Court-specific pricing, sport,
+              slots and booking configuration
+              should be managed from the
+              court section.
             </Text>
           </View>
 
           {/* =================================================
-              SUBMIT BUTTON
+              SUBMIT
           ================================================= */}
 
           <TouchableOpacity
             style={[
               styles.submitButton,
-
               (loading ||
                 imageUploading) &&
                 styles.submitButtonDisabled,
@@ -1961,21 +1434,69 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           </TouchableOpacity>
 
           <Text
-            style={
-              styles.requiredText
-            }
+            style={styles.requiredText}
           >
             * Required fields
           </Text>
 
           <View
-            style={
-              styles.bottomSpacing
-            }
+            style={styles.bottomSpacing}
           />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+};
+
+/* =========================================================
+   SECTION HEADER
+========================================================= */
+
+const SectionHeader = ({
+  number,
+  title,
+  subtitle,
+}: {
+  number: string;
+  title: string;
+  subtitle: string;
+}) => {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIcon}>
+        <Text
+          style={styles.sectionIconText}
+        >
+          {number}
+        </Text>
+      </View>
+
+      <View
+        style={styles.sectionHeaderText}
+      >
+        <View
+          style={styles.sectionTitleRow}
+        >
+          <Text
+            style={styles.sectionTitle}
+          >
+            {title}
+          </Text>
+
+          <View
+            style={
+              styles.sectionTitleAccent
+            }
+          />
+        </View>
+
+        <Text
+          style={styles.sectionSubtitle}
+        >
+          {subtitle}
+        </Text>
+      </View>
+    </View>
   );
 };
 
@@ -2011,12 +1532,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
   },
 
   backButtonText: {
@@ -2037,9 +1560,11 @@ const styles = StyleSheet.create({
 
   headerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
     color: COLORS.primaryDark,
     fontSize: 10,
     fontWeight: '900',
@@ -2083,7 +1608,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  /* SECTION HEADER */
+  /* SECTION */
 
   sectionHeader: {
     flexDirection: 'row',
@@ -2162,12 +1687,14 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 50,
     borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
     borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 14,
     color: COLORS.textPrimary,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     fontWeight: '500',
   },
 
@@ -2184,6 +1711,174 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  /* LOCATION */
+
+  locationInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 14,
+  },
+
+  locationInfoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  locationInfoIconText: {
+    fontSize: 18,
+  },
+
+  locationInfoContent: {
+    flex: 1,
+  },
+
+  locationInfoTitle: {
+    color: COLORS.primaryDeep,
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+
+  locationInfoText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+
+  locationButton: {
+    minHeight: 52,
+    borderRadius: 13,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+
+  locationButtonDisabled: {
+    opacity: 0.65,
+  },
+
+  locationButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  locationButtonIcon: {
+    fontSize: 17,
+    marginRight: 8,
+  },
+
+  locationButtonText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+
+  coordinatesCard: {
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+  },
+
+  coordinateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  coordinateLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  coordinateValue: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+
+  coordinateDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 10,
+  },
+
+  geoJsonBox: {
+    marginTop: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10,
+  },
+
+  geoJsonLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+
+  geoJsonValue: {
+    color: COLORS.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  locationSuccessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 11,
+  },
+
+  locationSuccessIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    color: COLORS.white,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontSize: 11,
+    fontWeight: '900',
+    marginRight: 7,
+  },
+
+  locationSuccessText: {
+    flex: 1,
+    color: COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  locationHelperText: {
+    marginTop: 9,
+    color: COLORS.textMuted,
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: '500',
+  },
+
   /* IMAGE */
 
   imagePickerButton: {
@@ -2192,7 +1887,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     borderStyle: 'dashed',
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -2206,12 +1902,14 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor:
+      COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor:
+      COLORS.borderSoft,
   },
 
   plusText: {
@@ -2241,9 +1939,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 14,
-    backgroundColor: COLORS.cardSoft,
+    backgroundColor:
+      COLORS.cardSoft,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor:
+      COLORS.borderLight,
     position: 'relative',
   },
 
@@ -2258,330 +1958,102 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: COLORS.overlay,
+    backgroundColor:
+      'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   uploadingText: {
     color: COLORS.white,
+    marginTop: 10,
     fontSize: 14,
     fontWeight: '800',
-    marginTop: 10,
-    letterSpacing: 0.5,
   },
 
   imageSuccessBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    right: 10,
+    top: 10,
+    backgroundColor:
+      COLORS.primary,
     borderRadius: 20,
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
 
   imageSuccessBadgeText: {
     color: COLORS.white,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 1.2,
   },
 
   successBadge: {
     marginTop: 12,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor:
+      COLORS.primarySoft,
     borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    borderColor:
+      COLORS.borderSoft,
   },
 
   successBadgeText: {
     color: COLORS.primaryDark,
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0.2,
   },
 
-  /* LOCATION */
-
-  locationInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.infoSoft,
-    borderWidth: 1,
-    borderColor: COLORS.infoLight,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 4,
-  },
-
-  locationInfoIconCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: COLORS.infoLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-
-  locationInfoIcon: {
-    fontSize: 13,
-    color: COLORS.info,
-    fontWeight: '900',
-  },
-
-  locationInfoText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
-    color: COLORS.infoText,
-    fontWeight: '500',
-  },
-
-  /* OPERATING HOURS */
-
-  hoursInfoBox: {
-    backgroundColor: COLORS.primarySoft,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-
-  hoursInfoTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: COLORS.primaryDeep,
-    marginBottom: 4,
-    letterSpacing: 0.2,
-  },
-
-  hoursInfoText: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: COLORS.primaryDark,
-    fontWeight: '500',
-  },
-
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-
-  timeInputContainer: {
-    flex: 1,
-  },
-
-  timeLabel: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-
-  timeInput: {
-    height: 56,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.primarySoft,
-    textAlign: 'center',
-  },
-
-  timeHint: {
-    textAlign: 'center',
-    fontSize: 11,
-    color: COLORS.textMuted,
-    marginTop: 6,
-    fontWeight: '600',
-  },
-
-  toContainer: {
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 22,
-  },
-
-  toCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-
-  toText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-  },
-
-  schedulePreview: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: COLORS.primaryFaint,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  schedulePreviewLabel: {
-    fontSize: 10,
-    color: COLORS.textMuted,
-    marginBottom: 4,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-
-  schedulePreviewValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: COLORS.textPrimary,
-    letterSpacing: 0.2,
-  },
-
-  openBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-
-  openDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    marginRight: 6,
-  },
-
-  openBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-    letterSpacing: 0.8,
-  },
-
-  defaultHoursBox: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.warningSoft,
-    borderWidth: 1,
-    borderColor: COLORS.warningBorder,
-    borderRadius: 12,
-    padding: 12,
-  },
-
-  defaultHoursIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.warningBorder,
-    color: COLORS.warningText,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontSize: 12,
-    fontWeight: '900',
-    marginRight: 10,
-    overflow: 'hidden',
-  },
-
-  defaultHoursText: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.warningText,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-
-  defaultHoursBold: {
-    fontWeight: '900',
-    color: '#78350F',
-  },
-
-  hoursNote: {
-    marginTop: 12,
-    fontSize: 11,
-    lineHeight: 17,
-    color: COLORS.textMuted,
-    fontWeight: '500',
-  },
-
-  /* INFO CARD */
+  /* INFO */
 
   infoCard: {
-    backgroundColor: COLORS.infoSoft,
+    backgroundColor:
+      COLORS.primaryFaint,
     borderWidth: 1,
-    borderColor: COLORS.infoLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderColor:
+      COLORS.borderLight,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 18,
   },
 
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
   infoIconCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: COLORS.infoLight,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor:
+      COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
 
   infoIcon: {
-    fontSize: 13,
-    color: COLORS.info,
+    color: COLORS.primaryDark,
+    fontSize: 16,
     fontWeight: '900',
   },
 
   infoTitle: {
+    flex: 1,
+    color: COLORS.primaryDeep,
     fontSize: 15,
     fontWeight: '900',
-    color: '#1E3A8A',
-    letterSpacing: 0.2,
   },
 
   infoText: {
-    fontSize: 12,
-    color: COLORS.infoText,
-    lineHeight: 18,
-    marginTop: 5,
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 8,
     fontWeight: '500',
   },
 
@@ -2590,22 +2062,22 @@ const styles = StyleSheet.create({
   submitButton: {
     minHeight: 58,
     borderRadius: 16,
-    backgroundColor: COLORS.primary,
+    backgroundColor:
+      COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
     shadowColor: COLORS.primary,
     shadowOffset: {
       width: 0,
       height: 5,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 5,
   },
 
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.65,
   },
 
   submitButtonContent: {
@@ -2615,18 +2087,17 @@ const styles = StyleSheet.create({
   },
 
   submitButtonIcon: {
-    fontSize: 22,
-    lineHeight: 22,
     color: COLORS.white,
+    fontSize: 22,
     fontWeight: '900',
-    marginRight: 10,
+    marginRight: 8,
   },
 
   submitButtonText: {
     color: COLORS.white,
     fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
 
   requiredText: {
@@ -2634,8 +2105,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 11,
     marginTop: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontWeight: '500',
   },
 
   bottomSpacing: {
