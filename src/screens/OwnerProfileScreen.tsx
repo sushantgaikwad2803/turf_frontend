@@ -14,6 +14,16 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+  Poppins_900Black,
+  useFonts,
+} from '@expo-google-fonts/poppins';
 
 /* =========================================================
    API
@@ -24,40 +34,40 @@ const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? '')
   .replace(/\/+$/, '');
 
 /* =========================================================
-   THEME
+   THEME COLORS
 ========================================================= */
 
 const COLORS = {
-  primary: '#22C55E',
-  primaryDark: '#16A34A',
-  primaryDeep: '#15803D',
-  primaryDarker: '#166534',
-  primaryLight: '#DCFCE7',
-  primarySoft: '#F0FDF4',
-  primaryFaint: '#F7FEF9',
-  primaryMuted: '#BBF7D0',
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
 
-  accent: '#F97316',
-  accentLight: '#FFEDD5',
-  accentSoft: '#FEF3C7',
-  accentText: '#92400E',
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
+  accentText: '#6D28D9',
 
-  bg: '#FFFFFF',
-  bgSoft: '#FAFEFB',
-  bgMuted: '#F4FBF6',
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
   card: '#FFFFFF',
-  cardSoft: '#F9FDFA',
+  cardSoft: '#FCFCFE',
 
-  border: '#E8F5EC',
-  borderLight: '#D1FAE5',
-  borderSoft: '#BBF7D0',
-  borderDark: '#A7F3D0',
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
-  textLight: '#CBD5E1',
-  placeholder: '#94A3B8',
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
+  placeholder: '#8A92A3',
 
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
@@ -74,7 +84,8 @@ const COLORS = {
 
   white: '#FFFFFF',
   black: '#000000',
-  overlay: 'rgba(15, 23, 42, 0.5)',
+  dark: '#0B1220',
+  overlay: 'rgba(11,18,32,0.52)',
 };
 
 /* =========================================================
@@ -112,8 +123,6 @@ export interface Court {
   nightPricePerHour?: number;
   nightStartHour?: number;
   nightEndHour?: number;
-  // Full-day / long-booking discount percentage
-  // Example: 4 means 4% discount.
   fullDayDiscountPercent?: number;
   status: 'active' | 'inactive' | 'maintenance';
 }
@@ -137,6 +146,39 @@ export interface Turf {
   }>;
 }
 
+export interface RecentBooking {
+  _id: string;
+  customer: {
+    _id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  turf: {
+    _id: string;
+    name: string;
+    city?: string;
+  } | null;
+  court: {
+    _id: string;
+    name: string;
+    sport?: string;
+  } | null;
+  slot: {
+    startTime?: string;
+    endTime?: string;
+    price?: number;
+  } | null;
+  bookingDate?: string;
+  startTime?: string;
+  endTime?: string;
+  grossAmount?: number;
+  discountAmount?: number;
+  finalAmount?: number;
+  status?: string;
+  createdAt?: string;
+}
+
 interface OwnerProfileScreenProps {
   user: User;
   onUpdateUser?: (updatedUser: User) => void;
@@ -149,48 +191,13 @@ interface OwnerProfileScreenProps {
 ========================================================= */
 
 const DEFAULT_OPERATING_HOURS: OperatingHour[] = [
-  {
-    day: 'Monday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Tuesday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Wednesday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Thursday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Friday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Saturday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
-  {
-    day: 'Sunday',
-    openingTime: '06:00',
-    closingTime: '23:00',
-    isClosed: false,
-  },
+  { day: 'Monday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Tuesday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Wednesday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Thursday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Friday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Saturday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
+  { day: 'Sunday', openingTime: '06:00', closingTime: '23:00', isClosed: false },
 ];
 
 /* =========================================================
@@ -204,14 +211,8 @@ const getErrorMessage = (
   error: unknown,
   fallback = 'Something went wrong.',
 ): string => {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === 'string' && error.trim()) {
-    return error;
-  }
-
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
   return fallback;
 };
 
@@ -221,27 +222,20 @@ const buildApiUrl = (path: string): string => {
       'API URL is not configured. Please add EXPO_PUBLIC_API_URL to your .env file.',
     );
   }
-
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-
   return `${API_BASE_URL}${cleanPath}`;
 };
 
 const parseApiResponse = async (response: Response): Promise<any> => {
   const text = await response.text();
-
   let data: any = null;
-
   if (text) {
     try {
       data = JSON.parse(text);
     } catch {
-      data = {
-        message: text,
-      };
+      data = { message: text };
     }
   }
-
   if (!response.ok) {
     throw new Error(
       data?.message ||
@@ -249,7 +243,6 @@ const parseApiResponse = async (response: Response): Promise<any> => {
         `Request failed with status ${response.status}`,
     );
   }
-
   return data;
 };
 
@@ -257,30 +250,25 @@ const timeStringToDate = (time: string): Date => {
   const [hours, minutes] = String(time || '')
     .split(':')
     .map(Number);
-
   const date = new Date();
-
   date.setHours(
     Number.isNaN(hours) ? 6 : hours,
     Number.isNaN(minutes) ? 0 : minutes,
     0,
     0,
   );
-
   return date;
 };
 
 const dateToTimeString = (date: Date): string => {
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
-
   return `${hours}:${minutes}`;
 };
 
 const hourToTimeString = (hour?: number): string => {
   const safeHour =
     typeof hour === 'number' && hour >= 0 && hour <= 23 ? hour : 18;
-
   return `${String(safeHour).padStart(2, '0')}:00`;
 };
 
@@ -288,45 +276,32 @@ const timeStringToHour = (time: string): number => {
   const [hours] = String(time || '')
     .split(':')
     .map(Number);
-
   return Number.isNaN(hours) ? 0 : hours;
 };
 
 const formatHour = (hour?: number): string => {
-  if (typeof hour !== 'number' || hour < 0 || hour > 23) {
-    return '--:--';
-  }
-
+  if (typeof hour !== 'number' || hour < 0 || hour > 23) return '--:--';
   const suffix = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
-
   return `${String(displayHour).padStart(2, '0')}:00 ${suffix}`;
 };
 
 const maskAccountNumber = (accountNumber: string): string => {
-  if (!accountNumber) {
-    return 'Not added';
-  }
-
-  if (accountNumber.length <= 4) {
-    return accountNumber;
-  }
-
+  if (!accountNumber) return 'Not added';
+  if (accountNumber.length <= 4) return accountNumber;
   return `•••• •••• ${accountNumber.slice(-4)}`;
 };
 
 const getTurfStatusColors = (status?: string) => {
   const cleanStatus = String(status || 'active').toLowerCase();
-
   switch (cleanStatus) {
     case 'active':
       return {
         bg: COLORS.primarySoft,
         border: COLORS.borderSoft,
-        text: COLORS.primaryDark,
-        dot: COLORS.primary,
+        text: COLORS.primaryDarker,
+        dot: COLORS.primaryDeep,
       };
-
     case 'maintenance':
       return {
         bg: COLORS.warningSoft,
@@ -334,7 +309,6 @@ const getTurfStatusColors = (status?: string) => {
         text: COLORS.warningText,
         dot: COLORS.warning,
       };
-
     case 'inactive':
     default:
       return {
@@ -354,6 +328,63 @@ const normalizePhone = (phone: string): string => {
   return phone.replace(/\D/g, '');
 };
 
+const formatBookingDate = (date?: string): string => {
+  if (!date) return 'Date not available';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatBookingTime = (time?: string): string => {
+  if (!time) return '--';
+  const match = String(time).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return time;
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (Number.isNaN(hours) || hours < 0 || hours > 23) return time;
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+  return `${displayHour}:${minutes} ${suffix}`;
+};
+
+const getBookingStatusColors = (status?: string) => {
+  const cleanStatus = String(status || 'confirmed').toLowerCase();
+
+  if (cleanStatus === 'cancelled' || cleanStatus === 'canceled') {
+    return {
+      bg: COLORS.dangerSoft,
+      border: COLORS.dangerBorder,
+      text: COLORS.dangerText,
+    };
+  }
+
+  if (cleanStatus === 'pending' || cleanStatus === 'reserved') {
+    return {
+      bg: COLORS.warningSoft,
+      border: COLORS.warningBorder,
+      text: COLORS.warningText,
+    };
+  }
+
+  if (cleanStatus === 'completed') {
+    return {
+      bg: COLORS.infoSoft,
+      border: '#BFDBFE',
+      text: '#1D4ED8',
+    };
+  }
+
+  return {
+    bg: COLORS.primarySoft,
+    border: COLORS.borderSoft,
+    text: COLORS.primaryDarker,
+  };
+};
+
 /* =========================================================
    COMPONENT
 ========================================================= */
@@ -364,20 +395,23 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   onLogout,
   onNavigateToAddTurf,
 }) => {
-  /* =======================================================
-     MODALS
-  ======================================================= */
+  const [fontsLoaded, fontError] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    Poppins_900Black,
+  });
 
+  /* MODALS */
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBankModal, setShowBankModal] = useState(false);
   const [showTurfModal, setShowTurfModal] = useState(false);
   const [showCourtModal, setShowCourtModal] = useState(false);
 
-  /* =======================================================
-     PROFILE
-  ======================================================= */
-
+  /* PROFILE */
   const [name, setName] = useState(user.name || '');
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
@@ -385,20 +419,14 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  /* =======================================================
-     BANK
-  ======================================================= */
-
+  /* BANK */
   const [bankDetails, setBankDetails] = useState<BankDetails>({
     accountHolderName: '',
     accountNumber: '',
     ifscCode: '',
   });
 
-  /* =======================================================
-     TURF FORM
-  ======================================================= */
-
+  /* TURF FORM */
   const [turfName, setTurfName] = useState('');
   const [turfDescription, setTurfDescription] = useState('');
   const [turfAddress, setTurfAddress] = useState('');
@@ -408,29 +436,22 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     cloneDefaultHours(),
   );
 
-  /* =======================================================
-     COURT FORM
-  ======================================================= */
-
+  /* COURT FORM */
   const [courtName, setCourtName] = useState('');
   const [courtSport, setCourtSport] = useState('');
   const [courtPrice, setCourtPrice] = useState('');
-
-  // Full-day / long-booking discount percentage
-  const [courtFullDayDiscountPercent, setCourtFullDayDiscountPercent] = useState('4');
-
+  const [courtFullDayDiscountPercent, setCourtFullDayDiscountPercent] =
+    useState('4');
   const [courtHasNightPricing, setCourtHasNightPricing] = useState(false);
-
   const [courtNightPrice, setCourtNightPrice] = useState('');
   const [courtNightStartTime, setCourtNightStartTime] = useState('18:00');
   const [courtNightEndTime, setCourtNightEndTime] = useState('23:00');
 
-  /* =======================================================
-     DATA
-  ======================================================= */
-
+  /* DATA */
   const [turfs, setTurfs] = useState<Turf[]>([]);
   const [turfCourts, setTurfCourts] = useState<Record<string, Court[]>>({});
+  const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+  const [fetchingBookings, setFetchingBookings] = useState(false);
 
   const [expandedTurfId, setExpandedTurfId] = useState<string | null>(null);
 
@@ -438,38 +459,25 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [selectedTurf, setSelectedTurf] = useState<Turf | null>(null);
   const [selectedCourt, setSelectedCourt] = useState<Court | null>(null);
 
-  /* =======================================================
-     TIME PICKERS
-  ======================================================= */
-
+  /* TIME PICKERS */
   const [showTimePicker, setShowTimePicker] = useState(false);
-
-  const [timePickerMode, setTimePickerMode] = useState<
-    'opening' | 'closing'
-  >('opening');
-
+  const [timePickerMode, setTimePickerMode] = useState<'opening' | 'closing'>(
+    'opening',
+  );
   const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
     null,
   );
 
   const [showCourtTimePicker, setShowCourtTimePicker] = useState(false);
-
   const [courtTimePickerMode, setCourtTimePickerMode] = useState<
     'nightStart' | 'nightEnd'
   >('nightStart');
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
-
+  /* LOADING */
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
 
   const mountedRef = useRef(true);
-
-  /* =======================================================
-     COMPONENT LIFECYCLE
-  ======================================================= */
 
   useEffect(() => {
     return () => {
@@ -483,47 +491,26 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     setPhone(user.phone || '');
   }, [user.name, user.email, user.phone]);
 
-  /* =======================================================
-     FETCH TURFS
-  ======================================================= */
-
   const fetchTurfs = useCallback(async () => {
     const response = await fetch(
       buildApiUrl(`/owners/${encodeURIComponent(user._id)}/turfs`),
     );
-
     const data = await parseApiResponse(response);
-
     const ownerTurfs = Array.isArray(data?.turfs)
       ? data.turfs
       : Array.isArray(data)
         ? data
         : [];
-
-    if (mountedRef.current) {
-      setTurfs(ownerTurfs);
-    }
-
+    if (mountedRef.current) setTurfs(ownerTurfs);
     return ownerTurfs;
   }, [user._id]);
 
-  /* =======================================================
-     FETCH BANK DETAILS
-  ======================================================= */
-
   const fetchBankDetails = useCallback(async () => {
     const response = await fetch(
-      buildApiUrl(
-        `/owners/${encodeURIComponent(user._id)}/bank-details`,
-      ),
+      buildApiUrl(`/owners/${encodeURIComponent(user._id)}/bank-details`),
     );
-
     const data = await parseApiResponse(response);
-
-    if (!mountedRef.current) {
-      return;
-    }
-
+    if (!mountedRef.current) return;
     if (data) {
       setBankDetails({
         accountHolderName: data.accountHolderName || '',
@@ -539,115 +526,92 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     }
   }, [user._id]);
 
-  /* =======================================================
-     FETCH OWNER DATA
-  ======================================================= */
+  const fetchRecentBookings = useCallback(async () => {
+    try {
+      setFetchingBookings(true);
+      const response = await fetch(
+        buildApiUrl(`/owners/${encodeURIComponent(user._id)}/dashboard`),
+      );
+      const data = await parseApiResponse(response);
+      const bookings = Array.isArray(data?.recentBookings)
+        ? data.recentBookings
+        : [];
+      if (mountedRef.current) setRecentBookings(bookings);
+    } catch (error) {
+      console.error('Failed to fetch recent bookings:', error);
+      if (mountedRef.current) setRecentBookings([]);
+    } finally {
+      if (mountedRef.current) setFetchingBookings(false);
+    }
+  }, [user._id]);
 
   const fetchOwnerData = useCallback(async () => {
     try {
       setFetchingData(true);
-
       const results = await Promise.allSettled([
         fetchTurfs(),
         fetchBankDetails(),
+        fetchRecentBookings(),
       ]);
-
       const failedRequests = results.filter(
         (result) => result.status === 'rejected',
       );
-
       if (failedRequests.length > 0) {
         const firstError = failedRequests[0];
-
         if (firstError.status === 'rejected') {
-          console.error(
-            'Owner data request failed:',
-            firstError.reason,
-          );
+          console.error('Owner data request failed:', firstError.reason);
         }
       }
     } catch (error) {
       console.error('Failed to fetch owner data:', error);
-
       if (mountedRef.current) {
         Alert.alert(
           'Connection Error',
-          getErrorMessage(
-            error,
-            'Unable to load your owner data.',
-          ),
+          getErrorMessage(error, 'Unable to load your owner data.'),
         );
       }
     } finally {
-      if (mountedRef.current) {
-        setFetchingData(false);
-      }
+      if (mountedRef.current) setFetchingData(false);
     }
-  }, [fetchTurfs, fetchBankDetails]);
+  }, [fetchTurfs, fetchBankDetails, fetchRecentBookings]);
 
   useEffect(() => {
     fetchOwnerData();
   }, [fetchOwnerData]);
-
-  /* =======================================================
-     FETCH COURTS
-  ======================================================= */
 
   const fetchCourts = useCallback(async (turfId: string) => {
     try {
       const response = await fetch(
         buildApiUrl(`/turfs/${encodeURIComponent(turfId)}/courts`),
       );
-
       const data = await parseApiResponse(response);
-
       const courts = Array.isArray(data?.courts)
         ? data.courts
         : Array.isArray(data)
           ? data
           : [];
-
       if (mountedRef.current) {
-        setTurfCourts((previous) => ({
-          ...previous,
-          [turfId]: courts,
-        }));
+        setTurfCourts((previous) => ({ ...previous, [turfId]: courts }));
       }
-
       return courts;
     } catch (error) {
       console.error('Failed to fetch courts:', error);
-
       Alert.alert(
         'Unable to Load Courts',
-        getErrorMessage(
-          error,
-          'Failed to load courts for this turf.',
-        ),
+        getErrorMessage(error, 'Failed to load courts for this turf.'),
       );
-
       return [];
     }
   }, []);
-
-  /* =======================================================
-     TOGGLE TURF
-  ======================================================= */
 
   const handleToggleTurf = async (turfId: string) => {
     if (expandedTurfId === turfId) {
       setExpandedTurfId(null);
       return;
     }
-
     setExpandedTurfId(turfId);
-
     await fetchCourts(turfId);
   };
-
-  /* =======================================================
-     UPDATE PROFILE
-  ======================================================= */
 
   const handleUpdateProfile = async () => {
     const trimmedName = name.trim();
@@ -655,41 +619,26 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     const trimmedPhone = phone.trim();
 
     if (!trimmedName || !trimmedEmail || !trimmedPhone) {
-      Alert.alert(
-        'Missing Information',
-        'Please fill in all profile fields.',
-      );
+      Alert.alert('Missing Information', 'Please fill in all profile fields.');
       return;
     }
-
     if (!validateEmail(trimmedEmail)) {
-      Alert.alert(
-        'Invalid Email',
-        'Please enter a valid email address.',
-      );
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
-
     const cleanPhone = normalizePhone(trimmedPhone);
-
     if (cleanPhone.length < 10) {
-      Alert.alert(
-        'Invalid Phone',
-        'Please enter a valid phone number.',
-      );
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number.');
       return;
     }
 
     try {
       setLoading(true);
-
       const response = await fetch(
         buildApiUrl(`/users/${encodeURIComponent(user._id)}`),
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: trimmedName,
             email: trimmedEmail,
@@ -697,39 +646,20 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           }),
         },
       );
-
       const data = await parseApiResponse(response);
-
       const updatedUser = data?.user || data;
-
-      if (updatedUser && mountedRef.current) {
-        onUpdateUser?.(updatedUser);
-      }
-
+      if (updatedUser && mountedRef.current) onUpdateUser?.(updatedUser);
       setShowEditProfile(false);
-
-      Alert.alert(
-        'Profile Updated',
-        'Your profile has been updated successfully.',
-      );
+      Alert.alert('Profile Updated', 'Your profile has been updated successfully.');
     } catch (error) {
       Alert.alert(
         'Update Failed',
-        getErrorMessage(
-          error,
-          'Failed to update profile.',
-        ),
+        getErrorMessage(error, 'Failed to update profile.'),
       );
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   };
-
-  /* =======================================================
-     CHANGE PASSWORD
-  ======================================================= */
 
   const handleChangePassword = async () => {
     const current = currentPassword.trim();
@@ -742,7 +672,6 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       );
       return;
     }
-
     if (next.length < 6) {
       Alert.alert(
         'Invalid Password',
@@ -750,7 +679,6 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       );
       return;
     }
-
     if (current === next) {
       Alert.alert(
         'Invalid Password',
@@ -761,29 +689,21 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
     try {
       setLoading(true);
-
       const response = await fetch(
-        buildApiUrl(
-          `/users/${encodeURIComponent(user._id)}/password`,
-        ),
+        buildApiUrl(`/users/${encodeURIComponent(user._id)}/password`),
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             currentPassword: current,
             newPassword: next,
           }),
         },
       );
-
       await parseApiResponse(response);
-
       setCurrentPassword('');
       setNewPassword('');
       setShowPasswordModal(false);
-
       Alert.alert(
         'Password Changed',
         'Your password has been changed successfully.',
@@ -791,41 +711,23 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     } catch (error) {
       Alert.alert(
         'Password Change Failed',
-        getErrorMessage(
-          error,
-          'Failed to change password.',
-        ),
+        getErrorMessage(error, 'Failed to change password.'),
       );
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   };
-
-  /* =======================================================
-     ADD TURF NAVIGATION
-  ======================================================= */
 
   const handleAddTurf = () => {
     if (onNavigateToAddTurf) {
       onNavigateToAddTurf();
       return;
     }
-
-    Alert.alert(
-      'Navigation Error',
-      'Add Turf navigation is not configured.',
-    );
+    Alert.alert('Navigation Error', 'Add Turf navigation is not configured.');
   };
-
-  /* =======================================================
-     EDIT TURF
-  ======================================================= */
 
   const handleEditTurf = (turf: Turf) => {
     setSelectedTurf(turf);
-
     setTurfName(turf.name || '');
     setTurfDescription(turf.description || '');
     setTurfAddress(turf.address || '');
@@ -835,39 +737,22 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       setOperatingHours(
         DEFAULT_OPERATING_HOURS.map((defaultHour) => {
           const existingHour = turf.operatingHours?.find(
-            (hour) =>
-              hour.day.toLowerCase() ===
-              defaultHour.day.toLowerCase(),
+            (hour) => hour.day.toLowerCase() === defaultHour.day.toLowerCase(),
           );
-
-          if (!existingHour) {
-            return { ...defaultHour };
-          }
-
+          if (!existingHour) return { ...defaultHour };
           return {
             day: defaultHour.day,
-            openingTime:
-              existingHour.openingTime ||
-              defaultHour.openingTime,
-            closingTime:
-              existingHour.closingTime ||
-              defaultHour.closingTime,
-            isClosed:
-              existingHour.isClosed ??
-              defaultHour.isClosed,
+            openingTime: existingHour.openingTime || defaultHour.openingTime,
+            closingTime: existingHour.closingTime || defaultHour.closingTime,
+            isClosed: existingHour.isClosed ?? defaultHour.isClosed,
           };
         }),
       );
     } else {
       setOperatingHours(cloneDefaultHours());
     }
-
     setShowTurfModal(true);
   };
-
-  /* =======================================================
-     UPDATE OPERATING HOUR
-  ======================================================= */
 
   const updateOperatingHour = (
     index: number,
@@ -876,37 +761,20 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   ) => {
     setOperatingHours((previous) =>
       previous.map((hour, hourIndex) => {
-        if (hourIndex !== index) {
-          return hour;
-        }
-
-        return {
-          ...hour,
-          [field]: value,
-        };
+        if (hourIndex !== index) return hour;
+        return { ...hour, [field]: value };
       }),
     );
   };
 
-  /* =======================================================
-     TURF TIME PICKER
-  ======================================================= */
-
-  const openTimePicker = (
-    index: number,
-    mode: 'opening' | 'closing',
-  ) => {
+  const openTimePicker = (index: number, mode: 'opening' | 'closing') => {
     setSelectedHourIndex(index);
     setTimePickerMode(mode);
     setShowTimePicker(true);
   };
 
-  const handleTimeChange = (
-    event: any,
-    selectedDate?: Date,
-  ) => {
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
     setShowTimePicker(false);
-
     if (
       event?.type === 'dismissed' ||
       !selectedDate ||
@@ -915,26 +783,11 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       setSelectedHourIndex(null);
       return;
     }
-
     const newTime = dateToTimeString(selectedDate);
-
-    const field =
-      timePickerMode === 'opening'
-        ? 'openingTime'
-        : 'closingTime';
-
-    updateOperatingHour(
-      selectedHourIndex,
-      field,
-      newTime,
-    );
-
+    const field = timePickerMode === 'opening' ? 'openingTime' : 'closingTime';
+    updateOperatingHour(selectedHourIndex, field, newTime);
     setSelectedHourIndex(null);
   };
-
-  /* =======================================================
-     SAVE TURF
-  ======================================================= */
 
   const handleSaveTurf = async () => {
     const cleanName = turfName.trim();
@@ -951,10 +804,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     }
 
     for (const hour of operatingHours) {
-      if (hour.isClosed) {
-        continue;
-      }
-
+      if (hour.isClosed) continue;
       if (!hour.openingTime || !hour.closingTime) {
         Alert.alert(
           'Invalid Hours',
@@ -962,13 +812,8 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
         );
         return;
       }
-
-      const opening =
-        timeStringToDate(hour.openingTime).getTime();
-
-      const closing =
-        timeStringToDate(hour.closingTime).getTime();
-
+      const opening = timeStringToDate(hour.openingTime).getTime();
+      const closing = timeStringToDate(hour.closingTime).getTime();
       if (opening >= closing) {
         Alert.alert(
           'Invalid Hours',
@@ -980,22 +825,13 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
     try {
       setLoading(true);
-
       const isEditing = Boolean(selectedTurf);
-
       const url = isEditing
-        ? buildApiUrl(
-            `/turfs/${encodeURIComponent(
-              selectedTurf!._id,
-            )}`,
-          )
+        ? buildApiUrl(`/turfs/${encodeURIComponent(selectedTurf!._id)}`)
         : buildApiUrl('/turfs');
-
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           owner: user._id,
           name: cleanName,
@@ -1005,58 +841,32 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           operatingHours,
         }),
       });
-
       await parseApiResponse(response);
-
       closeTurfModal();
-
       await fetchTurfs();
-
       Alert.alert(
         'Success',
-        isEditing
-          ? 'Turf updated successfully.'
-          : 'Turf added successfully.',
+        isEditing ? 'Turf updated successfully.' : 'Turf added successfully.',
       );
     } catch (error) {
-      Alert.alert(
-        'Save Failed',
-        getErrorMessage(
-          error,
-          'Failed to save turf.',
-        ),
-      );
+      Alert.alert('Save Failed', getErrorMessage(error, 'Failed to save turf.'));
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   };
 
-  /* =======================================================
-     CLOSE TURF MODAL
-  ======================================================= */
-
   const closeTurfModal = () => {
     setShowTurfModal(false);
-
     setSelectedTurf(null);
-
     setTurfName('');
     setTurfDescription('');
     setTurfAddress('');
     setTurfCity('');
-
     setOperatingHours(cloneDefaultHours());
   };
 
-  /* =======================================================
-     DELETE TURF
-  ======================================================= */
-
   const handleDeleteTurf = (turf: Turf) => {
     const courtCount = turfCourts[turf._id]?.length;
-
     const courtMessage =
       typeof courtCount === 'number'
         ? `\n\nThis turf currently has ${courtCount} court${
@@ -1068,56 +878,33 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       'Delete Turf',
       `Are you sure you want to permanently delete "${turf.name}"?${courtMessage}\n\nAll courts belonging to this turf will also be deleted.\n\nThis action cannot be undone.`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete Turf',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-
               const response = await fetch(
-                buildApiUrl(
-                  `/turfs/${encodeURIComponent(turf._id)}`,
-                ),
+                buildApiUrl(`/turfs/${encodeURIComponent(turf._id)}`),
                 {
                   method: 'DELETE',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
+                  headers: { 'Content-Type': 'application/json' },
                 },
               );
-
               const data = await parseApiResponse(response);
-
-              if (!mountedRef.current) {
-                return;
-              }
+              if (!mountedRef.current) return;
 
               setTurfs((previous) =>
-                previous.filter(
-                  (item) => item._id !== turf._id,
-                ),
+                previous.filter((item) => item._id !== turf._id),
               );
-
               setTurfCourts((previous) => {
                 const updated = { ...previous };
-
                 delete updated[turf._id];
-
                 return updated;
               });
-
-              if (expandedTurfId === turf._id) {
-                setExpandedTurfId(null);
-              }
-
-              if (selectedTurf?._id === turf._id) {
-                closeTurfModal();
-              }
+              if (expandedTurfId === turf._id) setExpandedTurfId(null);
+              if (selectedTurf?._id === turf._id) closeTurfModal();
 
               Alert.alert(
                 'Turf Deleted',
@@ -1125,22 +912,13 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                   'Turf and all its courts were deleted successfully.',
               );
             } catch (error) {
-              console.error(
-                'Delete turf error:',
-                error,
-              );
-
+              console.error('Delete turf error:', error);
               Alert.alert(
                 'Delete Failed',
-                getErrorMessage(
-                  error,
-                  'Failed to delete turf.',
-                ),
+                getErrorMessage(error, 'Failed to delete turf.'),
               );
             } finally {
-              if (mountedRef.current) {
-                setLoading(false);
-              }
+              if (mountedRef.current) setLoading(false);
             }
           },
         },
@@ -1148,123 +926,63 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* =======================================================
-     RESET COURT
-  ======================================================= */
-
   const resetCourtForm = () => {
     setCourtName('');
     setCourtSport('');
     setCourtPrice('');
-
-    // Default Full Day discount = 4%
     setCourtFullDayDiscountPercent('4');
-
     setCourtHasNightPricing(false);
-
     setCourtNightPrice('');
     setCourtNightStartTime('18:00');
     setCourtNightEndTime('23:00');
-
     setSelectedCourt(null);
   };
 
-  /* =======================================================
-     ADD COURT
-  ======================================================= */
-
   const handleAddCourt = (turfId: string) => {
     setSelectedTurfId(turfId);
-
     resetCourtForm();
-
     setShowCourtModal(true);
   };
 
-  /* =======================================================
-     EDIT COURT
-  ======================================================= */
-
-  const handleEditCourt = (
-    turfId: string,
-    court: Court,
-  ) => {
+  const handleEditCourt = (turfId: string, court: Court) => {
     setSelectedTurfId(turfId);
     setSelectedCourt(court);
-
     setCourtName(court.name || '');
     setCourtSport(court.sport || '');
-
     setCourtPrice(
-      court.pricePerHour !== undefined
-        ? String(court.pricePerHour)
-        : '',
+      court.pricePerHour !== undefined ? String(court.pricePerHour) : '',
     );
-
     setCourtFullDayDiscountPercent(
       court.fullDayDiscountPercent !== undefined
         ? String(court.fullDayDiscountPercent)
         : '4',
     );
-
-    setCourtHasNightPricing(
-      Boolean(court.hasNightPricing),
-    );
-
+    setCourtHasNightPricing(Boolean(court.hasNightPricing));
     setCourtNightPrice(
       court.nightPricePerHour !== undefined
         ? String(court.nightPricePerHour)
         : '',
     );
-
-    setCourtNightStartTime(
-      hourToTimeString(court.nightStartHour),
-    );
-
-    setCourtNightEndTime(
-      hourToTimeString(court.nightEndHour),
-    );
-
+    setCourtNightStartTime(hourToTimeString(court.nightStartHour));
+    setCourtNightEndTime(hourToTimeString(court.nightEndHour));
     setShowCourtModal(true);
   };
 
-  /* =======================================================
-     COURT TIME PICKER
-  ======================================================= */
-
-  const openCourtTimePicker = (
-    mode: 'nightStart' | 'nightEnd',
-  ) => {
+  const openCourtTimePicker = (mode: 'nightStart' | 'nightEnd') => {
     setCourtTimePickerMode(mode);
     setShowCourtTimePicker(true);
   };
 
-  const handleCourtTimeChange = (
-    event: any,
-    selectedDate?: Date,
-  ) => {
+  const handleCourtTimeChange = (event: any, selectedDate?: Date) => {
     setShowCourtTimePicker(false);
-
-    if (
-      event?.type === 'dismissed' ||
-      !selectedDate
-    ) {
-      return;
-    }
-
-    const selectedTime =
-      dateToTimeString(selectedDate);
-
+    if (event?.type === 'dismissed' || !selectedDate) return;
+    const selectedTime = dateToTimeString(selectedDate);
     if (courtTimePickerMode === 'nightStart') {
       setCourtNightStartTime(selectedTime);
     } else {
       setCourtNightEndTime(selectedTime);
     }
   };
-
-  /* =======================================================
-     SAVE COURT
-  ======================================================= */
 
   const handleSaveCourt = async () => {
     if (
@@ -1281,23 +999,14 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     }
 
     const price = Number(courtPrice);
-
     if (!Number.isFinite(price) || price <= 0) {
-      Alert.alert(
-        'Invalid Price',
-        'Base price must be greater than ₹0.',
-      );
+      Alert.alert('Invalid Price', 'Base price must be greater than ₹0.');
       return;
     }
-
-    // =====================================================
-    // FULL-DAY DISCOUNT VALIDATION
-    // =====================================================
 
     const fullDayDiscountPercent = Number(
       courtFullDayDiscountPercent.trim(),
     );
-
     if (
       !Number.isFinite(fullDayDiscountPercent) ||
       fullDayDiscountPercent < 0 ||
@@ -1322,26 +1031,16 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
         );
         return;
       }
-
       nightPrice = Number(courtNightPrice);
-
-      if (
-        !Number.isFinite(nightPrice) ||
-        nightPrice <= 0
-      ) {
+      if (!Number.isFinite(nightPrice) || nightPrice <= 0) {
         Alert.alert(
           'Invalid Night Price',
           'Night price must be greater than ₹0.',
         );
         return;
       }
-
-      nightStartHour =
-        timeStringToHour(courtNightStartTime);
-
-      nightEndHour =
-        timeStringToHour(courtNightEndTime);
-
+      nightStartHour = timeStringToHour(courtNightStartTime);
+      nightEndHour = timeStringToHour(courtNightEndTime);
       if (nightStartHour === nightEndHour) {
         Alert.alert(
           'Invalid Night Hours',
@@ -1353,153 +1052,83 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
     try {
       setLoading(true);
-
       const isEditing = Boolean(selectedCourt);
-
       const url = isEditing
-        ? buildApiUrl(
-            `/courts/${encodeURIComponent(
-              selectedCourt!._id,
-            )}`,
-          )
+        ? buildApiUrl(`/courts/${encodeURIComponent(selectedCourt!._id)}`)
         : buildApiUrl('/courts');
-
       const payload = {
         turf: selectedTurfId,
         name: courtName.trim(),
         sport: courtSport.trim(),
         pricePerHour: price,
-
-        // Full-day / long-booking discount
         fullDayDiscountPercent,
-
         hasNightPricing: courtHasNightPricing,
-
         ...(courtHasNightPricing
-          ? {
-              nightPricePerHour: nightPrice,
-              nightStartHour,
-              nightEndHour,
-            }
+          ? { nightPricePerHour: nightPrice, nightStartHour, nightEndHour }
           : {}),
       };
-
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       await parseApiResponse(response);
-
       setShowCourtModal(false);
-
       await fetchCourts(selectedTurfId);
-
       resetCourtForm();
-
       Alert.alert(
         'Success',
-        isEditing
-          ? 'Court updated successfully.'
-          : 'Court added successfully.',
+        isEditing ? 'Court updated successfully.' : 'Court added successfully.',
       );
     } catch (error) {
-      Alert.alert(
-        'Save Failed',
-        getErrorMessage(
-          error,
-          'Failed to save court.',
-        ),
-      );
+      Alert.alert('Save Failed', getErrorMessage(error, 'Failed to save court.'));
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   };
 
-  /* =======================================================
-     DELETE COURT
-  ======================================================= */
-
-  const handleDeleteCourt = (
-    turfId: string,
-    court: Court,
-  ) => {
+  const handleDeleteCourt = (turfId: string, court: Court) => {
     Alert.alert(
       'Delete Court',
       `Are you sure you want to delete "${court.name}"?\n\nThis action cannot be undone.`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-
               const response = await fetch(
-                buildApiUrl(
-                  `/courts/${encodeURIComponent(
-                    court._id,
-                  )}`,
-                ),
+                buildApiUrl(`/courts/${encodeURIComponent(court._id)}`),
                 {
                   method: 'DELETE',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
+                  headers: { 'Content-Type': 'application/json' },
                 },
               );
-
-              const data =
-                await parseApiResponse(response);
-
-              if (!mountedRef.current) {
-                return;
-              }
-
+              const data = await parseApiResponse(response);
+              if (!mountedRef.current) return;
               setTurfCourts((previous) => ({
                 ...previous,
-                [turfId]: (
-                  previous[turfId] || []
-                ).filter(
-                  (item) =>
-                    item._id !== court._id,
+                [turfId]: (previous[turfId] || []).filter(
+                  (item) => item._id !== court._id,
                 ),
               }));
-
-              if (
-                selectedCourt?._id ===
-                court._id
-              ) {
+              if (selectedCourt?._id === court._id) {
                 setSelectedCourt(null);
                 setShowCourtModal(false);
               }
-
               Alert.alert(
                 'Court Deleted',
-                data?.message ||
-                  'Court deleted successfully.',
+                data?.message || 'Court deleted successfully.',
               );
             } catch (error) {
               Alert.alert(
                 'Delete Failed',
-                getErrorMessage(
-                  error,
-                  'Failed to delete court.',
-                ),
+                getErrorMessage(error, 'Failed to delete court.'),
               );
             } finally {
-              if (mountedRef.current) {
-                setLoading(false);
-              }
+              if (mountedRef.current) setLoading(false);
             }
           },
         },
@@ -1507,28 +1136,15 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* =======================================================
-     SAVE BANK
-  ======================================================= */
-
   const handleSaveBankDetails = async () => {
-    const holder =
-      bankDetails.accountHolderName.trim();
-
-    const account =
-      bankDetails.accountNumber.trim();
-
-    const ifsc =
-      bankDetails.ifscCode.trim().toUpperCase();
+    const holder = bankDetails.accountHolderName.trim();
+    const account = bankDetails.accountNumber.trim();
+    const ifsc = bankDetails.ifscCode.trim().toUpperCase();
 
     if (!holder || !account || !ifsc) {
-      Alert.alert(
-        'Missing Information',
-        'Please fill all bank details.',
-      );
+      Alert.alert('Missing Information', 'Please fill all bank details.');
       return;
     }
-
     if (account.length < 6) {
       Alert.alert(
         'Invalid Account Number',
@@ -1536,29 +1152,18 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       );
       return;
     }
-
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
-      Alert.alert(
-        'Invalid IFSC',
-        'Please enter a valid IFSC code.',
-      );
+      Alert.alert('Invalid IFSC', 'Please enter a valid IFSC code.');
       return;
     }
 
     try {
       setLoading(true);
-
       const response = await fetch(
-        buildApiUrl(
-          `/owners/${encodeURIComponent(
-            user._id,
-          )}/bank-details`,
-        ),
+        buildApiUrl(`/owners/${encodeURIComponent(user._id)}/bank-details`),
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accountHolderName: holder,
             accountNumber: account,
@@ -1566,13 +1171,9 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           }),
         },
       );
-
       await parseApiResponse(response);
-
       setShowBankModal(false);
-
       await fetchBankDetails();
-
       Alert.alert(
         'Bank Details Saved',
         'Your payout bank details have been saved successfully.',
@@ -1580,89 +1181,55 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     } catch (error) {
       Alert.alert(
         'Save Failed',
-        getErrorMessage(
-          error,
-          'Failed to save bank details.',
-        ),
+        getErrorMessage(error, 'Failed to save bank details.'),
       );
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   };
 
-  /* =======================================================
-     DELETE BANK
-  ======================================================= */
-
   const handleDeleteBankDetails = () => {
-    if (!bankDetails.accountHolderName) {
-      return;
-    }
+    if (!bankDetails.accountHolderName) return;
 
     Alert.alert(
       'Delete Bank Details',
       'Are you sure you want to remove your payout bank account details?\n\nYou can add them again later.',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
-
               const response = await fetch(
                 buildApiUrl(
-                  `/owners/${encodeURIComponent(
-                    user._id,
-                  )}/bank-details`,
+                  `/owners/${encodeURIComponent(user._id)}/bank-details`,
                 ),
                 {
                   method: 'DELETE',
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                  },
+                  headers: { 'Content-Type': 'application/json' },
                 },
               );
-
-              const data =
-                await parseApiResponse(response);
-
-              if (!mountedRef.current) {
-                return;
-              }
-
+              const data = await parseApiResponse(response);
+              if (!mountedRef.current) return;
               setBankDetails({
                 accountHolderName: '',
                 accountNumber: '',
                 ifscCode: '',
               });
-
               setShowBankModal(false);
-
               Alert.alert(
                 'Bank Details Deleted',
-                data?.message ||
-                  'Bank details deleted successfully.',
+                data?.message || 'Bank details deleted successfully.',
               );
             } catch (error) {
               Alert.alert(
                 'Delete Failed',
-                getErrorMessage(
-                  error,
-                  'Failed to delete bank details.',
-                ),
+                getErrorMessage(error, 'Failed to delete bank details.'),
               );
             } finally {
-              if (mountedRef.current) {
-                setLoading(false);
-              }
+              if (mountedRef.current) setLoading(false);
             }
           },
         },
@@ -1670,80 +1237,47 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* =======================================================
-     DELETE OWNER ACCOUNT
-  ======================================================= */
-
-  const performDeleteOwnerAccount =
-    async () => {
-      try {
-        setLoading(true);
-
-        const response = await fetch(
-          buildApiUrl(
-            `/owners/${encodeURIComponent(
-              user._id,
-            )}/account`,
-          ),
-          {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        );
-
-        const data =
-          await parseApiResponse(response);
-
-        if (!mountedRef.current) {
-          return;
-        }
-
-        setTurfs([]);
-        setTurfCourts({});
-
-        setBankDetails({
-          accountHolderName: '',
-          accountNumber: '',
-          ifscCode: '',
-        });
-
-        Alert.alert(
-          'Account Deleted',
-          data?.message ||
-            'Your owner account and associated turf data have been deleted.',
-          [
-            {
-              text: 'OK',
-              onPress: () => onLogout?.(),
-            },
-          ],
-        );
-      } catch (error) {
-        Alert.alert(
-          'Account Deletion Failed',
-          getErrorMessage(
-            error,
-            'Failed to delete your owner account.',
-          ),
-        );
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-      }
-    };
+  const performDeleteOwnerAccount = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        buildApiUrl(`/owners/${encodeURIComponent(user._id)}/account`),
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+      const data = await parseApiResponse(response);
+      if (!mountedRef.current) return;
+      setTurfs([]);
+      setTurfCourts({});
+      setBankDetails({
+        accountHolderName: '',
+        accountNumber: '',
+        ifscCode: '',
+      });
+      Alert.alert(
+        'Account Deleted',
+        data?.message ||
+          'Your owner account and associated turf data have been deleted.',
+        [{ text: 'OK', onPress: () => onLogout?.() }],
+      );
+    } catch (error) {
+      Alert.alert(
+        'Account Deletion Failed',
+        getErrorMessage(error, 'Failed to delete your owner account.'),
+      );
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  };
 
   const handleDeleteOwnerAccount = () => {
     Alert.alert(
       'Delete Owner Account',
       `This will permanently delete:\n\n• Your owner account\n• All your turfs\n• All courts belonging to those turfs\n• Your bank details\n\nThis action cannot be undone.`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Continue',
           style: 'destructive',
@@ -1752,15 +1286,11 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               'Final Confirmation',
               `Are you absolutely sure you want to permanently delete "${user.name}"'s owner account?`,
               [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                },
+                { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'YES, DELETE ACCOUNT',
                   style: 'destructive',
-                  onPress:
-                    performDeleteOwnerAccount,
+                  onPress: performDeleteOwnerAccount,
                 },
               ],
             );
@@ -1770,31 +1300,27 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     );
   };
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
-
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: () => onLogout?.(),
-        },
-      ],
-    );
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => onLogout?.() },
+    ]);
   };
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
+  /* FONT LOADING */
+  if (!fontsLoaded && !fontError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.fontLoadingContainer}>
+          <View style={styles.fontLoadingMark}>
+            <Text style={styles.fontLoadingMarkText}>T</Text>
+          </View>
+          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+          <Text style={styles.fontLoadingText}>TurfBook</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1803,111 +1329,79 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
+        {/* HEADER */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageHeaderBadge}>
-            🏟️ OWNER
-          </Text>
-
+          <Text style={styles.pageHeaderBadge}>🏟️ OWNER</Text>
           <Text style={styles.title}>Profile</Text>
-
           <Text style={styles.pageHeaderSubtitle}>
             Manage your turfs, courts and payouts
           </Text>
         </View>
 
-        {/* =================================================
-            PROFILE CARD
-        ================================================= */}
-
+        {/* COMPACT PROFILE CARD */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user.name
-                  ?.charAt(0)
-                  ?.toUpperCase() || 'O'}
-              </Text>
+          <View style={styles.profileTop}>
+            <View style={styles.avatarWrapper}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {user.name?.charAt(0)?.toUpperCase() || 'O'}
+                </Text>
+              </View>
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarBadgeText}>🏆</Text>
+              </View>
             </View>
 
-            <View style={styles.avatarBadge}>
-              <Text style={styles.avatarBadgeText}>
-                🏆
+            <View style={styles.profileInfo}>
+              <Text style={styles.name} numberOfLines={1}>
+                {user.name || 'Owner'}
               </Text>
+              <Text style={styles.email} numberOfLines={1}>
+                {user.email || 'No email added'}
+              </Text>
+
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>TURF OWNER</Text>
+              </View>
             </View>
-          </View>
-
-          <Text style={styles.name}>
-            {user.name || 'Owner'}
-          </Text>
-
-          <Text style={styles.email}>
-            {user.email || 'No email added'}
-          </Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Phone
-            </Text>
-
-            <Text style={styles.infoValue}>
-              {user.phone || 'Not added'}
-            </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Account Type
-            </Text>
-
-            <View style={styles.rolePill}>
-              <Text style={styles.rolePillText}>
-                TURF OWNER
-              </Text>
-            </View>
+            <Text style={styles.infoLabel}>Phone</Text>
+            <Text style={styles.infoValue}>{user.phone || 'Not added'}</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() =>
-              setShowEditProfile(true)
-            }
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryButtonText}>
-              EDIT PROFILE
-            </Text>
-          </TouchableOpacity>
+          {/* Side-by-side compact buttons */}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => setShowEditProfile(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="create-outline" size={14} color={COLORS.dark} />
+              <Text style={styles.primaryButtonText}>Edit</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() =>
-              setShowPasswordModal(true)
-            }
-            activeOpacity={0.85}
-          >
-            <Text style={styles.secondaryButtonText}>
-              CHANGE PASSWORD
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => setShowPasswordModal(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={14}
+                color={COLORS.textPrimary}
+              />
+              <Text style={styles.secondaryButtonText}>Password</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* =================================================
-            TURFS HEADER
-        ================================================= */}
-
+        {/* TURFS HEADER */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>
-              My Listed Turfs
-            </Text>
-
-            <View
-              style={styles.sectionTitleAccent}
-            />
+            <Text style={styles.sectionTitle}>My Listed Turfs</Text>
+            <View style={styles.sectionTitleAccent} />
           </View>
 
           <TouchableOpacity
@@ -1915,80 +1409,45 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
             onPress={handleAddTurf}
             activeOpacity={0.85}
           >
-            <Text style={styles.addButtonText}>
-              + ADD TURF
-            </Text>
+            <Text style={styles.addButtonText}>+ ADD TURF</Text>
           </TouchableOpacity>
         </View>
 
-        {/* =================================================
-            TURF LIST
-        ================================================= */}
-
         {fetchingData ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator
-              size="small"
-              color={COLORS.primary}
-            />
-
-            <Text style={styles.loadingText}>
-              Loading your turfs...
-            </Text>
+            <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+            <Text style={styles.loadingText}>Loading your turfs...</Text>
           </View>
         ) : turfs.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconWrapper}>
-              <Text style={styles.emptyIcon}>
-                🏟️
-              </Text>
+              <Text style={styles.emptyIcon}>🏟️</Text>
             </View>
-
-            <Text style={styles.emptyTitle}>
-              No turfs listed
-            </Text>
-
+            <Text style={styles.emptyTitle}>No turfs listed</Text>
             <Text style={styles.emptyText}>
-              Add your first turf to start
-              accepting bookings.
+              Add your first turf to start accepting bookings.
             </Text>
-
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={styles.primaryButtonFull}
               onPress={handleAddTurf}
               activeOpacity={0.85}
             >
-              <Text
-                style={styles.primaryButtonText}
-              >
+              <Text style={styles.primaryButtonFullText}>
                 ADD YOUR FIRST TURF
               </Text>
             </TouchableOpacity>
           </View>
         ) : (
           turfs.map((turf) => {
-            const courts =
-              turfCourts[turf._id] || [];
-
-            const isExpanded =
-              expandedTurfId === turf._id;
-
-            const statusColors =
-              getTurfStatusColors(turf.status);
-
+            const courts = turfCourts[turf._id] || [];
+            const isExpanded = expandedTurfId === turf._id;
+            const statusColors = getTurfStatusColors(turf.status);
             const imageUrl =
-              turf.images?.find(
-                (image) => image.isPrimary,
-              )?.url ||
+              turf.images?.find((image) => image.isPrimary)?.url ||
               turf.images?.[0]?.url;
 
             return (
-              <View
-                key={turf._id}
-                style={styles.turfCard}
-              >
-                {/* IMAGE */}
-
+              <View key={turf._id} style={styles.turfCard}>
                 {imageUrl ? (
                   <Image
                     source={{ uri: imageUrl }}
@@ -1996,346 +1455,152 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                     resizeMode="cover"
                   />
                 ) : (
-                  <View
-                    style={styles.imagePlaceholder}
-                  >
-                    <Text
-                      style={styles.placeholderIcon}
-                    >
-                      ⚽
-                    </Text>
-
-                    <Text
-                      style={styles.placeholderText}
-                    >
-                      No Image
-                    </Text>
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.placeholderIcon}>⚽</Text>
+                    <Text style={styles.placeholderText}>No Image</Text>
                   </View>
                 )}
-
-                {/* STATUS */}
 
                 <View
                   style={[
                     styles.turfStatusPill,
                     {
-                      backgroundColor:
-                        statusColors.bg,
-                      borderColor:
-                        statusColors.border,
+                      backgroundColor: statusColors.bg,
+                      borderColor: statusColors.border,
                     },
                   ]}
                 >
                   <View
                     style={[
                       styles.statusDot,
-                      {
-                        backgroundColor:
-                          statusColors.dot,
-                      },
+                      { backgroundColor: statusColors.dot },
                     ]}
                   />
-
                   <Text
-                    style={[
-                      styles.turfStatusText,
-                      {
-                        color:
-                          statusColors.text,
-                      },
-                    ]}
+                    style={[styles.turfStatusText, { color: statusColors.text }]}
                   >
-                    {String(
-                      turf.status || 'active',
-                    ).toUpperCase()}
+                    {String(turf.status || 'active').toUpperCase()}
                   </Text>
                 </View>
 
-                {/* CONTENT */}
-
                 <View style={styles.turfContent}>
-                  <Text
-                    style={styles.turfName}
-                    numberOfLines={2}
-                  >
+                  <Text style={styles.turfName} numberOfLines={2}>
                     {turf.name}
                   </Text>
-
-                  <Text style={styles.turfCity}>
-                    📍 {turf.city}
-                  </Text>
-
-                  <Text
-                    style={styles.turfAddress}
-                    numberOfLines={3}
-                  >
+                  <Text style={styles.turfCity}>📍 {turf.city}</Text>
+                  <Text style={styles.turfAddress} numberOfLines={3}>
                     {turf.address}
                   </Text>
 
-                  {/* ACTIONS */}
-
-                  <View
-                    style={styles.turfActionGrid}
-                  >
+                  <View style={styles.turfActionGrid}>
                     <TouchableOpacity
                       style={styles.manageButton}
-                      onPress={() =>
-                        handleToggleTurf(
-                          turf._id,
-                        )
-                      }
+                      onPress={() => handleToggleTurf(turf._id)}
                       activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          styles.manageButtonText
-                        }
-                      >
-                        {isExpanded
-                          ? 'HIDE COURTS'
-                          : 'MANAGE COURTS'}
+                      <Text style={styles.manageButtonText}>
+                        {isExpanded ? 'HIDE COURTS' : 'MANAGE COURTS'}
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.editButton}
-                      onPress={() =>
-                        handleEditTurf(turf)
-                      }
+                      onPress={() => handleEditTurf(turf)}
                       activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          styles.editButtonText
-                        }
-                      >
-                        EDIT
-                      </Text>
+                      <Text style={styles.editButtonText}>EDIT</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={
-                        styles.deleteTurfButton
-                      }
-                      onPress={() =>
-                        handleDeleteTurf(turf)
-                      }
+                      style={styles.deleteTurfButton}
+                      onPress={() => handleDeleteTurf(turf)}
                       activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          styles.deleteTurfButtonText
-                        }
-                      >
-                        DELETE
-                      </Text>
+                      <Text style={styles.deleteTurfButtonText}>DELETE</Text>
                     </TouchableOpacity>
                   </View>
 
-                  {/* COURTS */}
-
                   {isExpanded && (
-                    <View
-                      style={
-                        styles.courtsContainer
-                      }
-                    >
-                      <View
-                        style={styles.courtHeader}
-                      >
-                        <Text
-                          style={styles.courtTitle}
-                        >
-                          Courts
-                        </Text>
-
+                    <View style={styles.courtsContainer}>
+                      <View style={styles.courtHeader}>
+                        <Text style={styles.courtTitle}>Courts</Text>
                         <TouchableOpacity
-                          onPress={() =>
-                            handleAddCourt(
-                              turf._id,
-                            )
-                          }
+                          onPress={() => handleAddCourt(turf._id)}
                           activeOpacity={0.8}
-                          style={
-                            styles.addCourtButton
-                          }
+                          style={styles.addCourtButton}
                         >
-                          <Text
-                            style={
-                              styles.addCourtText
-                            }
-                          >
-                            + Add Court
-                          </Text>
+                          <Text style={styles.addCourtText}>+ Add Court</Text>
                         </TouchableOpacity>
                       </View>
 
                       {courts.length === 0 ? (
-                        <View
-                          style={
-                            styles.noCourtsBox
-                          }
-                        >
-                          <Text
-                            style={
-                              styles.noCourtsIcon
-                            }
-                          >
-                            🏟️
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.noCourtText
-                            }
-                          >
+                        <View style={styles.noCourtsBox}>
+                          <Text style={styles.noCourtsIcon}>🏟️</Text>
+                          <Text style={styles.noCourtText}>
                             No courts added yet.
                           </Text>
                         </View>
                       ) : (
                         courts.map((court) => (
-                          <View
-                            key={court._id}
-                            style={
-                              styles.courtCard
-                            }
-                          >
-                            <View
-                              style={
-                                styles.courtInfo
-                              }
-                            >
-                              <View
-                                style={
-                                  styles.courtNameRow
-                                }
-                              >
+                          <View key={court._id} style={styles.courtCard}>
+                            <View style={styles.courtInfo}>
+                              <View style={styles.courtNameRow}>
                                 <Text
-                                  style={
-                                    styles.courtName
-                                  }
+                                  style={styles.courtName}
                                   numberOfLines={2}
                                 >
                                   {court.name}
                                 </Text>
-
-                                <View
-                                  style={
-                                    styles.sportPill
-                                  }
-                                >
-                                  <Text
-                                    style={
-                                      styles.sportPillText
-                                    }
-                                  >
+                                <View style={styles.sportPill}>
+                                  <Text style={styles.sportPillText}>
                                     {court.sport}
                                   </Text>
                                 </View>
                               </View>
 
-                              <Text
-                                style={
-                                  styles.courtPrice
-                                }
-                              >
+                              <Text style={styles.courtPrice}>
                                 ₹
                                 {Number(
-                                  court.pricePerHour ||
-                                    0,
-                                ).toLocaleString(
-                                  'en-IN',
-                                )}
+                                  court.pricePerHour || 0,
+                                ).toLocaleString('en-IN')}
                                 /hour
                               </Text>
 
                               {court.hasNightPricing && (
                                 <>
-                                  <View
-                                    style={
-                                      styles.nightPriceBadge
-                                    }
-                                  >
-                                    <Text
-                                      style={
-                                        styles.nightPriceBadgeText
-                                      }
-                                    >
+                                  <View style={styles.nightPriceBadge}>
+                                    <Text style={styles.nightPriceBadgeText}>
                                       🌙 Night ₹
                                       {Number(
-                                        court.nightPricePerHour ||
-                                          0,
-                                      ).toLocaleString(
-                                        'en-IN',
-                                      )}
+                                        court.nightPricePerHour || 0,
+                                      ).toLocaleString('en-IN')}
                                       /hr
                                     </Text>
                                   </View>
-
-                                  <Text
-                                    style={
-                                      styles.nightTimeText
-                                    }
-                                  >
-                                    {formatHour(
-                                      court.nightStartHour,
-                                    )}{' '}
-                                    —{' '}
-                                    {formatHour(
-                                      court.nightEndHour,
-                                    )}
+                                  <Text style={styles.nightTimeText}>
+                                    {formatHour(court.nightStartHour)} —{' '}
+                                    {formatHour(court.nightEndHour)}
                                   </Text>
                                 </>
                               )}
                             </View>
 
-                            <View
-                              style={
-                                styles.courtActions
-                              }
-                            >
+                            <View style={styles.courtActions}>
                               <TouchableOpacity
-                                style={
-                                  styles.smallEditButton
-                                }
-                                onPress={() =>
-                                  handleEditCourt(
-                                    turf._id,
-                                    court,
-                                  )
-                                }
-                                activeOpacity={
-                                  0.85
-                                }
+                                style={styles.smallEditButton}
+                                onPress={() => handleEditCourt(turf._id, court)}
+                                activeOpacity={0.85}
                               >
-                                <Text
-                                  style={
-                                    styles.editCourtText
-                                  }
-                                >
-                                  Edit
-                                </Text>
+                                <Text style={styles.editCourtText}>Edit</Text>
                               </TouchableOpacity>
-
                               <TouchableOpacity
-                                style={
-                                  styles.smallDeleteButton
-                                }
+                                style={styles.smallDeleteButton}
                                 onPress={() =>
-                                  handleDeleteCourt(
-                                    turf._id,
-                                    court,
-                                  )
+                                  handleDeleteCourt(turf._id, court)
                                 }
-                                activeOpacity={
-                                  0.85
-                                }
+                                activeOpacity={0.85}
                               >
-                                <Text
-                                  style={
-                                    styles.deleteCourtText
-                                  }
-                                >
+                                <Text style={styles.deleteCourtText}>
                                   Delete
                                 </Text>
                               </TouchableOpacity>
@@ -2351,44 +1616,160 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           })
         )}
 
-        {/* =================================================
-            BANK
-        ================================================= */}
-
+        {/* RECENT BOOKINGS */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>
-              Bank Account
-            </Text>
+            <Text style={styles.sectionTitle}>Recent Bookings</Text>
+            <View style={styles.sectionTitleAccent} />
+          </View>
 
-            <View
-              style={styles.sectionTitleAccent}
-            />
+          <View style={styles.bookingCountPill}>
+            <Text style={styles.bookingCountText}>
+              {recentBookings.length}
+            </Text>
+          </View>
+        </View>
+
+        {fetchingBookings ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+            <Text style={styles.loadingText}>
+              Loading recent bookings...
+            </Text>
+          </View>
+        ) : recentBookings.length === 0 ? (
+          <View style={styles.bookingEmptyCard}>
+            <View style={styles.bookingEmptyIcon}>
+              <Text style={styles.bookingEmptyIconText}>📅</Text>
+            </View>
+            <Text style={styles.bookingEmptyTitle}>No bookings yet</Text>
+            <Text style={styles.bookingEmptyText}>
+              Customer details will appear here when someone books your turf.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.bookingsList}>
+            {recentBookings.map((booking) => {
+              const customer = booking.customer;
+              const statusColors = getBookingStatusColors(booking.status);
+
+              return (
+                <View key={booking._id} style={styles.bookingCard}>
+                  <View style={styles.bookingTopRow}>
+                    <View style={styles.customerAvatar}>
+                      <Text style={styles.customerAvatarText}>
+                        {customer?.name?.charAt(0)?.toUpperCase() || 'C'}
+                      </Text>
+                    </View>
+                    <View style={styles.customerMainInfo}>
+                      <Text
+                        style={styles.customerName}
+                        numberOfLines={1}
+                      >
+                        {customer?.name || 'Customer'}
+                      </Text>
+                      <Text
+                        style={styles.customerPhone}
+                        numberOfLines={1}
+                      >
+                        📞 {customer?.phone || 'Phone not available'}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.bookingStatusPill,
+                        {
+                          backgroundColor: statusColors.bg,
+                          borderColor: statusColors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.bookingStatusText,
+                          { color: statusColors.text },
+                        ]}
+                      >
+                        {String(booking.status || 'confirmed').toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.bookingDivider} />
+
+                  <View style={styles.bookingDetailsGrid}>
+                    <View style={styles.bookingDetailItem}>
+                      <Text style={styles.bookingDetailLabel}>TURF</Text>
+                      <Text
+                        style={styles.bookingDetailValue}
+                        numberOfLines={1}
+                      >
+                        {booking.turf?.name || '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.bookingDetailItem}>
+                      <Text style={styles.bookingDetailLabel}>COURT</Text>
+                      <Text
+                        style={styles.bookingDetailValue}
+                        numberOfLines={1}
+                      >
+                        {booking.court?.name || '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.bookingDetailItem}>
+                      <Text style={styles.bookingDetailLabel}>DATE</Text>
+                      <Text style={styles.bookingDetailValue}>
+                        {formatBookingDate(booking.bookingDate)}
+                      </Text>
+                    </View>
+                    <View style={styles.bookingDetailItem}>
+                      <Text style={styles.bookingDetailLabel}>TIME</Text>
+                      <Text style={styles.bookingDetailValue}>
+                        {formatBookingTime(
+                          booking.startTime || booking.slot?.startTime,
+                        )}
+                        {' → '}
+                        {formatBookingTime(
+                          booking.endTime || booking.slot?.endTime,
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.bookingBottomRow}>
+                    <Text style={styles.bookingCustomerHint}>
+                      Customer contact
+                    </Text>
+                    <Text style={styles.bookingAmount}>
+                      ₹
+                      {Number(
+                        booking.finalAmount ?? booking.grossAmount ?? 0,
+                      ).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* BANK */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Bank Account</Text>
+            <View style={styles.sectionTitleAccent} />
           </View>
         </View>
 
         <View style={styles.bankCard}>
           <View style={styles.bankHeaderRow}>
             <View style={styles.bankIconCircle}>
-              <Text style={styles.bankIconText}>
-                🏦
-              </Text>
+              <Text style={styles.bankIconText}>🏦</Text>
             </View>
-
             <View style={styles.bankHeaderText}>
-              <Text
-                style={styles.bankHeaderTitle}
-              >
-                Payout Account
-              </Text>
-
-              <Text
-                style={
-                  styles.bankHeaderSubtitle
-                }
-              >
-                Where your earnings get
-                transferred
+              <Text style={styles.bankHeaderTitle}>Payout Account</Text>
+              <Text style={styles.bankHeaderSubtitle}>
+                Where your earnings get transferred
               </Text>
             </View>
           </View>
@@ -2396,58 +1777,37 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           {bankDetails.accountHolderName ? (
             <>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>
-                  Account Holder
-                </Text>
-
+                <Text style={styles.infoLabel}>Account Holder</Text>
                 <Text style={styles.infoValue}>
                   {bankDetails.accountHolderName}
                 </Text>
               </View>
-
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>
-                  Account Number
-                </Text>
-
+                <Text style={styles.infoLabel}>Account Number</Text>
                 <Text style={styles.infoValue}>
-                  {maskAccountNumber(
-                    bankDetails.accountNumber,
-                  )}
+                  {maskAccountNumber(bankDetails.accountNumber)}
                 </Text>
               </View>
-
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>
-                  IFSC
-                </Text>
-
-                <Text style={styles.infoValue}>
-                  {bankDetails.ifscCode}
-                </Text>
+                <Text style={styles.infoLabel}>IFSC</Text>
+                <Text style={styles.infoValue}>{bankDetails.ifscCode}</Text>
               </View>
             </>
           ) : (
             <View style={styles.noBankBox}>
-              <Text style={styles.noBankIcon}>
-                💳
-              </Text>
-
+              <Text style={styles.noBankIcon}>💳</Text>
               <Text style={styles.emptyText}>
-                No bank account details added
-                yet.
+                No bank account details added yet.
               </Text>
             </View>
           )}
 
           <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() =>
-              setShowBankModal(true)
-            }
+            style={styles.primaryButtonFull}
+            onPress={() => setShowBankModal(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>
+            <Text style={styles.primaryButtonFullText}>
               {bankDetails.accountHolderName
                 ? 'EDIT BANK DETAILS'
                 : 'ADD BANK DETAILS'}
@@ -2460,46 +1820,23 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               onPress={handleDeleteBankDetails}
               activeOpacity={0.85}
             >
-              <Text
-                style={
-                  styles.deleteBankButtonText
-                }
-              >
+              <Text style={styles.deleteBankButtonText}>
                 DELETE BANK DETAILS
               </Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* =================================================
-            DANGER ZONE
-        ================================================= */}
-
+        {/* DANGER ZONE */}
         <View style={styles.dangerSection}>
           <View style={styles.dangerHeaderRow}>
             <View style={styles.dangerIconCircle}>
-              <Text style={styles.dangerIcon}>
-                ⚠️
-              </Text>
+              <Text style={styles.dangerIcon}>⚠️</Text>
             </View>
-
-            <View
-              style={styles.dangerHeaderText}
-            >
-              <Text
-                style={styles.dangerSectionTitle}
-              >
-                Danger Zone
-              </Text>
-
-              <Text
-                style={
-                  styles.dangerSectionDescription
-                }
-              >
-                Permanently delete your owner
-                account and associated turf
-                data.
+            <View style={styles.dangerHeaderText}>
+              <Text style={styles.dangerSectionTitle}>Danger Zone</Text>
+              <Text style={styles.dangerSectionDescription}>
+                Permanently delete your owner account and associated turf data.
               </Text>
             </View>
           </View>
@@ -2511,91 +1848,62 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator
-                color={COLORS.dangerText}
-              />
+              <ActivityIndicator color={COLORS.dangerText} />
             ) : (
-              <Text
-                style={
-                  styles.deleteAccountButtonText
-                }
-              >
+              <Text style={styles.deleteAccountButtonText}>
                 DELETE OWNER ACCOUNT
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* =================================================
-            LOGOUT
-        ================================================= */}
-
+        {/* LOGOUT */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
           activeOpacity={0.85}
         >
-          <Text style={styles.logoutText}>
-            LOGOUT
-          </Text>
+          <Ionicons
+            name="log-out-outline"
+            size={16}
+            color={COLORS.textPrimary}
+          />
+          <Text style={styles.logoutText}>LOGOUT</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* =====================================================
-          EDIT PROFILE MODAL
-      ===================================================== */}
-
+      {/* EDIT PROFILE MODAL */}
       <Modal
         visible={showEditProfile}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setShowEditProfile(false)
-        }
+        onRequestClose={() => setShowEditProfile(false)}
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={
-              styles.modalScroll
-            }
+            contentContainerStyle={styles.modalScroll}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
+              <Text style={styles.modalBadge}>👤 PROFILE</Text>
+              <Text style={styles.modalTitle}>Edit Profile</Text>
 
-              <Text style={styles.modalBadge}>
-                👤 PROFILE
-              </Text>
-
-              <Text style={styles.modalTitle}>
-                Edit Profile
-              </Text>
-
-              <Text style={styles.fieldLabel}>
-                NAME
-              </Text>
-
+              <Text style={styles.fieldLabel}>NAME</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Name"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
               />
 
-              <Text style={styles.fieldLabel}>
-                EMAIL
-              </Text>
-
+              <Text style={styles.fieldLabel}>EMAIL</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Email"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -2603,37 +1911,26 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 autoCorrect={false}
               />
 
-              <Text style={styles.fieldLabel}>
-                PHONE
-              </Text>
-
+              <Text style={styles.fieldLabel}>PHONE</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Phone"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
               />
 
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={styles.primaryButtonFull}
                 onPress={handleUpdateProfile}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
+                  <Text style={styles.primaryButtonFullText}>
                     SAVE CHANGES
                   </Text>
                 )}
@@ -2641,104 +1938,67 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() =>
-                  setShowEditProfile(false)
-                }
+                onPress={() => setShowEditProfile(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* =====================================================
-          PASSWORD MODAL
-      ===================================================== */}
-
+      {/* PASSWORD MODAL */}
       <Modal
         visible={showPasswordModal}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setShowPasswordModal(false)
-        }
+        onRequestClose={() => setShowPasswordModal(false)}
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={
-              styles.modalScroll
-            }
+            contentContainerStyle={styles.modalScroll}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
+              <Text style={styles.modalBadge}>🔒 SECURITY</Text>
+              <Text style={styles.modalTitle}>Change Password</Text>
 
-              <Text style={styles.modalBadge}>
-                🔒 SECURITY
-              </Text>
-
-              <Text style={styles.modalTitle}>
-                Change Password
-              </Text>
-
-              <Text style={styles.fieldLabel}>
-                CURRENT PASSWORD
-              </Text>
-
+              <Text style={styles.fieldLabel}>CURRENT PASSWORD</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter current password"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 secureTextEntry
                 value={currentPassword}
-                onChangeText={
-                  setCurrentPassword
-                }
+                onChangeText={setCurrentPassword}
                 autoCapitalize="none"
               />
 
-              <Text style={styles.fieldLabel}>
-                NEW PASSWORD
-              </Text>
-
+              <Text style={styles.fieldLabel}>NEW PASSWORD</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter new password"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 secureTextEntry
                 value={newPassword}
                 onChangeText={setNewPassword}
                 autoCapitalize="none"
               />
 
-              <Text style={styles.helperText}>
-                Minimum 6 characters
-              </Text>
+              <Text style={styles.helperText}>Minimum 6 characters</Text>
 
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={styles.primaryButtonFull}
                 onPress={handleChangePassword}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
+                  <Text style={styles.primaryButtonFullText}>
                     CHANGE PASSWORD
                   </Text>
                 )}
@@ -2746,24 +2006,17 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() =>
-                  setShowPasswordModal(false)
-                }
+                onPress={() => setShowPasswordModal(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* =====================================================
-          TURF MODAL
-      ===================================================== */}
-
+      {/* TURF MODAL */}
       <Modal
         visible={showTurfModal}
         transparent
@@ -2772,275 +2025,138 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={
-              styles.modalScroll
-            }
+            contentContainerStyle={styles.modalScroll}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-
-              <Text style={styles.modalBadge}>
-                🏟️ TURF
-              </Text>
-
+              <Text style={styles.modalBadge}>🏟️ TURF</Text>
               <Text style={styles.modalTitle}>
-                {selectedTurf
-                  ? 'Edit Turf'
-                  : 'Add Turf'}
+                {selectedTurf ? 'Edit Turf' : 'Add Turf'}
               </Text>
 
-              <Text style={styles.fieldLabel}>
-                TURF NAME
-              </Text>
-
+              <Text style={styles.fieldLabel}>TURF NAME</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter turf name"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={turfName}
                 onChangeText={setTurfName}
               />
 
-              <Text style={styles.fieldLabel}>
-                DESCRIPTION
-              </Text>
-
+              <Text style={styles.fieldLabel}>DESCRIPTION</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  styles.textArea,
-                ]}
+                style={[styles.input, styles.textArea]}
                 placeholder="Enter turf description"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={turfDescription}
                 onChangeText={setTurfDescription}
                 multiline
                 textAlignVertical="top"
               />
 
-              <Text style={styles.fieldLabel}>
-                ADDRESS
-              </Text>
-
+              <Text style={styles.fieldLabel}>ADDRESS</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter address"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={turfAddress}
                 onChangeText={setTurfAddress}
               />
 
-              <Text style={styles.fieldLabel}>
-                CITY
-              </Text>
-
+              <Text style={styles.fieldLabel}>CITY</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter city"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={turfCity}
                 onChangeText={setTurfCity}
                 autoCapitalize="words"
               />
 
-              {/* OPERATING HOURS */}
-
-              <View
-                style={
-                  styles.hoursSectionTitleRow
-                }
-              >
-                <Text
-                  style={
-                    styles.hoursSectionTitle
-                  }
-                >
-                  Operating Hours
-                </Text>
-
-                <View
-                  style={
-                    styles.sectionTitleAccent
-                  }
-                />
+              <View style={styles.hoursSectionTitleRow}>
+                <Text style={styles.hoursSectionTitle}>Operating Hours</Text>
+                <View style={styles.sectionTitleAccent} />
               </View>
 
-              <Text
-                style={styles.hoursDescription}
-              >
-                Set the opening and closing time
-                for each day.
+              <Text style={styles.hoursDescription}>
+                Set the opening and closing time for each day.
               </Text>
 
-              {operatingHours.map(
-                (hour, index) => (
-                  <View
-                    key={hour.day}
-                    style={
-                      styles.operatingHourCard
-                    }
-                  >
-                    <View
-                      style={styles.dayHeader}
-                    >
+              {operatingHours.map((hour, index) => (
+                <View key={hour.day} style={styles.operatingHourCard}>
+                  <View style={styles.dayHeader}>
+                    <Text style={styles.dayName}>{hour.day}</Text>
+                    <View style={styles.openStatusRow}>
                       <Text
-                        style={styles.dayName}
+                        style={[
+                          styles.statusText,
+                          !hour.isClosed && styles.statusTextOpen,
+                        ]}
                       >
-                        {hour.day}
+                        {hour.isClosed ? 'CLOSED' : 'OPEN'}
                       </Text>
-
-                      <View
-                        style={
-                          styles.openStatusRow
+                      <Switch
+                        value={!hour.isClosed}
+                        onValueChange={(value) =>
+                          updateOperatingHour(index, 'isClosed', !value)
                         }
-                      >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            !hour.isClosed &&
-                              styles.statusTextOpen,
-                          ]}
-                        >
-                          {hour.isClosed
-                            ? 'CLOSED'
-                            : 'OPEN'}
-                        </Text>
+                        trackColor={{
+                          false: COLORS.border,
+                          true: COLORS.primaryMuted,
+                        }}
+                        thumbColor={
+                          hour.isClosed ? COLORS.textMuted : COLORS.primary
+                        }
+                      />
+                    </View>
+                  </View>
 
-                        <Switch
-                          value={!hour.isClosed}
-                          onValueChange={(value) =>
-                            updateOperatingHour(
-                              index,
-                              'isClosed',
-                              !value,
-                            )
-                          }
-                          trackColor={{
-                            false:
-                              COLORS.border,
-                            true:
-                              COLORS.primaryMuted,
-                          }}
-                          thumbColor={
-                            hour.isClosed
-                              ? COLORS.textMuted
-                              : COLORS.primary
-                          }
-                        />
+                  {!hour.isClosed && (
+                    <View style={styles.timeRow}>
+                      <View style={styles.timeBox}>
+                        <Text style={styles.timeLabel}>OPENING</Text>
+                        <TouchableOpacity
+                          style={styles.timeButton}
+                          onPress={() => openTimePicker(index, 'opening')}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.timeButtonText}>
+                            {hour.openingTime}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <Text style={styles.timeSeparator}>→</Text>
+
+                      <View style={styles.timeBox}>
+                        <Text style={styles.timeLabel}>CLOSING</Text>
+                        <TouchableOpacity
+                          style={styles.timeButton}
+                          onPress={() => openTimePicker(index, 'closing')}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.timeButtonText}>
+                            {hour.closingTime}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
-
-                    {!hour.isClosed && (
-                      <View
-                        style={styles.timeRow}
-                      >
-                        <View
-                          style={styles.timeBox}
-                        >
-                          <Text
-                            style={
-                              styles.timeLabel
-                            }
-                          >
-                            OPENING
-                          </Text>
-
-                          <TouchableOpacity
-                            style={
-                              styles.timeButton
-                            }
-                            onPress={() =>
-                              openTimePicker(
-                                index,
-                                'opening',
-                              )
-                            }
-                            activeOpacity={0.85}
-                          >
-                            <Text
-                              style={
-                                styles.timeButtonText
-                              }
-                            >
-                              {hour.openingTime}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <Text
-                          style={
-                            styles.timeSeparator
-                          }
-                        >
-                          →
-                        </Text>
-
-                        <View
-                          style={styles.timeBox}
-                        >
-                          <Text
-                            style={
-                              styles.timeLabel
-                            }
-                          >
-                            CLOSING
-                          </Text>
-
-                          <TouchableOpacity
-                            style={
-                              styles.timeButton
-                            }
-                            onPress={() =>
-                              openTimePicker(
-                                index,
-                                'closing',
-                              )
-                            }
-                            activeOpacity={0.85}
-                          >
-                            <Text
-                              style={
-                                styles.timeButtonText
-                              }
-                            >
-                              {hour.closingTime}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                ),
-              )}
+                  )}
+                </View>
+              ))}
 
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={styles.primaryButtonFull}
                 onPress={handleSaveTurf}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
-                    {selectedTurf
-                      ? 'UPDATE TURF'
-                      : 'SAVE TURF'}
+                  <Text style={styles.primaryButtonFullText}>
+                    {selectedTurf ? 'UPDATE TURF' : 'SAVE TURF'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -3050,40 +2166,28 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 onPress={closeTurfModal}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* TURF TIME PICKER */}
+      {showTimePicker && selectedHourIndex !== null && (
+        <DateTimePicker
+          value={timeStringToDate(
+            operatingHours[selectedHourIndex][
+              timePickerMode === 'opening' ? 'openingTime' : 'closingTime'
+            ],
+          )}
+          mode="time"
+          is24Hour
+          display="default"
+          onChange={handleTimeChange}
+        />
+      )}
 
-      {showTimePicker &&
-        selectedHourIndex !== null && (
-          <DateTimePicker
-            value={timeStringToDate(
-              operatingHours[
-                selectedHourIndex
-              ][
-                timePickerMode === 'opening'
-                  ? 'openingTime'
-                  : 'closingTime'
-              ],
-            )}
-            mode="time"
-            is24Hour
-            display="default"
-            onChange={handleTimeChange}
-          />
-        )}
-
-      {/* =====================================================
-          COURT MODAL
-      ===================================================== */}
-
+      {/* COURT MODAL */}
       <Modal
         visible={showCourtModal}
         transparent
@@ -3095,332 +2199,159 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={
-              styles.modalScroll
-            }
+            contentContainerStyle={styles.modalScroll}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
-
-              <Text style={styles.modalBadge}>
-                ⚽ COURT
-              </Text>
-
+              <Text style={styles.modalBadge}>⚽ COURT</Text>
               <Text style={styles.modalTitle}>
-                {selectedCourt
-                  ? 'Edit Court'
-                  : 'Add Court'}
+                {selectedCourt ? 'Edit Court' : 'Add Court'}
               </Text>
 
-              <Text style={styles.fieldLabel}>
-                COURT NAME
-              </Text>
-
+              <Text style={styles.fieldLabel}>COURT NAME</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Court 1"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={courtName}
                 onChangeText={setCourtName}
               />
 
-              <Text style={styles.fieldLabel}>
-                SPORT
-              </Text>
-
+              <Text style={styles.fieldLabel}>SPORT</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Football, Cricket"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={courtSport}
                 onChangeText={setCourtSport}
               />
 
-              <Text style={styles.fieldLabel}>
-                NORMAL PRICE PER HOUR
-              </Text>
-
+              <Text style={styles.fieldLabel}>NORMAL PRICE PER HOUR</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter base price"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={courtPrice}
                 onChangeText={setCourtPrice}
                 keyboardType="numeric"
               />
 
-              {/* FULL DAY DISCOUNT */}
-
-              <View
-                style={styles.fullDayDiscountCard}
-              >
-                <Text
-                  style={styles.fullDayDiscountTitle}
-                >
+              <View style={styles.fullDayDiscountCard}>
+                <Text style={styles.fullDayDiscountTitle}>
                   🎉 Full Day / Long Booking Discount
                 </Text>
-
-                <Text
-                  style={styles.fullDayDiscountDescription}
-                >
-                  Set the percentage discount applied when a customer uses Full Day booking and selects a continuous time range.
+                <Text style={styles.fullDayDiscountDescription}>
+                  Set the percentage discount applied when a customer uses
+                  Full Day booking and selects a continuous time range.
                 </Text>
 
-                <Text style={styles.fieldLabel}>
-                  FULL DAY DISCOUNT (%)
-                </Text>
-
+                <Text style={styles.fieldLabel}>FULL DAY DISCOUNT (%)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g. 4"
-                  placeholderTextColor={
-                    COLORS.placeholder
-                  }
-                  value={
-                    courtFullDayDiscountPercent
-                  }
+                  placeholderTextColor={COLORS.placeholder}
+                  value={courtFullDayDiscountPercent}
                   onChangeText={(value) => {
-                    const cleaned = value
-                      .replace(/[^0-9.]/g, '');
-
-                    setCourtFullDayDiscountPercent(
-                      cleaned,
-                    );
+                    const cleaned = value.replace(/[^0-9.]/g, '');
+                    setCourtFullDayDiscountPercent(cleaned);
                   }}
                   keyboardType="decimal-pad"
                   maxLength={6}
                 />
-
-                <Text
-                  style={styles.fullDayDiscountHint}
-                >
-                  Example: 4 means 4% OFF. Enter 0 for no discount. Maximum 100%.
+                <Text style={styles.fullDayDiscountHint}>
+                  Example: 4 means 4% OFF. Enter 0 for no discount. Maximum
+                  100%.
                 </Text>
               </View>
 
-              {/* NIGHT PRICING */}
-
-              <View
-                style={
-                  styles.nightPricingCard
-                }
-              >
-                <View
-                  style={
-                    styles.nightPricingHeader
-                  }
-                >
-                  <View
-                    style={
-                      styles.nightPricingTitleContainer
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.nightPricingTitle
-                      }
-                    >
+              <View style={styles.nightPricingCard}>
+                <View style={styles.nightPricingHeader}>
+                  <View style={styles.nightPricingTitleContainer}>
+                    <Text style={styles.nightPricingTitle}>
                       🌙 Night Pricing
                     </Text>
-
-                    <Text
-                      style={
-                        styles.nightPricingDescription
-                      }
-                    >
-                      Use a different hourly
-                      price during selected
-                      hours.
+                    <Text style={styles.nightPricingDescription}>
+                      Use a different hourly price during selected hours.
                     </Text>
                   </View>
-
                   <Switch
-                    value={
-                      courtHasNightPricing
-                    }
-                    onValueChange={
-                      setCourtHasNightPricing
-                    }
+                    value={courtHasNightPricing}
+                    onValueChange={setCourtHasNightPricing}
                     trackColor={{
-                      false:
-                        COLORS.border,
-                      true:
-                        COLORS.warningBorder,
+                      false: COLORS.border,
+                      true: COLORS.accentLight,
                     }}
                     thumbColor={
-                      courtHasNightPricing
-                        ? COLORS.warning
-                        : COLORS.textMuted
+                      courtHasNightPricing ? COLORS.accent : COLORS.textMuted
                     }
                   />
                 </View>
 
                 {courtHasNightPricing && (
                   <>
-                    <Text
-                      style={styles.fieldLabel}
-                    >
+                    <Text style={styles.fieldLabel}>
                       NIGHT PRICE PER HOUR
                     </Text>
-
                     <TextInput
                       style={styles.input}
                       placeholder="e.g. 700"
-                      placeholderTextColor={
-                        COLORS.placeholder
-                      }
+                      placeholderTextColor={COLORS.placeholder}
                       value={courtNightPrice}
-                      onChangeText={
-                        setCourtNightPrice
-                      }
+                      onChangeText={setCourtNightPrice}
                       keyboardType="numeric"
                     />
 
-                    <Text
-                      style={styles.fieldLabel}
-                    >
+                    <Text style={styles.fieldLabel}>
                       NIGHT PRICING STARTS
                     </Text>
-
                     <TouchableOpacity
-                      style={
-                        styles.timeButtonLarge
-                      }
-                      onPress={() =>
-                        openCourtTimePicker(
-                          'nightStart',
-                        )
-                      }
+                      style={styles.timeButtonLarge}
+                      onPress={() => openCourtTimePicker('nightStart')}
                       activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          styles.timeButtonLargeLabel
-                        }
-                      >
+                      <Text style={styles.timeButtonLargeLabel}>
                         START TIME
                       </Text>
-
-                      <Text
-                        style={
-                          styles.timeButtonLargeValue
-                        }
-                      >
+                      <Text style={styles.timeButtonLargeValue}>
                         {courtNightStartTime}
                       </Text>
                     </TouchableOpacity>
 
-                    <Text
-                      style={[
-                        styles.fieldLabel,
-                        { marginTop: 12 },
-                      ]}
-                    >
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
                       NIGHT PRICING ENDS
                     </Text>
-
                     <TouchableOpacity
-                      style={
-                        styles.timeButtonLarge
-                      }
-                      onPress={() =>
-                        openCourtTimePicker(
-                          'nightEnd',
-                        )
-                      }
+                      style={styles.timeButtonLarge}
+                      onPress={() => openCourtTimePicker('nightEnd')}
                       activeOpacity={0.85}
                     >
-                      <Text
-                        style={
-                          styles.timeButtonLargeLabel
-                        }
-                      >
+                      <Text style={styles.timeButtonLargeLabel}>
                         END TIME
                       </Text>
-
-                      <Text
-                        style={
-                          styles.timeButtonLargeValue
-                        }
-                      >
+                      <Text style={styles.timeButtonLargeValue}>
                         {courtNightEndTime}
                       </Text>
                     </TouchableOpacity>
 
-                    {/* PREVIEW */}
-
-                    <View
-                      style={
-                        styles.pricingPreview
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.pricingPreviewTitle
-                        }
-                      >
+                    <View style={styles.pricingPreview}>
+                      <Text style={styles.pricingPreviewTitle}>
                         PRICING PREVIEW
                       </Text>
-
-                      <View
-                        style={styles.previewRow}
-                      >
-                        <Text
-                          style={
-                            styles.previewLabel
-                          }
-                        >
-                          Normal
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.previewValue
-                          }
-                        >
-                          ₹
-                          {courtPrice || '0'}
-                          /hr
+                      <View style={styles.previewRow}>
+                        <Text style={styles.previewLabel}>Normal</Text>
+                        <Text style={styles.previewValue}>
+                          ₹{courtPrice || '0'}/hr
                         </Text>
                       </View>
-
-                      <View
-                        style={styles.previewRow}
-                      >
-                        <Text
-                          style={
-                            styles.previewLabel
-                          }
-                        >
-                          Night
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.nightPreviewValue
-                          }
-                        >
-                          ₹
-                          {courtNightPrice ||
-                            '0'}
-                          /hr
+                      <View style={styles.previewRow}>
+                        <Text style={styles.previewLabel}>Night</Text>
+                        <Text style={styles.nightPreviewValue}>
+                          ₹{courtNightPrice || '0'}/hr
                         </Text>
                       </View>
-
-                      <Text
-                        style={
-                          styles.previewTime
-                        }
-                      >
-                        {courtNightStartTime} →
-                        {courtNightEndTime}
+                      <Text style={styles.previewTime}>
+                        {courtNightStartTime} → {courtNightEndTime}
                       </Text>
                     </View>
                   </>
@@ -3428,51 +2359,31 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               </View>
 
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={styles.primaryButtonFull}
                 onPress={handleSaveCourt}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
-                    {selectedCourt
-                      ? 'UPDATE COURT'
-                      : 'SAVE COURT'}
+                  <Text style={styles.primaryButtonFullText}>
+                    {selectedCourt ? 'UPDATE COURT' : 'SAVE COURT'}
                   </Text>
                 )}
               </TouchableOpacity>
 
               {selectedCourt && (
                 <TouchableOpacity
-                  style={
-                    styles.deleteFullButton
-                  }
+                  style={styles.deleteFullButton}
                   onPress={() => {
-                    if (!selectedTurfId) {
-                      return;
-                    }
-
-                    handleDeleteCourt(
-                      selectedTurfId,
-                      selectedCourt,
-                    );
+                    if (!selectedTurfId) return;
+                    handleDeleteCourt(selectedTurfId, selectedCourt);
                   }}
                   disabled={loading}
                   activeOpacity={0.85}
                 >
-                  <Text
-                    style={
-                      styles.deleteFullButtonText
-                    }
-                  >
+                  <Text style={styles.deleteFullButtonText}>
                     DELETE COURT
                   </Text>
                 </TouchableOpacity>
@@ -3486,159 +2397,100 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* COURT TIME PICKER */}
-
       {showCourtTimePicker && (
         <DateTimePicker
           value={timeStringToDate(
-            courtTimePickerMode ===
-              'nightStart'
+            courtTimePickerMode === 'nightStart'
               ? courtNightStartTime
               : courtNightEndTime,
           )}
           mode="time"
           is24Hour
           display="default"
-          onChange={
-            handleCourtTimeChange
-          }
+          onChange={handleCourtTimeChange}
         />
       )}
 
-      {/* =====================================================
-          BANK MODAL
-      ===================================================== */}
-
+      {/* BANK MODAL */}
       <Modal
         visible={showBankModal}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setShowBankModal(false)
-        }
+        onRequestClose={() => setShowBankModal(false)}
       >
         <View style={styles.modalOverlay}>
           <ScrollView
-            contentContainerStyle={
-              styles.modalScroll
-            }
+            contentContainerStyle={styles.modalScroll}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
               <View style={styles.modalHandle} />
+              <Text style={styles.modalBadge}>🏦 BANK</Text>
+              <Text style={styles.modalTitle}>Bank Account Details</Text>
 
-              <Text style={styles.modalBadge}>
-                🏦 BANK
-              </Text>
-
-              <Text style={styles.modalTitle}>
-                Bank Account Details
-              </Text>
-
-              <Text style={styles.fieldLabel}>
-                ACCOUNT HOLDER NAME
-              </Text>
-
+              <Text style={styles.fieldLabel}>ACCOUNT HOLDER NAME</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Account Holder Name"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
-                value={
-                  bankDetails.accountHolderName
-                }
+                placeholderTextColor={COLORS.placeholder}
+                value={bankDetails.accountHolderName}
                 onChangeText={(value) =>
-                  setBankDetails(
-                    (previous) => ({
-                      ...previous,
-                      accountHolderName:
-                        value,
-                    }),
-                  )
+                  setBankDetails((previous) => ({
+                    ...previous,
+                    accountHolderName: value,
+                  }))
                 }
                 autoCapitalize="words"
               />
 
-              <Text style={styles.fieldLabel}>
-                ACCOUNT NUMBER
-              </Text>
-
+              <Text style={styles.fieldLabel}>ACCOUNT NUMBER</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Account Number"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
-                value={
-                  bankDetails.accountNumber
-                }
+                placeholderTextColor={COLORS.placeholder}
+                value={bankDetails.accountNumber}
                 onChangeText={(value) =>
-                  setBankDetails(
-                    (previous) => ({
-                      ...previous,
-                      accountNumber:
-                        value.replace(
-                          /\D/g,
-                          '',
-                        ),
-                    }),
-                  )
+                  setBankDetails((previous) => ({
+                    ...previous,
+                    accountNumber: value.replace(/\D/g, ''),
+                  }))
                 }
                 keyboardType="numeric"
               />
 
-              <Text style={styles.fieldLabel}>
-                IFSC CODE
-              </Text>
-
+              <Text style={styles.fieldLabel}>IFSC CODE</Text>
               <TextInput
                 style={styles.input}
                 placeholder="IFSC Code"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={bankDetails.ifscCode}
                 onChangeText={(value) =>
-                  setBankDetails(
-                    (previous) => ({
-                      ...previous,
-                      ifscCode:
-                        value.toUpperCase(),
-                    }),
-                  )
+                  setBankDetails((previous) => ({
+                    ...previous,
+                    ifscCode: value.toUpperCase(),
+                  }))
                 }
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
 
               <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={
-                  handleSaveBankDetails
-                }
+                style={styles.primaryButtonFull}
+                onPress={handleSaveBankDetails}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
+                  <Text style={styles.primaryButtonFullText}>
                     SAVE BANK DETAILS
                   </Text>
                 )}
@@ -3646,20 +2498,12 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
               {bankDetails.accountHolderName && (
                 <TouchableOpacity
-                  style={
-                    styles.deleteFullButton
-                  }
-                  onPress={
-                    handleDeleteBankDetails
-                  }
+                  style={styles.deleteFullButton}
+                  onPress={handleDeleteBankDetails}
                   disabled={loading}
                   activeOpacity={0.85}
                 >
-                  <Text
-                    style={
-                      styles.deleteFullButtonText
-                    }
-                  >
+                  <Text style={styles.deleteFullButtonText}>
                     DELETE BANK DETAILS
                   </Text>
                 </TouchableOpacity>
@@ -3667,14 +2511,10 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() =>
-                  setShowBankModal(false)
-                }
+                onPress={() => setShowBankModal(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cancelText}>
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -3687,7 +2527,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
 export default OwnerProfileScreen;
 
 /* =========================================================
-   STYLES
+   STYLES — COMPACT
 ========================================================= */
 
 const styles = StyleSheet.create({
@@ -3697,210 +2537,286 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 10,
     paddingBottom: 60,
+  },
+
+  /* FONT LOADING */
+
+  fontLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+
+  fontLoadingMark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+
+  fontLoadingMarkText: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
+    letterSpacing: -0.5,
+  },
+
+  fontLoadingText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 10,
+    letterSpacing: 0.3,
   },
 
   /* HEADER */
 
   pageHeader: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
 
   pageHeaderBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 10,
-    fontWeight: '900',
     letterSpacing: 1.5,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 20,
-    marginBottom: 12,
+    marginBottom: 10,
     overflow: 'hidden',
   },
 
   title: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontSize: 26,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.4,
   },
 
   pageHeaderSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
     color: COLORS.textSecondary,
-    marginTop: 5,
-    lineHeight: 19,
+    marginTop: 4,
+    lineHeight: 18,
   },
 
-  /* PROFILE */
+  /* COMPACT PROFILE CARD */
 
   profileCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 28,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 22,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05,
-    shadowRadius: 16,
+    shadowRadius: 14,
     elevation: 3,
+  },
+
+  profileTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
   },
 
   avatarWrapper: {
     position: 'relative',
-    alignSelf: 'center',
-    marginBottom: 16,
+    marginRight: 14,
   },
 
   avatar: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
   avatarText: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: COLORS.white,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
   },
 
   avatarBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    bottom: -4,
+    right: -4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: COLORS.white,
   },
 
   avatarBadgeText: {
-    fontSize: 13,
+    fontSize: 11,
+  },
+
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
   },
 
   name: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 18,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    textAlign: 'center',
+    letterSpacing: -0.2,
   },
 
   email: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
     color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 5,
-    marginBottom: 22,
-    fontWeight: '500',
+    marginTop: 2,
+  },
+
+  rolePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+
+  rolePillText: {
+    color: COLORS.primaryDarker,
+    fontSize: 9,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1,
   },
 
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
   },
 
   infoLabel: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
     flex: 1,
+    letterSpacing: 0.2,
   },
 
   infoValue: {
     color: COLORS.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
     maxWidth: '65%',
     textAlign: 'right',
   },
 
-  rolePill: {
-    backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
+  /* BUTTON ROW — side-by-side compact */
 
-  rolePillText: {
-    color: COLORS.primaryDark,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1,
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
   },
-
-  /* BUTTONS */
 
   primaryButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 18,
-    minHeight: 52,
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.25,
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  primaryButtonText: {
+    color: COLORS.dark,
+    fontSize: 12,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
+  },
+
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+
+  secondaryButtonText: {
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
+  },
+
+  /* FULL-WIDTH BUTTONS (used in modals) */
+
+  primaryButtonFull: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    minHeight: 50,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.20,
     shadowRadius: 10,
     elevation: 4,
   },
 
-  primaryButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-
-  secondaryButton: {
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primarySoft,
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-
-  secondaryButtonText: {
-    color: COLORS.primaryDark,
-    fontSize: 13,
-    fontWeight: '900',
+  primaryButtonFullText: {
+    color: COLORS.dark,
+    fontSize: 12,
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1.2,
   },
 
@@ -3909,16 +2825,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
 
   cancelText: {
     color: COLORS.textSecondary,
     fontSize: 13,
-    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   /* SECTIONS */
@@ -3927,7 +2843,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
 
   sectionTitleRow: {
@@ -3937,41 +2853,39 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+    fontSize: 16,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   sectionTitleAccent: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.accent,
-    marginLeft: 8,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.primary,
+    marginLeft: 7,
     marginTop: 2,
   },
 
   addButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     marginLeft: 10,
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.25,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
     shadowRadius: 8,
     elevation: 3,
   },
 
   addButtonText: {
-    color: COLORS.white,
+    color: COLORS.dark,
     fontWeight: '900',
-    fontSize: 11,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 10,
     letterSpacing: 1,
   },
 
@@ -3980,26 +2894,27 @@ const styles = StyleSheet.create({
   loadingBox: {
     backgroundColor: COLORS.primarySoft,
     borderRadius: 18,
-    padding: 32,
+    padding: 26,
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   loadingText: {
     color: COLORS.textSecondary,
-    marginTop: 12,
-    fontSize: 13,
-    fontWeight: '600',
+    marginTop: 10,
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
+    letterSpacing: 0.3,
   },
 
   /* EMPTY */
 
   emptyCard: {
     backgroundColor: COLORS.primarySoft,
-    borderRadius: 22,
-    padding: 30,
+    borderRadius: 20,
+    padding: 26,
     alignItems: 'center',
     marginBottom: 22,
     borderWidth: 1,
@@ -4007,150 +2922,151 @@ const styles = StyleSheet.create({
   },
 
   emptyIconWrapper: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 62,
+    height: 62,
+    borderRadius: 20,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   emptyIcon: {
-    fontSize: 30,
+    fontSize: 26,
   },
 
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 16,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
+    letterSpacing: 0.2,
   },
 
   emptyText: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 19,
+    marginTop: 6,
+    lineHeight: 18,
   },
 
   /* TURF */
 
   turfCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
     elevation: 3,
     position: 'relative',
   },
 
   turfImage: {
     width: '100%',
-    height: 180,
+    height: 160,
   },
 
   imagePlaceholder: {
     width: '100%',
-    height: 180,
-    backgroundColor: COLORS.primarySoft,
+    height: 160,
+    backgroundColor: COLORS.primaryFaint,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   placeholderIcon: {
-    fontSize: 36,
-    marginBottom: 8,
+    fontSize: 32,
+    marginBottom: 6,
   },
 
   placeholderText: {
     color: COLORS.textMuted,
     fontWeight: '700',
-    fontSize: 12,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 11,
     letterSpacing: 0.5,
   },
 
   turfStatusPill: {
     position: 'absolute',
-    top: 14,
-    right: 14,
+    top: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
-    backgroundColor: COLORS.white,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.12,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
 
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    marginRight: 6,
+    marginRight: 5,
   },
 
   turfStatusText: {
     fontSize: 9,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1,
   },
 
   turfContent: {
-    padding: 18,
+    padding: 14,
   },
 
   turfName: {
-    fontSize: 19,
-    fontWeight: '900',
+    fontSize: 16,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
 
   turfCity: {
-    fontSize: 13,
-    color: COLORS.primaryDark,
+    fontSize: 12,
+    color: COLORS.primaryDarker,
     fontWeight: '700',
-    marginTop: 6,
+    fontFamily: 'Poppins_700Bold',
+    marginTop: 5,
   },
 
   turfAddress: {
-    fontSize: 12,
+    fontSize: 11,
+    fontFamily: 'Poppins_400Regular',
     color: COLORS.textMuted,
-    marginTop: 4,
-    lineHeight: 18,
+    marginTop: 3,
+    lineHeight: 16,
   },
 
   turfActionGrid: {
     flexDirection: 'row',
-    marginTop: 18,
+    marginTop: 14,
   },
 
   manageButton: {
     flex: 1.4,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
+    borderColor: COLORS.borderLight,
     backgroundColor: COLORS.primarySoft,
     borderRadius: 12,
-    minHeight: 46,
+    minHeight: 42,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -4158,8 +3074,9 @@ const styles = StyleSheet.create({
   },
 
   manageButtonText: {
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     fontSize: 10,
     letterSpacing: 0.7,
     textAlign: 'center',
@@ -4168,8 +3085,8 @@ const styles = StyleSheet.create({
   editButton: {
     flex: 0.7,
     borderRadius: 12,
-    backgroundColor: COLORS.textPrimary,
-    minHeight: 46,
+    backgroundColor: COLORS.dark,
+    minHeight: 42,
     paddingHorizontal: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -4179,6 +3096,7 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: COLORS.white,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     fontSize: 10,
     letterSpacing: 0.8,
   },
@@ -4189,7 +3107,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerSoft,
     borderWidth: 1.5,
     borderColor: COLORS.dangerBorder,
-    minHeight: 46,
+    minHeight: 42,
     paddingHorizontal: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -4198,6 +3116,7 @@ const styles = StyleSheet.create({
   deleteTurfButtonText: {
     color: COLORS.dangerText,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     fontSize: 10,
     letterSpacing: 0.7,
   },
@@ -4205,8 +3124,8 @@ const styles = StyleSheet.create({
   /* COURTS */
 
   courtsContainer: {
-    marginTop: 18,
-    paddingTop: 18,
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
   },
@@ -4215,35 +3134,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   courtTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 15,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
+    letterSpacing: 0.2,
   },
 
   addCourtButton: {
     backgroundColor: COLORS.primarySoft,
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 11,
   },
 
   addCourtText: {
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
     fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 0.5,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 11,
+    letterSpacing: 0.4,
   },
 
   noCourtsBox: {
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor: COLORS.primaryFaint,
     borderRadius: 14,
-    paddingVertical: 22,
+    paddingVertical: 20,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
@@ -4251,21 +3172,22 @@ const styles = StyleSheet.create({
   },
 
   noCourtsIcon: {
-    fontSize: 26,
-    marginBottom: 8,
+    fontSize: 24,
+    marginBottom: 6,
   },
 
   noCourtText: {
     color: COLORS.textMuted,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Poppins_600SemiBold',
   },
 
   courtCard: {
     backgroundColor: COLORS.primaryFaint,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -4275,7 +3197,7 @@ const styles = StyleSheet.create({
 
   courtInfo: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 10,
   },
 
   courtNameRow: {
@@ -4285,57 +3207,58 @@ const styles = StyleSheet.create({
   },
 
   courtName: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    marginRight: 8,
+    marginRight: 6,
+    letterSpacing: -0.1,
   },
 
   sportPill: {
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
 
   sportPillText: {
-    color: COLORS.primaryDark,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    color: COLORS.primaryDarker,
+    fontSize: 9,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
   },
 
   courtPrice: {
-    color: COLORS.primaryDark,
-    fontSize: 14,
-    fontWeight: '900',
-    marginTop: 8,
+    color: COLORS.primaryDarker,
+    fontSize: 13,
+    fontFamily: 'Poppins_900Black',
+    marginTop: 6,
   },
 
   nightPriceBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.accentSoft,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginTop: 10,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginTop: 8,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: COLORS.accentLight,
   },
 
   nightPriceBadgeText: {
     color: COLORS.accentText,
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 9,
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   nightTimeText: {
     color: COLORS.accentText,
-    fontSize: 11,
-    marginTop: 6,
-    fontWeight: '700',
+    fontSize: 10,
+    marginTop: 4,
+    fontFamily: 'Poppins_700Bold',
   },
 
   courtActions: {
@@ -4344,25 +3267,26 @@ const styles = StyleSheet.create({
 
   smallEditButton: {
     backgroundColor: COLORS.primaryLight,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: COLORS.borderSoft,
-    marginBottom: 8,
+    marginBottom: 6,
   },
 
   editCourtText: {
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
     fontWeight: '900',
-    fontSize: 11,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 10,
   },
 
   smallDeleteButton: {
     backgroundColor: COLORS.dangerSoft,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: COLORS.dangerBorder,
   },
@@ -4370,96 +3294,279 @@ const styles = StyleSheet.create({
   deleteCourtText: {
     color: COLORS.dangerText,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    fontSize: 10,
+  },
+
+  /* BOOKINGS */
+
+  bookingCountPill: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 8,
+    borderRadius: 13,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  bookingCountText: {
+    color: COLORS.primaryDarker,
+    fontSize: 10,
+    fontFamily: 'Poppins_900Black',
+  },
+
+  bookingEmptyCard: {
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: 20,
+    padding: 22,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    alignItems: 'center',
+  },
+
+  bookingEmptyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
+  bookingEmptyIconText: {
+    fontSize: 24,
+  },
+
+  bookingEmptyTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontFamily: 'Poppins_900Black',
+  },
+
+  bookingEmptyText: {
+    color: COLORS.textMuted,
     fontSize: 11,
+    fontFamily: 'Poppins_400Regular',
+    lineHeight: 17,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+
+  bookingsList: {
+    marginBottom: 22,
+  },
+
+  bookingCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+
+  bookingTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  customerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  customerAvatarText: {
+    color: COLORS.dark,
+    fontSize: 16,
+    fontFamily: 'Poppins_900Black',
+  },
+
+  customerMainInfo: {
+    flex: 1,
+    marginLeft: 10,
+    paddingRight: 8,
+  },
+
+  customerName: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontFamily: 'Poppins_900Black',
+  },
+
+  customerPhone: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontFamily: 'Poppins_700Bold',
+    marginTop: 3,
+  },
+
+  bookingStatusPill: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    maxWidth: 86,
+  },
+
+  bookingStatusText: {
+    fontSize: 8,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 0.6,
+    textAlign: 'center',
+  },
+
+  bookingDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginVertical: 11,
+  },
+
+  bookingDetailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+  },
+
+  bookingDetailItem: {
+    width: '50%',
+    paddingHorizontal: 4,
+    marginBottom: 9,
+  },
+
+  bookingDetailLabel: {
+    color: COLORS.textMuted,
+    fontSize: 8,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 0.9,
+    marginBottom: 3,
+  },
+
+  bookingDetailValue: {
+    color: COLORS.textPrimary,
+    fontSize: 11,
+    fontFamily: 'Poppins_800ExtraBold',
+  },
+
+  bookingBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+
+  bookingCustomerHint: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    fontFamily: 'Poppins_600SemiBold',
+  },
+
+  bookingAmount: {
+    color: COLORS.primaryDarker,
+    fontSize: 14,
+    fontFamily: 'Poppins_900Black',
   },
 
   /* BANK */
 
   bankCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 22,
-    padding: 20,
-    marginBottom: 24,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 22,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowRadius: 10,
     elevation: 2,
   },
 
   bankHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   bankIconCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   bankIconText: {
-    fontSize: 24,
+    fontSize: 22,
   },
 
   bankHeaderText: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
   },
 
   bankHeaderTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 15,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
   },
 
   bankHeaderSubtitle: {
     color: COLORS.textMuted,
     fontSize: 11,
-    marginTop: 4,
-    lineHeight: 16,
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 3,
+    lineHeight: 15,
   },
 
   noBankBox: {
     backgroundColor: COLORS.cardSoft,
     borderRadius: 14,
-    paddingVertical: 22,
+    paddingVertical: 20,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
 
   noBankIcon: {
-    fontSize: 30,
-    marginBottom: 8,
+    fontSize: 26,
+    marginBottom: 6,
   },
 
   deleteBankButton: {
-    marginTop: 12,
+    marginTop: 10,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: COLORS.dangerBorder,
     backgroundColor: COLORS.dangerSoft,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
   },
 
   deleteBankButtonText: {
     color: COLORS.dangerText,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.8,
   },
 
@@ -4467,10 +3574,10 @@ const styles = StyleSheet.create({
 
   dangerSection: {
     backgroundColor: COLORS.dangerSoft,
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
     marginTop: 4,
-    marginBottom: 22,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.dangerBorder,
   },
@@ -4481,74 +3588,78 @@ const styles = StyleSheet.create({
   },
 
   dangerIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.dangerBorder,
   },
 
   dangerIcon: {
-    fontSize: 22,
+    fontSize: 20,
   },
 
   dangerHeaderText: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
   },
 
   dangerSectionTitle: {
     color: COLORS.dangerText,
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 15,
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.3,
   },
 
   dangerSectionDescription: {
     color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
+    fontSize: 11,
+    fontFamily: 'Poppins_500Medium',
+    lineHeight: 16,
+    marginTop: 4,
   },
 
   deleteAccountButton: {
-    marginTop: 18,
+    marginTop: 16,
     borderWidth: 1.5,
     borderColor: COLORS.dangerText,
     backgroundColor: COLORS.white,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    minHeight: 48,
   },
 
   deleteAccountButtonText: {
     color: COLORS.dangerText,
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 11,
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.8,
   },
 
   /* LOGOUT */
 
   logoutButton: {
-    borderWidth: 1.5,
-    borderColor: COLORS.dangerBorder,
-    backgroundColor: COLORS.dangerSoft,
-    borderRadius: 14,
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderSoft,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    paddingVertical: 14,
     marginTop: 2,
   },
 
   logoutText: {
-    color: COLORS.dangerText,
-    fontSize: 13,
-    fontWeight: '900',
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1.2,
   },
 
@@ -4568,20 +3679,17 @@ const styles = StyleSheet.create({
 
   modalCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 28,
-    padding: 24,
+    borderRadius: 26,
+    padding: 22,
     marginTop: 40,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 26,
+    elevation: 12,
   },
 
   modalHandle: {
@@ -4590,19 +3698,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: COLORS.borderDark,
     alignSelf: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   modalBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1.2,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 18,
     overflow: 'hidden',
@@ -4610,24 +3718,25 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 20,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    marginBottom: 20,
-    letterSpacing: 0.2,
+    marginBottom: 16,
+    letterSpacing: -0.2,
   },
 
   fieldLabel: {
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 11,
-    fontWeight: '900',
-    marginBottom: 8,
-    marginTop: 12,
+    fontFamily: 'Poppins_800ExtraBold',
+    marginBottom: 7,
+    marginTop: 10,
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 
   input: {
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor: COLORS.cardSoft,
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
     borderRadius: 14,
@@ -4635,19 +3744,19 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     color: COLORS.textPrimary,
     fontSize: 14,
-    fontWeight: '500',
-    minHeight: 52,
+    fontFamily: 'Poppins_500Medium',
+    minHeight: 50,
   },
 
   textArea: {
-    minHeight: 100,
+    minHeight: 90,
     paddingTop: 15,
   },
 
   helperText: {
     color: COLORS.textMuted,
     fontSize: 11,
-    fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
     marginTop: -6,
     marginBottom: 8,
     letterSpacing: 0.3,
@@ -4658,31 +3767,32 @@ const styles = StyleSheet.create({
   hoursSectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 26,
+    marginTop: 22,
     marginBottom: 6,
   },
 
   hoursSectionTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 15,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
   },
 
   hoursDescription: {
     color: COLORS.textMuted,
     fontSize: 11,
-    lineHeight: 17,
+    fontFamily: 'Poppins_400Regular',
+    lineHeight: 16,
     marginTop: 5,
-    marginBottom: 14,
+    marginBottom: 12,
   },
 
   operatingHourCard: {
     backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
   },
 
   dayHeader: {
@@ -4692,8 +3802,8 @@ const styles = StyleSheet.create({
   },
 
   dayName: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
   },
 
@@ -4705,19 +3815,19 @@ const styles = StyleSheet.create({
   statusText: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     marginRight: 8,
     letterSpacing: 0.8,
   },
 
   statusTextOpen: {
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
   },
 
   timeRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    marginTop: 14,
+    marginTop: 12,
   },
 
   timeBox: {
@@ -4727,8 +3837,8 @@ const styles = StyleSheet.create({
   timeLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '800',
-    marginBottom: 6,
+    fontFamily: 'Poppins_800ExtraBold',
+    marginBottom: 5,
     letterSpacing: 0.6,
   },
 
@@ -4736,67 +3846,70 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 11,
+    paddingVertical: 11,
     alignItems: 'center',
   },
 
   timeButtonText: {
-    color: COLORS.primaryDark,
-    fontSize: 14,
-    fontWeight: '900',
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   timeSeparator: {
-    color: COLORS.primary,
-    fontSize: 18,
-    fontWeight: '900',
+    color: COLORS.primaryDeep,
+    fontSize: 16,
+    fontFamily: 'Poppins_900Black',
     marginHorizontal: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   /* FULL DAY DISCOUNT */
 
   fullDayDiscountCard: {
-    backgroundColor: COLORS.primarySoft,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.cardSoft,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   fullDayDiscountTitle: {
     color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 6,
+    fontSize: 14,
+    fontFamily: 'Poppins_900Black',
+    marginBottom: 5,
+    letterSpacing: -0.1,
   },
 
   fullDayDiscountDescription: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 14,
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    lineHeight: 17,
+    marginBottom: 12,
   },
 
   fullDayDiscountHint: {
-    color: COLORS.primaryDark,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 7,
-    fontWeight: '700',
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+    fontFamily: 'Poppins_600SemiBold',
   },
 
   /* NIGHT PRICING */
 
   nightPricingCard: {
-    backgroundColor: COLORS.warningSoft,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 20,
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 16,
     borderWidth: 1,
-    borderColor: COLORS.warningBorder,
+    borderColor: COLORS.accentLight,
   },
 
   nightPricingHeader: {
@@ -4807,28 +3920,29 @@ const styles = StyleSheet.create({
 
   nightPricingTitleContainer: {
     flex: 1,
-    paddingRight: 14,
+    paddingRight: 12,
   },
 
   nightPricingTitle: {
     color: COLORS.accentText,
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 14,
+    fontFamily: 'Poppins_900Black',
   },
 
   nightPricingDescription: {
     color: COLORS.textSecondary,
     fontSize: 10,
-    lineHeight: 16,
+    fontFamily: 'Poppins_500Medium',
+    lineHeight: 15,
     marginTop: 4,
   },
 
   timeButtonLarge: {
     backgroundColor: COLORS.white,
     borderWidth: 1.5,
-    borderColor: COLORS.warningBorder,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: COLORS.accentLight,
+    borderRadius: 11,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -4837,74 +3951,74 @@ const styles = StyleSheet.create({
   timeButtonLargeLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.8,
   },
 
   timeButtonLargeValue: {
     color: COLORS.accentText,
-    fontSize: 14,
-    fontWeight: '900',
+    fontSize: 13,
+    fontFamily: 'Poppins_900Black',
   },
 
   pricingPreview: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 16,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: COLORS.warningBorder,
+    borderColor: COLORS.accentLight,
   },
 
   pricingPreviewTitle: {
     color: COLORS.accentText,
     fontSize: 11,
-    fontWeight: '900',
-    marginBottom: 10,
+    fontFamily: 'Poppins_900Black',
+    marginBottom: 8,
     letterSpacing: 1,
   },
 
   previewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
 
   previewLabel: {
     color: COLORS.textSecondary,
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
   },
 
   previewValue: {
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
   },
 
   nightPreviewValue: {
     color: COLORS.accentText,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
   },
 
   previewTime: {
     color: COLORS.textMuted,
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 7,
   },
 
   /* DELETE */
 
   deleteFullButton: {
-    marginTop: 12,
+    marginTop: 10,
     borderRadius: 14,
     backgroundColor: COLORS.dangerSoft,
     borderWidth: 1.5,
     borderColor: COLORS.dangerBorder,
-    paddingVertical: 15,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4912,7 +4026,7 @@ const styles = StyleSheet.create({
   deleteFullButtonText: {
     color: COLORS.dangerText,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.9,
   },
 });

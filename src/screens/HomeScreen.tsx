@@ -51,6 +51,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import * as Location from 'expo-location';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+  Poppins_900Black,
+  useFonts,
+} from '@expo-google-fonts/poppins';
 
 import { SavedTurfsScreen } from './SavedTurfsScreen';
 
@@ -211,125 +221,65 @@ const NEARBY_TURF_LIMIT = 3;
 
 
 const COLORS = {
+  // Premium TurfBook palette — deep navy + electric lime + violet
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
 
-  // Primary Green (#7DC25B and derived shades)
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
 
-  primary: '#7DC25B',
-
-  primaryDark: '#6AAF4A',
-
-  primaryDeep: '#5A9A3E',
-
-  primaryDarker: '#4A8032',
-
-  primaryLight: '#E4F3DA',
-
-  primarySoft: '#F2F9EC',
-
-  primaryFaint: '#F9FCF6',
-
-  primaryMuted: '#C5E4B0',
-
-
-
-  // Accent (warm contrast)
-
-  accent: '#F97316',
-
-  accentLight: '#FFEDD5',
-
-  accentSoft: '#FEF3C7',
-
-
-
-  // Neutrals
-
-  bg: '#FFFFFF',
-
-  bgSoft: '#FCFEFB',
-
-  bgMuted: '#F7FBF4',
-
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
   card: '#FFFFFF',
+  cardSoft: '#FCFCFE',
 
-  cardSoft: '#FBFDF9',
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
 
-
-
-  // Borders
-
-  border: '#E8F3E0',
-
-  borderLight: '#D9EDCB',
-
-  borderSoft: '#C5E4B0',
-
-  borderDark: '#A8D689',
-
-
-
-  // Text
-
-  textPrimary: '#0F1A0B',
-
-  textSecondary: '#4A5A42',
-
-  textMuted: '#8B9A82',
-
-  textLight: '#C2CDBA',
-
-  placeholder: '#8B9A82',
-
-
-
-  // Status
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
+  placeholder: '#8A92A3',
 
   danger: '#EF4444',
-
   dangerSoft: '#FEF2F2',
-
   dangerBorder: '#FECACA',
-
   dangerText: '#B91C1C',
 
-
-
   warning: '#F59E0B',
-
   warningSoft: '#FFFBEB',
-
   warningText: '#92400E',
 
-
-
   info: '#3B82F6',
-
   infoSoft: '#EFF6FF',
 
-
-
   white: '#FFFFFF',
-
   black: '#000000',
 
+  overlay: 'rgba(11,18,32,0.06)',
+  overlaySoft: 'rgba(255,255,255,0.94)',
+  overlayFaint: 'rgba(255,255,255,0.18)',
 
+  shadowColor: '#0B1220',
+  shadowLight: '#DDE2EC',
 
-  // Overlays
-
-  overlay: 'rgba(125, 194, 91, 0.08)',
-
-  overlaySoft: 'rgba(255,255,255,0.9)',
-
-  overlayFaint: 'rgba(255,255,255,0.2)',
-
-
-
-  // Shadows
-
-  shadowColor: '#7DC25B',
-
-  shadowLight: '#E4F3DA',
-
+  dark: '#0B1220',
+  darkSoft: '#111827',
+  darkCard: '#151D2E',
+  darkMuted: '#1D2638',
+  lime: '#C7F36B',
+  violet: '#8B5CF6',
 };
 
 
@@ -457,19 +407,12 @@ interface HomeScreenProps {
 
 
 const SPORT_CATEGORIES = [
-
-  { id: 'all', name: 'All', icon: '🏆' },
-
-  { id: 'cricket', name: 'Cricket', icon: '🏏' },
-
-  { id: 'football', name: 'Football', icon: '⚽' },
-
-  { id: 'badminton', name: 'Badminton', icon: '🏸' },
-
-  { id: 'basketball', name: 'Basketball', icon: '🏀' },
-
-  { id: 'volleyball', name: 'Volleyball', icon: '🏐' },
-
+  { id: 'all', name: 'All', icon: 'trophy-outline' as const },
+  { id: 'cricket', name: 'Cricket', icon: 'cricket' as const },
+  { id: 'football', name: 'Football', icon: 'soccer' as const },
+  { id: 'badminton', name: 'Badminton', icon: 'badminton' as const },
+  { id: 'basketball', name: 'Basketball', icon: 'basketball' as const },
+  { id: 'volleyball', name: 'Volleyball', icon: 'volleyball' as const },
 ];
 
 
@@ -781,6 +724,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onNavigateToOwnerBookings,
 
 }) => {
+
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    Poppins_900Black,
+  });
 
   const isOwner = user?.role === 'owner';
 
@@ -1717,7 +1669,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             <View style={styles.imagePlaceholder}>
 
-              <Text style={styles.imagePlaceholderIcon}>⚽</Text>
+              <MaterialCommunityIcons name="soccer" size={34} color={COLORS.primaryDeep} />
 
               <Text style={styles.imagePlaceholderText}>No Image</Text>
 
@@ -1747,15 +1699,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             >
 
-              <Text
-
-                style={[styles.heartIcon, isLiked && styles.likedHeartIcon]}
-
-              >
-
-                {isLiked ? '♥' : '♡'}
-
-              </Text>
+              <Ionicons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={21}
+                color={isLiked ? COLORS.danger : COLORS.textMuted}
+              />
 
             </TouchableOpacity>
 
@@ -1781,11 +1729,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <View style={styles.distanceBadge}>
 
-            <Text style={styles.distanceBadgeText}>
-
-              📍 {formatDistance(turfDistance)}
-
-            </Text>
+            <View style={styles.distanceBadgeContent}>
+              <Ionicons name="location-outline" size={12} color={COLORS.primaryDeep} />
+              <Text style={styles.distanceBadgeText}>{formatDistance(turfDistance)}</Text>
+            </View>
 
           </View>
 
@@ -1805,11 +1752,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
 
 
-          <Text style={styles.turfCityHorizontal} numberOfLines={1}>
-
-            📍 {item.city || 'City unavailable'}
-
-          </Text>
+          <View style={styles.cityRow}>
+            <Ionicons name="location-outline" size={14} color={COLORS.textMuted} />
+            <Text style={styles.turfCityHorizontal} numberOfLines={1}>
+              {item.city || 'City unavailable'}
+            </Text>
+          </View>
 
 
 
@@ -1837,11 +1785,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             <View style={styles.courtBadge}>
 
-              <Text style={styles.courtText} numberOfLines={1}>
-
-                🏟️ {courtCount}
-
-              </Text>
+              <View style={styles.courtTextRow}>
+                <Ionicons name="grid-outline" size={11} color={COLORS.primaryDeep} />
+                <Text style={styles.courtText} numberOfLines={1}>{courtCount}</Text>
+              </View>
 
             </View>
 
@@ -1925,7 +1872,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             <View style={styles.moreTurfImagePlaceholder}>
 
-              <Text style={styles.moreTurfPlaceholderIcon}>⚽</Text>
+              <MaterialCommunityIcons name="soccer" size={30} color={COLORS.primaryDeep} />
 
             </View>
 
@@ -1945,15 +1892,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             >
 
-              <Text
-
-                style={[styles.moreTurfHeart, isLiked && styles.likedHeartIcon]}
-
-              >
-
-                {isLiked ? '♥' : '♡'}
-
-              </Text>
+              <Ionicons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={18}
+                color={isLiked ? COLORS.danger : COLORS.textMuted}
+              />
 
             </TouchableOpacity>
 
@@ -1973,21 +1916,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
 
 
-          <Text style={styles.moreTurfCity} numberOfLines={1}>
-
-            📍 {item.city || 'City unavailable'}
-
-          </Text>
+          <View style={styles.cityRow}>
+            <Ionicons name="location-outline" size={13} color={COLORS.textMuted} />
+            <Text style={styles.moreTurfCity} numberOfLines={1}>
+              {item.city || 'City unavailable'}
+            </Text>
+          </View>
 
 
 
           <View style={styles.moreTurfDistanceRow}>
 
-            <Text style={styles.moreTurfDistance} numberOfLines={1}>
-
-              📍 {formatDistance(distance)}
-
-            </Text>
+            <View style={styles.distanceInlineRow}>
+              <Ionicons name="location-outline" size={12} color={COLORS.primaryDeep} />
+              <Text style={styles.moreTurfDistance} numberOfLines={1}>
+                {formatDistance(distance)}
+              </Text>
+            </View>
 
 
 
@@ -2005,11 +1950,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             <View style={styles.moreTurfCourtBadge}>
 
-              <Text style={styles.moreTurfCourtText} numberOfLines={1}>
-
-                🏟️ {courtCount}
-
-              </Text>
+              <View style={styles.courtTextRow}>
+              <Ionicons name="grid-outline" size={10} color={COLORS.primaryDeep} />
+              <Text style={styles.moreTurfCourtText} numberOfLines={1}>{courtCount}</Text>
+            </View>
 
             </View>
 
@@ -2089,7 +2033,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           >
 
-            <View style={styles.locationDot} />
+            <Ionicons name="location-outline" size={16} color={COLORS.primaryDeep} style={styles.locationDot} />
 
             <Text style={styles.locationText} numberOfLines={1}>
 
@@ -2131,7 +2075,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             >
 
-              <Text style={styles.headerIconText}>♡</Text>
+              <Ionicons name="heart-outline" size={21} color={COLORS.textPrimary} />
 
             </TouchableOpacity>
 
@@ -2149,7 +2093,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           >
 
-            <Text style={styles.headerIconText}>🔔</Text>
+            <Ionicons name="notifications-outline" size={21} color={COLORS.textPrimary} />
 
           </TouchableOpacity>
 
@@ -2163,7 +2107,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       <View style={styles.searchContainer}>
 
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search-outline" size={20} color={COLORS.textMuted} style={styles.searchIcon} />
 
         <TextInput
 
@@ -2199,7 +2143,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <View style={styles.bannerBadgeRow}>
 
-            <Text style={styles.bannerBadgeText}>🏆 TURFBOOK</Text>
+            <Ionicons name="trophy-outline" size={13} color={COLORS.lime} /><Text style={styles.bannerBadgeText}>TURFBOOK</Text>
 
           </View>
 
@@ -2237,7 +2181,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         <View style={styles.bannerEmojiCircle}>
 
-          <Text style={styles.bannerBadgeEmoji}>⚽</Text>
+          <MaterialCommunityIcons name="soccer" size={40} color={COLORS.lime} />
 
         </View>
 
@@ -2246,6 +2190,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
 
       
+
       <View style={styles.sectionContainer}>
 
         <View style={styles.sectionTitleRow}>
@@ -2279,13 +2224,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <TouchableOpacity
 
                 key={category.id}
-
                 style={[
-
                   styles.categoryCard,
-
+                  category.id === SPORT_CATEGORIES[SPORT_CATEGORIES.length - 1].id &&
+                    styles.lastCategoryCard,
                   isSelected && styles.activeCategoryCard,
-
                 ]}
 
                 activeOpacity={0.8}
@@ -2306,7 +2249,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                 >
 
-                  <Text style={styles.categoryIcon}>{category.icon}</Text>
+                  <MaterialCommunityIcons name={category.icon} size={24} color={isSelected ? COLORS.dark : COLORS.textPrimary} />
 
                 </View>
 
@@ -2340,6 +2283,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         </>
             )}
+
 
 
       <View style={styles.sectionContainer}>
@@ -2405,7 +2349,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <View style={styles.errorContainer}>
 
-            <Text style={styles.errorEmoji}>⚠️</Text>
+            <Ionicons name="warning-outline" size={28} color={COLORS.danger} />
 
             <Text style={styles.errorText}>{errorMessage}</Text>
 
@@ -2453,7 +2397,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             <View style={styles.emptyIconWrapper}>
 
-              <Text style={styles.emptyIcon}>🏟️</Text>
+              <Ionicons name="search-outline" size={30} color={COLORS.primaryDeep} />
 
             </View>
 
@@ -2548,7 +2492,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               <View style={styles.locationNotice}>
 
-                <Text style={styles.locationNoticeIcon}>📍</Text>
+                <Ionicons name="location-outline" size={21} color={COLORS.primaryDeep} style={styles.locationNoticeIcon} />
 
                 <Text style={styles.locationNoticeText}>
 
@@ -2587,6 +2531,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
 
   /* MAIN RENDER */
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.fontLoadingContainer}>
+          <View style={styles.fontLoadingMark}>
+            <Ionicons name="football-outline" size={30} color={COLORS.dark} />
+          </View>
+          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+          <Text style={styles.fontLoadingText}>TurfBook</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
 
@@ -2696,21 +2654,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           >
 
-            <Text
-
-              style={[
-
-                styles.tabIcon,
-
-                activeTab === 'home' && styles.activeTabIcon,
-
-              ]}
-
-            >
-
-              🏠
-
-            </Text>
+            <Ionicons name={activeTab === 'home' ? 'home' : 'home-outline'} size={22}
+              color={activeTab === 'home' ? COLORS.dark : COLORS.textMuted} />
 
           </View>
 
@@ -2758,21 +2703,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             >
 
-              <Text
-
-                style={[
-
-                  styles.tabIcon,
-
-                  activeTab === 'liked' && styles.activeTabIcon,
-
-                ]}
-
-              >
-
-                ♡
-
-              </Text>
+              <Ionicons name={activeTab === 'liked' ? 'heart' : 'heart-outline'} size={22}
+                color={activeTab === 'liked' ? COLORS.dark : COLORS.textMuted} />
 
             </View>
 
@@ -2820,21 +2752,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           >
 
-            <Text
-
-              style={[
-
-                styles.tabIcon,
-
-                activeTab === 'notifications' && styles.activeTabIcon,
-
-              ]}
-
-            >
-
-              🔔
-
-            </Text>
+            <Ionicons name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'} size={22}
+              color={activeTab === 'notifications' ? COLORS.dark : COLORS.textMuted} />
 
           </View>
 
@@ -2882,21 +2801,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
             >
 
-              <Text
-
-                style={[
-
-                  styles.tabIcon,
-
-                  activeTab === 'dashboard' && styles.activeTabIcon,
-
-                ]}
-
-              >
-
-                📊
-
-              </Text>
+              <Ionicons name={activeTab === 'dashboard' ? 'grid' : 'grid-outline'} size={21}
+                color={activeTab === 'dashboard' ? COLORS.dark : COLORS.textMuted} />
 
             </View>
 
@@ -2944,21 +2850,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           >
 
-            <Text
-
-              style={[
-
-                styles.tabIcon,
-
-                activeTab === 'profile' && styles.activeTabIcon,
-
-              ]}
-
-            >
-
-              👤
-
-            </Text>
+            <Ionicons name={activeTab === 'profile' ? 'person' : 'person-outline'} size={22}
+              color={activeTab === 'profile' ? COLORS.dark : COLORS.textMuted} />
 
           </View>
 
@@ -3010,14 +2903,39 @@ const styles = StyleSheet.create({
 
 
 
+  fontLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+
+  fontLoadingMark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+
+  fontLoadingText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 10,
+  },
+
   scrollContent: {
-
-    paddingHorizontal: 20,
-
-    paddingTop: 10,
-
-    paddingBottom: 110,
-
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 118,
   },
 
 
@@ -3049,15 +2967,11 @@ const styles = StyleSheet.create({
 
 
   greeting: {
-
-    fontSize: 22,
-
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 23,
     fontWeight: '800',
-
     color: COLORS.textPrimary,
-
-    letterSpacing: 0.2,
-
+    letterSpacing: -0.3,
   },
 
 
@@ -3077,22 +2991,13 @@ const styles = StyleSheet.create({
 
 
   locationDot: {
-
-    width: 8,
-
-    height: 8,
-
-    borderRadius: 4,
-
-    backgroundColor: COLORS.primary,
-
-    marginRight: 6,
-
+    marginRight: 4,
   },
 
 
 
   locationText: {
+    fontFamily: 'Poppins_600SemiBold',
 
     fontSize: 13,
 
@@ -3115,28 +3020,25 @@ const styles = StyleSheet.create({
 
 
   iconCircleButton: {
-
     width: 44,
-
     height: 44,
-
-    borderRadius: 22,
-
-    backgroundColor: COLORS.primarySoft,
-
-    borderWidth: 1.5,
-
-    borderColor: COLORS.borderLight,
-
+    borderRadius: 15,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     justifyContent: 'center',
-
     alignItems: 'center',
-
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
 
 
   headerIconText: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 18,
 
@@ -3147,40 +3049,32 @@ const styles = StyleSheet.create({
   /* SEARCH */
 
   searchContainer: {
-
     flexDirection: 'row',
-
     alignItems: 'center',
-
-    backgroundColor: COLORS.primarySoft,
-
-    borderRadius: 16,
-
-    paddingHorizontal: 16,
-
-    height: 54,
-
+    backgroundColor: COLORS.white,
+    borderRadius: 17,
+    paddingHorizontal: 15,
+    height: 56,
     marginBottom: 22,
-
-    borderWidth: 1.5,
-
-    borderColor: COLORS.borderLight,
-
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
 
 
 
   searchIcon: {
-
-    marginRight: 10,
-
-    fontSize: 16,
-
+    marginRight: 9,
   },
 
 
 
   searchInput: {
+    fontFamily: 'Poppins_500Medium',
 
     flex: 1,
 
@@ -3197,33 +3091,19 @@ const styles = StyleSheet.create({
   /* BANNER */
 
   bannerContainer: {
-
-    backgroundColor: COLORS.primary,
-
-    borderRadius: 24,
-
+    backgroundColor: COLORS.dark,
+    borderRadius: 28,
     padding: 22,
-
     flexDirection: 'row',
-
     justifyContent: 'space-between',
-
     alignItems: 'center',
-
-    marginBottom: 26,
-
+    marginBottom: 28,
     overflow: 'hidden',
-
-    shadowColor: COLORS.primaryDark,
-
-    shadowOffset: { width: 0, height: 12 },
-
-    shadowOpacity: 0.25,
-
-    shadowRadius: 20,
-
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
     elevation: 8,
-
   },
 
 
@@ -3279,24 +3159,23 @@ const styles = StyleSheet.create({
 
 
   bannerBadgeRow: {
-
     alignSelf: 'flex-start',
-
-    backgroundColor: 'rgba(255,255,255,0.22)',
-
-    paddingHorizontal: 12,
-
-    paddingVertical: 5,
-
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(199,243,107,0.12)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     borderRadius: 20,
-
     marginBottom: 14,
-
+    borderWidth: 1,
+    borderColor: 'rgba(199,243,107,0.22)',
   },
 
 
 
   bannerBadgeText: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.white,
 
@@ -3311,6 +3190,7 @@ const styles = StyleSheet.create({
 
 
   bannerTitle: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.white,
 
@@ -3327,6 +3207,7 @@ const styles = StyleSheet.create({
 
 
   bannerSubText: {
+    fontFamily: 'Poppins_500Medium',
 
     color: 'rgba(255,255,255,0.92)',
 
@@ -3341,62 +3222,48 @@ const styles = StyleSheet.create({
 
 
   bannerButton: {
-
-    backgroundColor: COLORS.white,
-
-    borderRadius: 24,
-
-    paddingHorizontal: 18,
-
+    backgroundColor: COLORS.primary,
+    borderRadius: 15,
+    paddingHorizontal: 17,
     paddingVertical: 11,
-
     alignSelf: 'flex-start',
-
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
 
 
   bannerButtonText: {
-
-    color: COLORS.primaryDeep,
-
+    fontFamily: 'Poppins_800ExtraBold',
+    color: COLORS.dark,
     fontSize: 11,
-
     fontWeight: '900',
-
-    letterSpacing: 1,
-
+    letterSpacing: 0.8,
   },
 
 
 
   bannerEmojiCircle: {
-
-    width: 72,
-
-    height: 72,
-
-    borderRadius: 36,
-
-    backgroundColor: 'rgba(255,255,255,0.22)',
-
+    width: 82,
+    height: 82,
+    borderRadius: 28,
+    backgroundColor: 'rgba(199,243,107,0.10)',
     alignItems: 'center',
-
     justifyContent: 'center',
-
     marginLeft: 14,
-
     zIndex: 2,
-
-    borderWidth: 1.5,
-
-    borderColor: 'rgba(255,255,255,0.32)',
-
+    borderWidth: 1,
+    borderColor: 'rgba(199,243,107,0.24)',
+    transform: [{ rotate: '-8deg' }],
   },
 
 
 
   bannerBadgeEmoji: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 36,
 
@@ -3449,6 +3316,7 @@ const styles = StyleSheet.create({
 
 
   sectionTitle: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 19,
 
@@ -3481,6 +3349,7 @@ const styles = StyleSheet.create({
 
 
   priceModeText: {
+    fontFamily: 'Poppins_600SemiBold',
 
     fontSize: 11,
 
@@ -3515,6 +3384,7 @@ const styles = StyleSheet.create({
 
 
   viewAllText: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 12,
 
@@ -3531,122 +3401,83 @@ const styles = StyleSheet.create({
   /* CATEGORIES */
 
   categoryScroll: {
-
-    flexDirection: 'row',
-
-    marginTop: 4,
-
+    marginTop: 10,
+    width: '100%',
   },
-
-
 
   categoryScrollContent: {
-
-    paddingRight: 4,
-
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingLeft: 2,
+    paddingRight: 16,
   },
-
-
 
   categoryCard: {
-
-    backgroundColor: COLORS.primarySoft,
-
-    borderRadius: 18,
-
-    paddingHorizontal: 16,
-
-    paddingVertical: 14,
-
-    alignItems: 'center',
-
+    width: 82,
+    height: 100,
     marginRight: 10,
-
-    minWidth: 88,
-
-    borderWidth: 1.5,
-
-    borderColor: COLORS.borderLight,
-
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
 
-
+  lastCategoryCard: {
+    marginRight: 0,
+  },
 
   activeCategoryCard: {
-
-    backgroundColor: COLORS.primaryLight,
-
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
-
-    shadowColor: COLORS.primary,
-
+    shadowColor: COLORS.primaryDeep,
     shadowOffset: { width: 0, height: 6 },
-
-    shadowOpacity: 0.28,
-
-    shadowRadius: 10,
-
-    elevation: 4,
-
+    shadowOpacity: 0.20,
+    shadowRadius: 12,
+    elevation: 5,
   },
-
-
 
   categoryIconWrapper: {
-
     width: 44,
-
     height: 44,
-
-    borderRadius: 22,
-
-    backgroundColor: COLORS.white,
-
+    borderRadius: 14,
+    backgroundColor: COLORS.bgMuted,
     alignItems: 'center',
-
     justifyContent: 'center',
-
-    marginBottom: 8,
-
-    borderWidth: 1.5,
-
-    borderColor: COLORS.borderLight,
-
+    marginBottom: 9,
   },
-
-
 
   activeCategoryIconWrapper: {
-
-    borderColor: COLORS.primary,
-
+    backgroundColor: 'rgba(11,18,32,0.10)',
   },
-
-
 
   categoryIcon: {
-
+    fontFamily: 'Poppins_400Regular',
     fontSize: 22,
-
   },
-
-
 
   categoryText: {
-
-    fontSize: 11,
-
+    width: '100%',
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 10.5,
+    lineHeight: 15,
     color: COLORS.textSecondary,
-
-    fontWeight: '700',
-
-    letterSpacing: 0.3,
-
+    fontWeight: '600',
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 
-
-
   activeCategoryText: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.primaryDarker,
 
@@ -3751,6 +3582,7 @@ const styles = StyleSheet.create({
 
 
   imagePlaceholderIcon: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 32,
 
@@ -3761,6 +3593,7 @@ const styles = StyleSheet.create({
 
 
   imagePlaceholderText: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 11,
 
@@ -3773,50 +3606,59 @@ const styles = StyleSheet.create({
   /* PRICE PILL */
 
   pricePill: {
-
     position: 'absolute',
-
     bottom: 10,
-
     left: 10,
-
-    backgroundColor: COLORS.primary,
-
+    backgroundColor: COLORS.dark,
     paddingHorizontal: 12,
-
     paddingVertical: 6,
-
-    borderRadius: 14,
-
-    shadowColor: COLORS.primary,
-
-    shadowOffset: { width: 0, height: 3 },
-
-    shadowOpacity: 0.4,
-
-    shadowRadius: 6,
-
+    borderRadius: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
     elevation: 4,
-
   },
 
 
 
   pricePillText: {
-
-    color: COLORS.white,
-
+    fontFamily: 'Poppins_800ExtraBold',
+    color: COLORS.primary,
     fontSize: 11,
-
     fontWeight: '900',
-
     letterSpacing: 0.3,
-
   },
 
 
 
   /* DISTANCE BADGE */
+
+  distanceBadgeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  distanceInlineRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  cityRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  courtTextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
 
   distanceBadge: {
     position: 'absolute',
@@ -3831,6 +3673,7 @@ const styles = StyleSheet.create({
   },
 
   distanceBadgeText: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 10,
     fontWeight: '900',
 
@@ -3877,6 +3720,7 @@ const styles = StyleSheet.create({
 
 
   heartIcon: {
+    fontFamily: 'Poppins_700Bold',
 
     color: COLORS.textMuted,
 
@@ -3907,6 +3751,7 @@ const styles = StyleSheet.create({
 
 
   turfNameHorizontal: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 15,
 
@@ -3921,6 +3766,7 @@ const styles = StyleSheet.create({
 
 
   turfCityHorizontal: {
+    fontFamily: 'Poppins_500Medium',
 
     fontSize: 12,
 
@@ -3951,6 +3797,7 @@ const styles = StyleSheet.create({
 
 
   priceText: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     flex: 1,
 
@@ -3965,6 +3812,7 @@ const styles = StyleSheet.create({
 
 
   priceUnavailableText: {
+    fontFamily: 'Poppins_400Regular',
 
     flex: 1,
 
@@ -3995,6 +3843,7 @@ const styles = StyleSheet.create({
 
 
   courtText: {
+    fontFamily: 'Poppins_700Bold',
 
     fontSize: 10,
 
@@ -4007,6 +3856,7 @@ const styles = StyleSheet.create({
 
 
   sportsText: {
+    fontFamily: 'Poppins_600SemiBold',
 
     fontSize: 11,
 
@@ -4021,6 +3871,7 @@ const styles = StyleSheet.create({
 
 
   noSportsText: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 10,
 
@@ -4043,6 +3894,7 @@ const styles = StyleSheet.create({
 
 
   moreNearbySubtitle: {
+    fontFamily: 'Poppins_500Medium',
 
     fontSize: 12,
 
@@ -4139,6 +3991,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfPlaceholderIcon: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 30,
 
@@ -4181,6 +4034,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfHeart: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 16,
 
@@ -4207,6 +4061,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfName: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 15,
 
@@ -4219,6 +4074,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfCity: {
+    fontFamily: 'Poppins_500Medium',
 
     fontSize: 11,
 
@@ -4247,6 +4103,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfDistance: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     flex: 1,
 
@@ -4261,6 +4118,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfPrice: {
+    fontFamily: 'Poppins_900Black',
 
     fontSize: 12,
 
@@ -4305,6 +4163,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfCourtText: {
+    fontFamily: 'Poppins_700Bold',
 
     fontSize: 9,
 
@@ -4317,6 +4176,7 @@ const styles = StyleSheet.create({
 
 
   moreTurfSports: {
+    fontFamily: 'Poppins_600SemiBold',
 
     flex: 1,
 
@@ -4357,6 +4217,7 @@ const styles = StyleSheet.create({
 
 
   locationNoticeIcon: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 18,
 
@@ -4367,6 +4228,7 @@ const styles = StyleSheet.create({
 
 
   locationNoticeText: {
+    fontFamily: 'Poppins_500Medium',
 
     flex: 1,
 
@@ -4399,6 +4261,7 @@ const styles = StyleSheet.create({
 
 
   locationNoticeButtonText: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.white,
 
@@ -4425,6 +4288,7 @@ const styles = StyleSheet.create({
 
 
   loadingText: {
+    fontFamily: 'Poppins_600SemiBold',
 
     marginTop: 12,
 
@@ -4485,6 +4349,7 @@ const styles = StyleSheet.create({
 
 
   emptyIcon: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 30,
 
@@ -4493,6 +4358,7 @@ const styles = StyleSheet.create({
 
 
   emptyTitle: {
+    fontFamily: 'Poppins_800ExtraBold',
 
     fontSize: 16,
 
@@ -4507,6 +4373,7 @@ const styles = StyleSheet.create({
 
 
   emptyText: {
+    fontFamily: 'Poppins_400Regular',
 
     color: COLORS.textMuted,
 
@@ -4523,32 +4390,22 @@ const styles = StyleSheet.create({
 
 
   clearFilterButton: {
-
     marginTop: 18,
-
-    backgroundColor: COLORS.primary,
-
+    backgroundColor: COLORS.dark,
     paddingHorizontal: 22,
-
     paddingVertical: 12,
-
-    borderRadius: 24,
-
-    shadowColor: COLORS.primary,
-
-    shadowOffset: { width: 0, height: 4 },
-
-    shadowOpacity: 0.3,
-
-    shadowRadius: 8,
-
+    borderRadius: 15,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
     elevation: 4,
-
   },
 
 
 
   clearFilterButtonText: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.white,
 
@@ -4585,6 +4442,7 @@ const styles = StyleSheet.create({
 
 
   errorEmoji: {
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 24,
 
@@ -4595,6 +4453,7 @@ const styles = StyleSheet.create({
 
 
   errorText: {
+    fontFamily: 'Poppins_500Medium',
 
     color: COLORS.dangerText,
 
@@ -4627,6 +4486,7 @@ const styles = StyleSheet.create({
 
 
   errorHint: {
+    fontFamily: 'Poppins_400Regular',
 
     marginTop: 10,
 
@@ -4645,6 +4505,7 @@ const styles = StyleSheet.create({
 
 
   retryButtonText: {
+    fontFamily: 'Poppins_900Black',
 
     color: COLORS.white,
 
@@ -4661,43 +4522,26 @@ const styles = StyleSheet.create({
   /* BOTTOM NAVIGATION */
 
   bottomBarContainer: {
-
     position: 'absolute',
-
-    bottom: 0,
-
-    left: 0,
-
-    right: 0,
-
-    height: 78,
-
-    backgroundColor: COLORS.white,
-
-    borderTopWidth: 1,
-
-    borderTopColor: COLORS.borderLight,
-
+    bottom: 10,
+    left: 12,
+    right: 12,
+    height: 74,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 24,
     flexDirection: 'row',
-
     justifyContent: 'space-around',
-
     alignItems: 'center',
-
-    paddingBottom: 8,
-
-    paddingTop: 8,
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: -4 },
-
-    shadowOpacity: 0.04,
-
-    shadowRadius: 10,
-
-    elevation: 10,
-
+    paddingHorizontal: 5,
+    paddingBottom: 4,
+    paddingTop: 5,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 14,
   },
 
 
@@ -4716,57 +4560,52 @@ const styles = StyleSheet.create({
 
 
 
+  /* =====================================================
+
+     ⭐ iPhone-style squircle tab icon wrapper
+
+     - `borderCurve: 'continuous'` gives the iOS superellipse
+
+       curve (same math as iOS app icons and tab bars).
+
+     - On Android, it falls back to a normal rounded rect.
+
+     - `overflow: 'hidden'` clips the lime fill cleanly
+
+       to the squircle curve.
+
+  ===================================================== */
+
   tabIconWrapper: {
-
-    width: 42,
-
-    height: 42,
-
-    borderRadius: 21,
-
+    width: 46,
+    height: 40,
+    borderRadius: 16,
+    borderCurve: 'continuous',
     alignItems: 'center',
-
     justifyContent: 'center',
-
-    marginBottom: 2,
-
-    // Shadow for the circular icon background
-
-    shadowColor: '#000',
-
-    shadowOffset: { width: 0, height: 2 },
-
-    shadowOpacity: 0.1,
-
-    shadowRadius: 4,
-
-    elevation: 2,
-
+    marginBottom: 3,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
   },
 
 
 
   activeTabIconWrapper: {
-
-    backgroundColor: COLORS.primaryLight,
-
-    // Enhanced shadow when active
-
-    shadowColor: COLORS.primary,
-
-    shadowOffset: { width: 0, height: 3 },
-
-    shadowOpacity: 0.25,
-
-    shadowRadius: 6,
-
-    elevation: 4,
-
+    backgroundColor: COLORS.primary,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 5,
   },
 
 
 
   tabIcon: {
+
+    fontFamily: 'Poppins_400Regular',
 
     fontSize: 18,
 
@@ -4776,6 +4615,8 @@ const styles = StyleSheet.create({
 
   activeTabIcon: {
 
+    fontFamily: 'Poppins_400Regular',
+
     fontSize: 18,
 
   },
@@ -4783,25 +4624,19 @@ const styles = StyleSheet.create({
 
 
   tabLabel: {
-
+    fontFamily: 'Poppins_500Medium',
     fontSize: 10,
-
     color: COLORS.textMuted,
-
-    fontWeight: '600',
-
-    letterSpacing: 0.2,
-
+    fontWeight: '500',
+    letterSpacing: 0.1,
   },
 
 
 
   activeTabLabel: {
-
-    color: COLORS.primaryDarker,
-
-    fontWeight: '900',
-
+    fontFamily: 'Poppins_700Bold',
+    color: COLORS.dark,
+    fontWeight: '700',
   },
 
 });

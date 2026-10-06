@@ -1,45 +1,74 @@
 import React from 'react';
 import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
-  ScrollView,
   TouchableOpacity,
-  Image,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+  Poppins_900Black,
+  useFonts,
+} from '@expo-google-fonts/poppins';
 
 /* =========================================================
-   THEME COLORS - WHITE & LIGHT GREEN
+   THEME COLORS — matched to HomeScreen / OwnerProfile
 ========================================================= */
 
 const COLORS = {
-  primary: '#22C55E',
-  primaryDark: '#16A34A',
-  primaryDeep: '#15803D',
-  primaryLight: '#DCFCE7',
-  primarySoft: '#F0FDF4',
-  primaryFaint: '#F7FEF9',
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
 
-  accent: '#F97316',
-  accentLight: '#FFEDD5',
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
+  accentText: '#6D28D9',
 
-  bg: '#FFFFFF',
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
   card: '#FFFFFF',
-  cardSoft: '#F9FDFA',
+  cardSoft: '#FCFCFE',
 
-  border: '#E8F5EC',
-  borderLight: '#D1FAE5',
-  borderSoft: '#BBF7D0',
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
 
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
   dangerBorder: '#FECACA',
+  dangerText: '#B91C1C',
+
+  warning: '#F59E0B',
+  warningSoft: '#FFFBEB',
+  warningBorder: '#FDE68A',
+  warningText: '#92400E',
+
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
 
   white: '#FFFFFF',
+  dark: '#0B1220',
 };
 
 /* =========================================================
@@ -63,12 +92,36 @@ export const SavedTurfsScreen: React.FC<SavedTurfsScreenProps> = ({
   onSelectTurf,
   onToggleLike,
 }) => {
+  const [fontsLoaded, fontError] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    Poppins_900Black,
+  });
+
   const normalizedLikedTurfs = new Set(likedTurfs.map((id) => String(id)));
 
   const savedTurfsList = turfs.filter((turf) => {
     const turfId = String(turf._id || turf.id || '');
     return turfId.length > 0 && normalizedLikedTurfs.has(turfId);
   });
+
+  /* Font loading guard — never hangs the screen */
+  if (!fontsLoaded && !fontError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.fontLoadingContainer}>
+          <View style={styles.fontLoadingMark}>
+            <Text style={styles.fontLoadingMarkText}>T</Text>
+          </View>
+          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+          <Text style={styles.fontLoadingText}>TurfBook</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -80,7 +133,9 @@ export const SavedTurfsScreen: React.FC<SavedTurfsScreenProps> = ({
           <Text style={styles.headerTitle}>Saved Turfs</Text>
           {savedTurfsList.length > 0 && (
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{savedTurfsList.length}</Text>
+              <Text style={styles.countBadgeText}>
+                {savedTurfsList.length}
+              </Text>
             </View>
           )}
         </View>
@@ -182,18 +237,63 @@ export const SavedTurfsScreen: React.FC<SavedTurfsScreenProps> = ({
 };
 
 /* =========================================================
-   STYLES
+   STYLES — matched to HomeScreen palette + Poppins
 ========================================================= */
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingTop: 12,
     backgroundColor: COLORS.bg,
   },
 
+  /* FONT LOADING */
+
+  fontLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+
+  fontLoadingMark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+
+  fontLoadingMarkText: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
+    letterSpacing: -0.5,
+  },
+
+  fontLoadingText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 10,
+    letterSpacing: 0.3,
+  },
+
   /* HEADER */
+
   header: {
     marginBottom: 20,
   },
@@ -201,14 +301,14 @@ const styles = StyleSheet.create({
   headerBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 10,
-    fontWeight: '900',
     letterSpacing: 1.5,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 20,
     marginBottom: 10,
     overflow: 'hidden',
@@ -220,47 +320,50 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 28,
-    fontWeight: '900',
     color: COLORS.textPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.4,
   },
 
   countBadge: {
     marginLeft: 12,
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
-    paddingHorizontal: 8,
+    minWidth: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 9,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
   },
 
   countBadgeText: {
-    color: COLORS.white,
+    color: COLORS.dark,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: -0.2,
   },
 
   headerSubtitle: {
-    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
     color: COLORS.textMuted,
     marginTop: 6,
-    fontWeight: '500',
   },
 
   /* LIST */
+
   listContainer: {
     paddingBottom: 100,
   },
 
   /* EMPTY */
+
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -272,50 +375,56 @@ const styles = StyleSheet.create({
   emptyIconCircle: {
     width: 104,
     height: 104,
-    borderRadius: 52,
+    borderRadius: 34,
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
 
   emptyIcon: {
-    fontSize: 46,
-    color: COLORS.primary,
-    fontWeight: '700',
+    fontSize: 44,
+    color: COLORS.primaryDeep,
+    fontFamily: 'Poppins_700Bold',
   },
 
   emptyTitle: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 20,
-    fontWeight: '900',
     color: COLORS.textPrimary,
     marginBottom: 10,
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
 
   emptySubtitle: {
+    fontFamily: 'Poppins_500Medium',
     fontSize: 13,
     color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 20,
-    fontWeight: '500',
   },
 
   /* TURF CARD */
+
   turfCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 22,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: '#000',
+    shadowColor: COLORS.dark,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowRadius: 14,
     elevation: 3,
   },
 
@@ -326,43 +435,48 @@ const styles = StyleSheet.create({
   turfImage: {
     width: '100%',
     height: 170,
+    backgroundColor: COLORS.bgMuted,
   },
 
   /* PRICE PILL */
+
   pricePill: {
     position: 'absolute',
     bottom: 14,
     left: 14,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    backgroundColor: COLORS.dark,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
     elevation: 4,
   },
 
   pricePillText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '900',
+    color: COLORS.primary,
+    fontSize: 11,
+    fontFamily: 'Poppins_800ExtraBold',
     letterSpacing: 0.3,
   },
 
   /* HEART */
+
   heartButton: {
     position: 'absolute',
     top: 14,
     right: 14,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 15,
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 5,
@@ -372,19 +486,20 @@ const styles = StyleSheet.create({
   heartIcon: {
     color: COLORS.danger,
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   /* DETAILS */
+
   cardDetails: {
     padding: 16,
   },
 
   turfName: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 17,
-    fontWeight: '900',
     color: COLORS.textPrimary,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   locationRow: {
@@ -397,23 +512,24 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.primaryDeep,
     marginRight: 8,
   },
 
   locationText: {
     flex: 1,
+    fontFamily: 'Poppins_500Medium',
     fontSize: 12,
     color: COLORS.textSecondary,
-    fontWeight: '500',
   },
 
   /* CARD FOOTER */
+
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
@@ -425,40 +541,40 @@ const styles = StyleSheet.create({
   },
 
   priceLabel: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 10,
     color: COLORS.textMuted,
-    fontWeight: '800',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
     marginRight: 8,
   },
 
   priceText: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 17,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-    letterSpacing: 0.2,
+    color: COLORS.primaryDarker,
+    letterSpacing: -0.2,
   },
 
   priceUnit: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 11,
-    fontWeight: '700',
     color: COLORS.textMuted,
   },
 
   bookNowPill: {
     backgroundColor: COLORS.primarySoft,
     borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
+    borderColor: COLORS.primaryMuted,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
   },
 
   bookNowText: {
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1,
   },
 });

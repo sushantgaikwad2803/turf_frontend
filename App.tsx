@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
 
 import {
   ActivityIndicator,
@@ -67,16 +68,6 @@ export interface TurfCourt {
 }
 
 export interface TurfOperatingHour {
-  /*
-   * Backend can use either:
-   * day / openingTime / closingTime
-   * OR
-   * dayOfWeek / openTime / closeTime
-   *
-   * dayOfWeek is intentionally STRING because
-   * TurfDetailsScreen expects values such as:
-   * "Monday", "Tuesday", etc.
-   */
   day?: string;
   dayOfWeek?: string;
 
@@ -133,10 +124,6 @@ export interface BookingSlot {
   isNight?: boolean;
 }
 
-/* =========================================================
-   BOOKING TYPES
-========================================================= */
-
 export interface BookingDateData {
   date: string;
   courtId: string;
@@ -159,14 +146,6 @@ export type RootStackParamList = {
     turf: Turf;
   };
 
-  /*
-   * IMPORTANT:
-   * TurfDetailsScreen navigates to:
-   *
-   * navigation.navigate('Slot', { turf })
-   *
-   * Therefore Slot MUST exist here.
-   */
   Slot: {
     turf: Turf;
     initialCourtId?: string;
@@ -177,41 +156,22 @@ export type RootStackParamList = {
     turf: Turf;
     court: TurfCourt;
 
-    /*
-     * Single-date booking support
-     */
     date?: string;
     slots?: BookingSlot[];
 
-    /*
-     * Multi-date booking support
-     */
     bookings?: BookingDateData[];
     dates?: string[];
 
-    /*
-     * Required payment summary
-     */
     slotCount: number;
     totalAmount: number;
 
-    /*
-     * Optional discount information
-     */
     originalTotal?: number;
     discountAmount?: number;
     discountPercent?: number;
 
-    /*
-     * Booking flags
-     */
     isMultiDate?: boolean;
     isMultiSlot?: boolean;
 
-    /*
-     * IDs are kept available because your payment flow
-     * may use them when creating the Cashfree order.
-     */
     turfId?: string;
     courtId?: string;
   };
@@ -240,7 +200,6 @@ const USER_STORAGE_KEY = '@user_data';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
 
   /* =======================================================
@@ -249,9 +208,7 @@ const App: React.FC = () => {
 
   const loadUserSession = async (): Promise<void> => {
     try {
-      const storedUser = await AsyncStorage.getItem(
-        USER_STORAGE_KEY,
-      );
+      const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
 
       if (!storedUser) {
         setCurrentUser(null);
@@ -272,10 +229,7 @@ const App: React.FC = () => {
         setCurrentUser(null);
       }
     } catch (error) {
-      console.error(
-        'Failed to load user session:',
-        error,
-      );
+      console.error('Failed to load user session:', error);
 
       try {
         await AsyncStorage.removeItem(USER_STORAGE_KEY);
@@ -313,9 +267,6 @@ const App: React.FC = () => {
 
       setCurrentUser(user);
 
-      /*
-       * New owner -> directly open Add Turf.
-       */
       if (isNewSignup && user.role === 'owner') {
         setTimeout(() => {
           if (navigationRef.isReady()) {
@@ -324,10 +275,7 @@ const App: React.FC = () => {
         }, 300);
       }
     } catch (error) {
-      console.error(
-        'Failed to save user session:',
-        error,
-      );
+      console.error('Failed to save user session:', error);
     }
   };
 
@@ -337,16 +285,10 @@ const App: React.FC = () => {
 
   const handleLogout = async (): Promise<void> => {
     try {
-      await AsyncStorage.removeItem(
-        USER_STORAGE_KEY,
-      );
-
+      await AsyncStorage.removeItem(USER_STORAGE_KEY);
       setCurrentUser(null);
     } catch (error) {
-      console.error(
-        'Failed to logout:',
-        error,
-      );
+      console.error('Failed to logout:', error);
     }
   };
 
@@ -354,19 +296,12 @@ const App: React.FC = () => {
      SELECT TURF
   ======================================================= */
 
-  const handleSelectTurf = (
-    turf: Turf,
-  ): void => {
+  const handleSelectTurf = (turf: Turf): void => {
     if (!navigationRef.isReady()) {
       return;
     }
 
-    navigationRef.navigate(
-      'TurfDetails',
-      {
-        turf,
-      },
-    );
+    navigationRef.navigate('TurfDetails', { turf });
   };
 
   /* =======================================================
@@ -374,10 +309,7 @@ const App: React.FC = () => {
   ======================================================= */
 
   const handleNavigateToAddTurf = (): void => {
-    if (
-      !currentUser ||
-      currentUser.role !== 'owner'
-    ) {
+    if (!currentUser || currentUser.role !== 'owner') {
       return;
     }
 
@@ -395,7 +327,8 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#C7F36B" />
       </View>
     );
   }
@@ -405,139 +338,79 @@ const App: React.FC = () => {
   ======================================================= */
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
+    <>
+      {/* ⭐ Status bar — black icons on light backgrounds */}
+      <StatusBar style="dark" />
 
-        {/* =================================================
-            AUTH
-        ================================================= */}
-
-        {!currentUser ? (
-          <Stack.Screen name="Auth">
-            {(props) => (
-              <AuthScreen
-                {...props}
-                onAuthSuccess={handleAuthSuccess}
-              />
-            )}
-          </Stack.Screen>
-        ) : currentUser.role === 'admin' ? (
-
-          /* ===============================================
-             ADMIN
-          =============================================== */
-
-          <Stack.Screen name="AdminDashboard">
-            {(props) => (
-              <AdminDashboardScreen
-                {...props}
-                user={currentUser}
-                onLogout={handleLogout}
-              />
-            )}
-          </Stack.Screen>
-
-        ) : (
-
-          /* ===============================================
-             CUSTOMER / OWNER
-          =============================================== */
-
-          <>
-            {/* ===========================================
-                HOME
-            =========================================== */}
-
-            <Stack.Screen name="Home">
+      <NavigationContainer ref={navigationRef}>
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
+          {/* AUTH */}
+          {!currentUser ? (
+            <Stack.Screen name="Auth">
               {(props) => (
-                <HomeScreen
+                <AuthScreen
+                  {...props}
+                  onAuthSuccess={handleAuthSuccess}
+                />
+              )}
+            </Stack.Screen>
+          ) : currentUser.role === 'admin' ? (
+            /* ADMIN */
+            <Stack.Screen name="AdminDashboard">
+              {(props) => (
+                <AdminDashboardScreen
                   {...props}
                   user={currentUser}
                   onLogout={handleLogout}
-                  onNavigateToAddTurf={
-                    handleNavigateToAddTurf
-                  }
-                  onSelectTurf={
-                    handleSelectTurf
-                  }
                 />
               )}
             </Stack.Screen>
-
-            {/* ===========================================
-                TURF DETAILS
-            =========================================== */}
-
-            <Stack.Screen name="TurfDetails">
-              {(props) => (
-                <TurfDetailsScreen
-                  {...props}
-                />
-              )}
-            </Stack.Screen>
-
-            {/* ===========================================
-                SLOT SCREEN
-
-                IMPORTANT:
-                This fixes:
-
-                The action 'NAVIGATE' with payload
-                {"name":"Slot",...}
-                was not handled by any navigator.
-
-                TurfDetailsScreen calls:
-
-                navigation.navigate('Slot', { turf })
-
-                Therefore this screen MUST be
-                registered here.
-            =========================================== */}
-
-            <Stack.Screen name="Slot">
-              {(props) => (
-                <SlotScreen
-                  {...props}
-                />
-              )}
-            </Stack.Screen>
-
-            {/* ===========================================
-                PAYMENT
-            =========================================== */}
-
-            <Stack.Screen name="Payment">
-              {(props) => (
-                <PaymentScreen
-                  {...props}
-                />
-              )}
-            </Stack.Screen>
-
-            {/* ===========================================
-                ADD TURF
-                OWNER ONLY
-            =========================================== */}
-
-            {currentUser.role === 'owner' && (
-              <Stack.Screen name="AddTurf">
+          ) : (
+            /* CUSTOMER / OWNER */
+            <>
+              <Stack.Screen name="Home">
                 {(props) => (
-                  <AddTurfScreen
+                  <HomeScreen
                     {...props}
                     user={currentUser}
+                    onLogout={handleLogout}
+                    onNavigateToAddTurf={handleNavigateToAddTurf}
+                    onSelectTurf={handleSelectTurf}
                   />
                 )}
               </Stack.Screen>
-            )}
-          </>
-        )}
 
-      </Stack.Navigator>
-    </NavigationContainer>
+              <Stack.Screen name="TurfDetails">
+                {(props) => <TurfDetailsScreen {...props} />}
+              </Stack.Screen>
+
+              <Stack.Screen name="Slot">
+                {(props) => <SlotScreen {...props} />}
+              </Stack.Screen>
+
+              <Stack.Screen name="Payment">
+                {(props) => <PaymentScreen {...props} />}
+              </Stack.Screen>
+
+              {currentUser.role === 'owner' && (
+                <Stack.Screen name="AddTurf">
+                  {(props) => (
+                    <AddTurfScreen
+                      {...props}
+                      user={currentUser}
+                    />
+                  )}
+                </Stack.Screen>
+              )}
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
   );
 };
 
@@ -550,7 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F8FC',
   },
 });
 

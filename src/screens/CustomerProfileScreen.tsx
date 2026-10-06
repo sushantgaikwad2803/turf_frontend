@@ -16,6 +16,17 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+  Poppins_900Black,
+  useFonts,
+} from '@expo-google-fonts/poppins';
 
 /* =========================================================
    API CONFIG
@@ -25,23 +36,6 @@ const RAW_API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   'http://192.168.0.100:5000/api';
 
-/**
- * Normalizes the API URL.
- *
- * Examples:
- *
- * turfbackend-production-a87e.up.railway.app/api
- *      ->
- * https://turfbackend-production-a87e.up.railway.app/api
- *
- * https://turfbackend-production-a87e.up.railway.app/api
- *      ->
- * https://turfbackend-production-a87e.up.railway.app/api
- *
- * http://192.168.0.100:5000/api
- *      ->
- * http://192.168.0.100:5000/api
- */
 const normalizeApiUrl = (url: string): string => {
   let normalized = String(url || '').trim();
 
@@ -49,15 +43,12 @@ const normalizeApiUrl = (url: string): string => {
     normalized = 'http://192.168.0.100:5000/api';
   }
 
-  // Remove accidental quotes
   normalized = normalized.replace(/^["']|["']$/g, '');
 
-  // Add HTTPS when protocol is missing
   if (!/^https?:\/\//i.test(normalized)) {
     normalized = `https://${normalized}`;
   }
 
-  // Remove trailing slashes
   normalized = normalized.replace(/\/+$/, '');
 
   return normalized;
@@ -65,38 +56,41 @@ const normalizeApiUrl = (url: string): string => {
 
 const API_BASE_URL = normalizeApiUrl(RAW_API_URL);
 
-console.log('CustomerProfile API URL:', API_BASE_URL);
-
 /* =========================================================
    THEME COLORS
 ========================================================= */
 
 const COLORS = {
-  primary: '#22C55E',
-  primaryDark: '#16A34A',
-  primaryDeep: '#15803D',
-  primaryLight: '#DCFCE7',
-  primarySoft: '#F0FDF4',
-  primaryFaint: '#F7FEF9',
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
 
-  accent: '#F97316',
-  accentLight: '#FFEDD5',
-  accentSoft: '#FEF3C7',
-  accentText: '#92400E',
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
+  accentText: '#6D28D9',
 
-  bg: '#FFFFFF',
-  bgSoft: '#FAFEFB',
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
   card: '#FFFFFF',
-  cardSoft: '#F9FDFA',
+  cardSoft: '#FCFCFE',
 
-  border: '#E8F5EC',
-  borderLight: '#D1FAE5',
-  borderSoft: '#BBF7D0',
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
-  placeholder: '#94A3B8',
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
+  placeholder: '#8A92A3',
 
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
@@ -105,10 +99,15 @@ const COLORS = {
 
   warning: '#F59E0B',
   warningSoft: '#FFFBEB',
+  warningBorder: '#FDE68A',
   warningText: '#92400E',
 
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
+
   white: '#FFFFFF',
-  overlay: 'rgba(0,0,0,0.45)',
+  dark: '#0B1220',
+  overlay: 'rgba(11,18,32,0.52)',
 };
 
 /* =========================================================
@@ -165,16 +164,12 @@ interface CustomerProfileScreenProps {
 ========================================================= */
 
 const formatBookingDate = (dateString: string): string => {
-  if (!dateString) {
-    return 'Date unavailable';
-  }
+  if (!dateString) return 'Date unavailable';
 
   try {
     const date = new Date(dateString);
 
-    if (Number.isNaN(date.getTime())) {
-      return dateString;
-    }
+    if (Number.isNaN(date.getTime())) return dateString;
 
     return date.toLocaleDateString('en-IN', {
       day: '2-digit',
@@ -186,21 +181,80 @@ const formatBookingDate = (dateString: string): string => {
   }
 };
 
+/**
+ * Converts any time string into a compact 12-hour hour number.
+ *
+ * Examples:
+ *   "17:00"     -> "5"
+ *   "19:00"     -> "7"
+ *   "12:00"     -> "12"
+ *   "13:00"     -> "1"
+ *   "00:00"     -> "12"
+ *   "07:30"     -> "7:30"
+ *   "5:00 PM"   -> "5"
+ */
+const formatTimeCompact = (time: string): string => {
+  if (!time) return '--';
+
+  const str = String(time).trim();
+
+  const match = str.match(
+    /^(\d{1,2})(?::(\d{1,2}))?(?::\d{2})?\s*(AM|PM)?$/i,
+  );
+
+  if (!match) return str;
+
+  let hour = Number(match[1]);
+  const minute = match[2] !== undefined ? Number(match[2]) : 0;
+  const period = match[3]?.toUpperCase();
+
+  if (!Number.isFinite(hour)) return str;
+
+  // Normalize 12-hour AM/PM input to 24-hour internally
+  if (period) {
+    if (period === 'AM' && hour === 12) {
+      hour = 0;
+    } else if (period === 'PM' && hour < 12) {
+      hour += 12;
+    }
+  }
+
+  // Convert 24-hour to 12-hour display
+  let displayHour: number;
+  if (hour === 0) {
+    displayHour = 12;
+  } else if (hour > 12) {
+    displayHour = hour - 12;
+  } else {
+    displayHour = hour;
+  }
+
+  if (minute === 0) {
+    return String(displayHour);
+  }
+
+  return `${displayHour}:${String(minute).padStart(2, '0')}`;
+};
+
+const formatTimeRange = (
+  startTime: string,
+  endTime: string,
+): string => {
+  const start = formatTimeCompact(startTime);
+  const end = formatTimeCompact(endTime);
+  return `${start} - ${end}`;
+};
+
 const formatAmount = (amount: number): string => {
   const numericAmount = Number(amount);
 
-  if (Number.isNaN(numericAmount)) {
-    return '0';
-  }
+  if (Number.isNaN(numericAmount)) return '0';
 
   return numericAmount.toLocaleString('en-IN');
 };
 
 const getInitial = (name?: string): string => {
-  if (!name?.trim()) {
-    return 'U';
-  }
-
+  if (!name?.trim()) return 'U';
   return name.trim().charAt(0).toUpperCase();
 };
 
@@ -215,7 +269,7 @@ const getStatusStyle = (status: string) => {
           borderColor: COLORS.borderSoft,
         },
         text: {
-          color: COLORS.primaryDark,
+          color: COLORS.primaryDarker,
         },
       };
 
@@ -234,7 +288,7 @@ const getStatusStyle = (status: string) => {
       return {
         container: {
           backgroundColor: COLORS.warningSoft,
-          borderColor: '#FDE68A',
+          borderColor: COLORS.warningBorder,
         },
         text: {
           color: COLORS.warningText,
@@ -255,16 +309,9 @@ const getStatusStyle = (status: string) => {
 };
 
 const getStatusLabel = (status: string): string => {
-  if (!status) {
-    return 'UNKNOWN';
-  }
-
+  if (!status) return 'UNKNOWN';
   return status.toUpperCase();
 };
-
-/* =========================================================
-   SAFE API RESPONSE
-========================================================= */
 
 const getResponseData = async (response: Response): Promise<any> => {
   const contentType = response.headers.get('content-type') || '';
@@ -273,17 +320,12 @@ const getResponseData = async (response: Response): Promise<any> => {
     try {
       return await response.json();
     } catch {
-      return {
-        message: 'Server returned invalid JSON.',
-      };
+      return { message: 'Server returned invalid JSON.' };
     }
   }
 
   const text = await response.text();
-
-  return {
-    message: text || 'Unexpected server response.',
-  };
+  return { message: text || 'Unexpected server response.' };
 };
 
 /* =========================================================
@@ -293,10 +335,16 @@ const getResponseData = async (response: Response): Promise<any> => {
 const CustomerProfileScreen: React.FC<
   CustomerProfileScreenProps
 > = ({ user, onUpdateUser, onLogout }) => {
-  /* =======================================================
-     PROFILE STATE
-  ======================================================= */
+  const [fontsLoaded, fontError] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    Poppins_900Black,
+  });
 
+  /* PROFILE STATE */
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
@@ -304,79 +352,49 @@ const CustomerProfileScreen: React.FC<
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone || '');
 
-  /* =======================================================
-     PASSWORD STATE
-  ======================================================= */
-
+  /* PASSWORD STATE */
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  const [showCurrentPassword, setShowCurrentPassword] =
-    useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
-  const [showNewPassword, setShowNewPassword] =
-    useState(false);
-
-  /* =======================================================
-     BOOKING STATE
-  ======================================================= */
-
+  /* BOOKING STATE */
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [fetchingBookings, setFetchingBookings] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  /* =======================================================
-     LOADING STATES
-  ======================================================= */
-
+  /* LOADING STATES */
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
-  /* =======================================================
-     SYNC USER DATA
-  ======================================================= */
-
+  /* SYNC USER DATA */
   useEffect(() => {
     setName(user.name || '');
     setEmail(user.email || '');
     setPhone(user.phone || '');
   }, [user]);
 
-  /* =======================================================
-     FETCH BOOKINGS
-  ======================================================= */
-
+  /* FETCH BOOKINGS */
   const fetchBookings = useCallback(async () => {
     if (!user?._id) {
-      console.warn(
-        'Cannot fetch bookings: user ID is missing.',
-      );
+      console.warn('Cannot fetch bookings: user ID is missing.');
       return;
     }
 
-    const bookingUrl =
-      `${API_BASE_URL}/users/${encodeURIComponent(
-        user._id,
-      )}/bookings`;
-
-    console.log('Fetching customer bookings:', bookingUrl);
+    const bookingUrl = `${API_BASE_URL}/users/${encodeURIComponent(
+      user._id,
+    )}/bookings`;
 
     try {
       setFetchingBookings(true);
 
       const response = await fetch(bookingUrl, {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
       const data = await getResponseData(response);
-
-      console.log(
-        'Booking API status:',
-        response.status,
-      );
 
       if (!response.ok) {
         throw new Error(
@@ -386,21 +404,6 @@ const CustomerProfileScreen: React.FC<
         );
       }
 
-      /*
-       * Backend can return either:
-       *
-       * [
-       *   {...},
-       *   {...}
-       * ]
-       *
-       * OR:
-       *
-       * {
-       *   bookings: [...]
-       * }
-       */
-
       const bookingData: Booking[] = Array.isArray(data)
         ? data
         : Array.isArray(data?.bookings)
@@ -409,34 +412,16 @@ const CustomerProfileScreen: React.FC<
 
       setBookings(bookingData);
     } catch (error: any) {
-      console.error(
-        'Fetch bookings error:',
-        error,
-      );
-
+      console.error('Fetch bookings error:', error);
       setBookings([]);
-
-      /*
-       * We intentionally do not show an Alert here.
-       * A temporary network error should not interrupt
-       * the profile screen.
-       */
     } finally {
       setFetchingBookings(false);
     }
   }, [user?._id]);
 
-  /* =======================================================
-     INITIAL BOOKING LOAD
-  ======================================================= */
-
   useEffect(() => {
     fetchBookings();
   }, [fetchBookings]);
-
-  /* =======================================================
-     PULL TO REFRESH
-  ======================================================= */
 
   const handleRefresh = useCallback(async () => {
     try {
@@ -447,79 +432,47 @@ const CustomerProfileScreen: React.FC<
     }
   }, [fetchBookings]);
 
-  /* =======================================================
-     VALIDATE PROFILE
-  ======================================================= */
-
   const validateProfile = (): boolean => {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
     const trimmedPhone = phone.trim();
 
-    if (
-      !trimmedName ||
-      !trimmedEmail ||
-      !trimmedPhone
-    ) {
+    if (!trimmedName || !trimmedEmail || !trimmedPhone) {
       Alert.alert(
         'Missing Information',
         'Please fill in your name, email and phone number.',
       );
-
       return false;
     }
 
-    const emailRegex =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(trimmedEmail)) {
-      Alert.alert(
-        'Invalid Email',
-        'Please enter a valid email address.',
-      );
-
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return false;
     }
 
-    const phoneDigits =
-      trimmedPhone.replace(/\D/g, '');
+    const phoneDigits = trimmedPhone.replace(/\D/g, '');
 
     if (phoneDigits.length < 10) {
-      Alert.alert(
-        'Invalid Phone',
-        'Please enter a valid phone number.',
-      );
-
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number.');
       return false;
     }
 
     return true;
   };
 
-  /* =======================================================
-     UPDATE PROFILE
-  ======================================================= */
-
   const handleUpdateProfile = async () => {
-    if (!validateProfile()) {
-      return;
-    }
+    if (!validateProfile()) return;
 
     if (!user?._id) {
-      Alert.alert(
-        'Error',
-        'User information is missing.',
-      );
-
+      Alert.alert('Error', 'User information is missing.');
       return;
     }
 
-    const updateUrl =
-      `${API_BASE_URL}/users/${encodeURIComponent(
-        user._id,
-      )}`;
-
-    console.log('Updating profile:', updateUrl);
+    const updateUrl = `${API_BASE_URL}/users/${encodeURIComponent(
+      user._id,
+    )}`;
 
     try {
       setUpdatingProfile(true);
@@ -547,8 +500,7 @@ const CustomerProfileScreen: React.FC<
         );
       }
 
-      const updatedUser: CustomerUser =
-        data?.user || data;
+      const updatedUser: CustomerUser = data?.user || data;
 
       onUpdateUser?.({
         ...user,
@@ -558,16 +510,9 @@ const CustomerProfileScreen: React.FC<
 
       setShowEditProfile(false);
 
-      Alert.alert(
-        'Success',
-        'Your profile has been updated successfully.',
-      );
+      Alert.alert('Success', 'Your profile has been updated successfully.');
     } catch (error: any) {
-      console.error(
-        'Update profile error:',
-        error,
-      );
-
+      console.error('Update profile error:', error);
       Alert.alert(
         'Update Failed',
         error?.message ||
@@ -578,26 +523,14 @@ const CustomerProfileScreen: React.FC<
     }
   };
 
-  /* =======================================================
-     VALIDATE PASSWORD
-  ======================================================= */
-
   const validatePassword = (): boolean => {
     if (!currentPassword.trim()) {
-      Alert.alert(
-        'Missing Password',
-        'Please enter your current password.',
-      );
-
+      Alert.alert('Missing Password', 'Please enter your current password.');
       return false;
     }
 
     if (!newPassword.trim()) {
-      Alert.alert(
-        'Missing Password',
-        'Please enter your new password.',
-      );
-
+      Alert.alert('Missing Password', 'Please enter your new password.');
       return false;
     }
 
@@ -606,7 +539,6 @@ const CustomerProfileScreen: React.FC<
         'Invalid Password',
         'New password must contain at least 6 characters.',
       );
-
       return false;
     }
 
@@ -615,40 +547,23 @@ const CustomerProfileScreen: React.FC<
         'Invalid Password',
         'New password must be different from your current password.',
       );
-
       return false;
     }
 
     return true;
   };
 
-  /* =======================================================
-     CHANGE PASSWORD
-  ======================================================= */
-
   const handleChangePassword = async () => {
-    if (!validatePassword()) {
-      return;
-    }
+    if (!validatePassword()) return;
 
     if (!user?._id) {
-      Alert.alert(
-        'Error',
-        'User information is missing.',
-      );
-
+      Alert.alert('Error', 'User information is missing.');
       return;
     }
 
-    const passwordUrl =
-      `${API_BASE_URL}/users/${encodeURIComponent(
-        user._id,
-      )}/password`;
-
-    console.log(
-      'Changing password:',
-      passwordUrl,
-    );
+    const passwordUrl = `${API_BASE_URL}/users/${encodeURIComponent(
+      user._id,
+    )}/password`;
 
     try {
       setChangingPassword(true);
@@ -659,10 +574,7 @@ const CustomerProfileScreen: React.FC<
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-        }),
+        body: JSON.stringify({ currentPassword, newPassword }),
       });
 
       const data = await getResponseData(response);
@@ -677,22 +589,13 @@ const CustomerProfileScreen: React.FC<
 
       setCurrentPassword('');
       setNewPassword('');
-
       setShowCurrentPassword(false);
       setShowNewPassword(false);
-
       setShowPasswordModal(false);
 
-      Alert.alert(
-        'Success',
-        'Your password has been changed successfully.',
-      );
+      Alert.alert('Success', 'Your password has been changed successfully.');
     } catch (error: any) {
-      console.error(
-        'Change password error:',
-        error,
-      );
-
+      console.error('Change password error:', error);
       Alert.alert(
         'Password Change Failed',
         error?.message ||
@@ -703,51 +606,30 @@ const CustomerProfileScreen: React.FC<
     }
   };
 
-  /* =======================================================
-     OPEN PASSWORD MODAL
-  ======================================================= */
-
   const openPasswordModal = () => {
     setCurrentPassword('');
     setNewPassword('');
-
     setShowCurrentPassword(false);
     setShowNewPassword(false);
-
     setShowPasswordModal(true);
   };
 
-  /* =======================================================
-     CLOSE PASSWORD MODAL
-  ======================================================= */
-
   const closePasswordModal = () => {
-    if (changingPassword) {
-      return;
-    }
+    if (changingPassword) return;
 
     setCurrentPassword('');
     setNewPassword('');
-
     setShowCurrentPassword(false);
     setShowNewPassword(false);
-
     setShowPasswordModal(false);
   };
-
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
 
   const handleLogout = () => {
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Logout',
           style: 'destructive',
@@ -756,15 +638,24 @@ const CustomerProfileScreen: React.FC<
           },
         },
       ],
-      {
-        cancelable: true,
-      },
+      { cancelable: true },
     );
   };
 
-  /* =======================================================
-     RENDER
-  ======================================================= */
+  /* FONT LOADING GUARD */
+  if (!fontsLoaded && !fontError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.fontLoadingContainer}>
+          <View style={styles.fontLoadingMark}>
+            <Text style={styles.fontLoadingMarkText}>T</Text>
+          </View>
+          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+          <Text style={styles.fontLoadingText}>TurfBook</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -776,333 +667,190 @@ const CustomerProfileScreen: React.FC<
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={COLORS.primary}
+            tintColor={COLORS.primaryDeep}
             colors={[COLORS.primary]}
           />
         }
       >
-        {/* =================================================
-            PAGE HEADER
-        ================================================= */}
-
+        {/* PAGE HEADER */}
         <View style={styles.pageHeader}>
-          <Text style={styles.pageHeaderBadge}>
-            ⚽ PLAYER
-          </Text>
-
-          <Text style={styles.title}>
-            Profile
-          </Text>
-
+          <Text style={styles.pageHeaderBadge}>⚽ PLAYER</Text>
+          <Text style={styles.title}>Profile</Text>
           <Text style={styles.pageHeaderSubtitle}>
             Manage your account and bookings
           </Text>
         </View>
 
-        {/* =================================================
-            PROFILE CARD
-        ================================================= */}
-
+        {/* PROFILE CARD */}
         <View style={styles.card}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {getInitial(user.name)}
-              </Text>
+          <View style={styles.profileTop}>
+            <View style={styles.avatarWrapper}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {getInitial(user.name)}
+                </Text>
+              </View>
+
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarBadgeText}>🏆</Text>
+              </View>
             </View>
 
-            <View style={styles.avatarBadge}>
-              <Text style={styles.avatarBadgeText}>
-                🏆
+            <View style={styles.profileInfo}>
+              <Text style={styles.name} numberOfLines={1}>
+                {user.name || 'User'}
               </Text>
+              <Text style={styles.email} numberOfLines={1}>
+                {user.email || 'Email not available'}
+              </Text>
+
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>PLAYER</Text>
+              </View>
             </View>
           </View>
-
-          <Text style={styles.name}>
-            {user.name || 'User'}
-          </Text>
-
-          <Text style={styles.email}>
-            {user.email || 'Email not available'}
-          </Text>
-
-          {/* PHONE */}
 
           <View style={styles.infoRow}>
-            <Text style={styles.label}>
-              Phone
-            </Text>
-
-            <Text style={styles.value}>
-              {user.phone || 'Not added'}
-            </Text>
+            <Text style={styles.label}>Phone</Text>
+            <Text style={styles.value}>{user.phone || 'Not added'}</Text>
           </View>
 
-          {/* ACCOUNT TYPE */}
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>
-              Account Type
-            </Text>
-
-            <View style={styles.rolePill}>
-              <Text style={styles.rolePillText}>
-                PLAYER
-              </Text>
-            </View>
-          </View>
-
-          {/* EDIT PROFILE */}
-
-          <TouchableOpacity
-            style={styles.greenButton}
-            onPress={() =>
-              setShowEditProfile(true)
-            }
-            activeOpacity={0.85}
-          >
-            <Text style={styles.greenButtonText}>
-              EDIT PROFILE
-            </Text>
-          </TouchableOpacity>
-
-          {/* CHANGE PASSWORD */}
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={openPasswordModal}
-            activeOpacity={0.85}
-          >
-            <Text
-              style={styles.secondaryButtonText}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => setShowEditProfile(true)}
+              activeOpacity={0.85}
             >
-              CHANGE PASSWORD
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name="create-outline"
+                size={15}
+                color={COLORS.dark}
+              />
+              <Text style={styles.primaryButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={openPasswordModal}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={15}
+                color={COLORS.textPrimary}
+              />
+              <Text style={styles.secondaryButtonText}>Password</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* =================================================
-            BOOKING HISTORY HEADER
-        ================================================= */}
-
+        {/* BOOKING HISTORY HEADER */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>
-              Booking History
-            </Text>
-
-            <View
-              style={styles.sectionTitleAccent}
-            />
+            <Text style={styles.sectionTitle}>Booking History</Text>
+            <View style={styles.sectionTitleAccent} />
           </View>
 
           {bookings.length > 0 && (
             <View style={styles.countPill}>
-              <Text
-                style={styles.countPillText}
-              >
-                {bookings.length}
-              </Text>
+              <Text style={styles.countPillText}>{bookings.length}</Text>
             </View>
           )}
         </View>
 
-        {/* =================================================
-            BOOKING LOADING
-        ================================================= */}
-
+        {/* BOOKING LOADING */}
         {fetchingBookings && !refreshing ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator
-              size="small"
-              color={COLORS.primary}
-            />
-
-            <Text style={styles.loadingText}>
-              Loading bookings...
-            </Text>
+            <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+            <Text style={styles.loadingText}>Loading bookings...</Text>
           </View>
         ) : bookings.length === 0 ? (
-          /* =================================================
-             EMPTY BOOKINGS
-          ================================================= */
-
+          /* EMPTY BOOKINGS */
           <View style={styles.emptyCard}>
-            <View
-              style={styles.emptyIconWrapper}
-            >
-              <Text style={styles.emptyIcon}>
-                🎟️
-              </Text>
+            <View style={styles.emptyIconWrapper}>
+              <Text style={styles.emptyIcon}>🎟️</Text>
             </View>
 
-            <Text style={styles.emptyTitle}>
-              No bookings yet
-            </Text>
+            <Text style={styles.emptyTitle}>No bookings yet</Text>
 
             <Text style={styles.emptyText}>
               Your turf bookings will appear here.
             </Text>
 
             <TouchableOpacity
-              style={
-                styles.emptyRefreshButton
-              }
+              style={styles.emptyRefreshButton}
               onPress={fetchBookings}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text
-                style={styles.emptyRefreshText}
-              >
-                REFRESH
-              </Text>
+              <Text style={styles.emptyRefreshText}>REFRESH</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          /* =================================================
-             BOOKINGS
-          ================================================= */
-
+          /* BOOKINGS */
           bookings.map((booking) => {
-            const statusStyle =
-              getStatusStyle(
-                booking.status,
-              );
+            const statusStyle = getStatusStyle(booking.status);
 
             return (
-              <View
-                key={booking._id}
-                style={styles.bookingCard}
-              >
+              <View key={booking._id} style={styles.bookingCard}>
                 {/* BOOKING HEADER */}
-
-                <View
-                  style={styles.bookingHeader}
-                >
-                  <View
-                    style={
-                      styles.bookingIconCircle
-                    }
-                  >
-                    <Text
-                      style={styles.bookingIcon}
-                    >
-                      🏟️
-                    </Text>
+                <View style={styles.bookingHeader}>
+                  <View style={styles.bookingIconCircle}>
+                    <Text style={styles.bookingIcon}>🏟️</Text>
                   </View>
 
-                  <View
-                    style={
-                      styles.bookingMainInfo
-                    }
-                  >
+                  <View style={styles.bookingMainInfo}>
                     <Text
-                      style={
-                        styles.bookingTurf
-                      }
+                      style={styles.bookingTurf}
                       numberOfLines={1}
                     >
-                      {booking.turf?.name ||
-                        'Turf'}
+                      {booking.turf?.name || 'Turf'}
                     </Text>
 
-                    <View
-                      style={
-                        styles.bookingDateRow
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.bookingDateIcon
-                        }
-                      >
-                        📅
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.bookingDate
-                        }
-                      >
-                        {formatBookingDate(
-                          booking.bookingDate,
-                        )}
+                    <View style={styles.bookingDateRow}>
+                      <Ionicons
+                        name="calendar-outline"
+                        size={11}
+                        color={COLORS.textMuted}
+                      />
+                      <Text style={styles.bookingDate}>
+                        {formatBookingDate(booking.bookingDate)}
                       </Text>
                     </View>
                   </View>
 
                   <View
-                    style={[
-                      styles.statusPill,
-                      statusStyle.container,
-                    ]}
+                    style={[styles.statusPill, statusStyle.container]}
                   >
                     <Text
-                      style={[
-                        styles.statusPillText,
-                        statusStyle.text,
-                      ]}
+                      style={[styles.statusPillText, statusStyle.text]}
                     >
-                      {getStatusLabel(
-                        booking.status,
-                      )}
+                      {getStatusLabel(booking.status)}
                     </Text>
                   </View>
                 </View>
 
-                {/* DIVIDER */}
-
-                <View
-                  style={styles.bookingDivider}
-                />
+                <View style={styles.bookingDivider} />
 
                 {/* BOTTOM */}
+                <View style={styles.bookingBottom}>
+                  <View style={styles.bookingTimeBox}>
+                    <Text style={styles.bookingTimeLabel}>TIME</Text>
 
-                <View
-                  style={styles.bookingBottom}
-                >
-                  <View
-                    style={styles.bookingTimeBox}
-                  >
-                    <Text
-                      style={
-                        styles.bookingTimeLabel
-                      }
-                    >
-                      TIME
-                    </Text>
-
-                    <Text
-                      style={styles.bookingTime}
-                    >
-                      {booking.startTime ||
-                        '--'}{' '}
-                      —{' '}
-                      {booking.endTime ||
-                        '--'}
+                    <Text style={styles.bookingTime}>
+                      {formatTimeRange(
+                        booking.startTime,
+                        booking.endTime,
+                      )}
                     </Text>
                   </View>
 
-                  <View
-                    style={
-                      styles.bookingAmountBox
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.bookingAmountLabel
-                      }
-                    >
+                  <View style={styles.bookingAmountBox}>
+                    <Text style={styles.bookingAmountLabel}>
                       AMOUNT
                     </Text>
 
-                    <Text
-                      style={styles.amount}
-                    >
-                      ₹
-                      {formatAmount(
-                        booking.finalAmount,
-                      )}
+                    <Text style={styles.amount}>
+                      ₹{formatAmount(booking.finalAmount)}
                     </Text>
                   </View>
                 </View>
@@ -1111,70 +859,51 @@ const CustomerProfileScreen: React.FC<
           })
         )}
 
-        {/* =================================================
-            LOGOUT
-        ================================================= */}
-
+        {/* LOGOUT */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
           activeOpacity={0.85}
         >
-          <Text style={styles.logoutText}>
-            LOGOUT
-          </Text>
+          <Ionicons
+            name="log-out-outline"
+            size={16}
+            color={COLORS.dangerText}
+          />
+          <Text style={styles.logoutText}>LOGOUT</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ===================================================
-          EDIT PROFILE MODAL
-      =================================================== */}
-
+      {/* EDIT PROFILE MODAL */}
       <Modal
         visible={showEditProfile}
         transparent
         animationType="slide"
         onRequestClose={() => {
-          if (!updatingProfile) {
-            setShowEditProfile(false);
-          }
+          if (!updatingProfile) setShowEditProfile(false);
         }}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={
-            Platform.OS === 'ios'
-              ? 'padding'
-              : undefined
-          }
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
-            contentContainerStyle={
-              styles.modalScrollContent
-            }
+            contentContainerStyle={styles.modalScrollContent}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
-              <Text style={styles.modalBadge}>
-                👤 PROFILE
-              </Text>
+              <View style={styles.modalHandle} />
 
-              <Text style={styles.modalTitle}>
-                Edit Profile
-              </Text>
+              <Text style={styles.modalBadge}>👤 PROFILE</Text>
 
-              {/* NAME */}
+              <Text style={styles.modalTitle}>Edit Profile</Text>
 
-              <Text style={styles.fieldLabel}>
-                Name
-              </Text>
+              <Text style={styles.fieldLabel}>NAME</Text>
 
               <TextInput
                 style={styles.input}
                 placeholder="Enter your name"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -1182,18 +911,12 @@ const CustomerProfileScreen: React.FC<
                 returnKeyType="next"
               />
 
-              {/* EMAIL */}
-
-              <Text style={styles.fieldLabel}>
-                Email
-              </Text>
+              <Text style={styles.fieldLabel}>EMAIL</Text>
 
               <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}
@@ -1203,18 +926,12 @@ const CustomerProfileScreen: React.FC<
                 returnKeyType="next"
               />
 
-              {/* PHONE */}
-
-              <Text style={styles.fieldLabel}>
-                Phone
-              </Text>
+              <Text style={styles.fieldLabel}>PHONE</Text>
 
               <TextInput
                 style={styles.input}
                 placeholder="Enter your phone number"
-                placeholderTextColor={
-                  COLORS.placeholder
-                }
+                placeholderTextColor={COLORS.placeholder}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
@@ -1223,164 +940,109 @@ const CustomerProfileScreen: React.FC<
                 returnKeyType="done"
               />
 
-              {/* SAVE */}
-
               <TouchableOpacity
                 style={[
                   styles.greenButton,
-                  updatingProfile &&
-                    styles.disabledButton,
+                  updatingProfile && styles.disabledButton,
                 ]}
-                onPress={
-                  handleUpdateProfile
-                }
+                onPress={handleUpdateProfile}
                 disabled={updatingProfile}
                 activeOpacity={0.85}
               >
                 {updatingProfile ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.greenButtonText
-                    }
-                  >
+                  <Text style={styles.greenButtonText}>
                     SAVE CHANGES
                   </Text>
                 )}
               </TouchableOpacity>
 
-              {/* CANCEL */}
-
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() =>
-                  setShowEditProfile(false)
-                }
+                onPress={() => setShowEditProfile(false)}
                 disabled={updatingProfile}
                 activeOpacity={0.8}
               >
-                <Text
-                  style={styles.cancelText}
-                >
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ===================================================
-          CHANGE PASSWORD MODAL
-      =================================================== */}
-
+      {/* CHANGE PASSWORD MODAL */}
       <Modal
         visible={showPasswordModal}
         transparent
         animationType="slide"
-        onRequestClose={
-          closePasswordModal
-        }
+        onRequestClose={closePasswordModal}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={
-            Platform.OS === 'ios'
-              ? 'padding'
-              : undefined
-          }
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
-            contentContainerStyle={
-              styles.modalScrollContent
-            }
+            contentContainerStyle={styles.modalScrollContent}
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.modalCard}>
-              <Text style={styles.modalBadge}>
-                🔒 SECURITY
-              </Text>
+              <View style={styles.modalHandle} />
 
-              <Text style={styles.modalTitle}>
-                Change Password
-              </Text>
+              <Text style={styles.modalBadge}>🔒 SECURITY</Text>
 
-              {/* CURRENT PASSWORD */}
+              <Text style={styles.modalTitle}>Change Password</Text>
 
               <Text style={styles.fieldLabel}>
-                Current Password
+                CURRENT PASSWORD
               </Text>
 
-              <View
-                style={
-                  styles.passwordInputWrapper
-                }
-              >
+              <View style={styles.passwordInputWrapper}>
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="Enter current password"
-                  placeholderTextColor={
-                    COLORS.placeholder
-                  }
-                  secureTextEntry={
-                    !showCurrentPassword
-                  }
+                  placeholderTextColor={COLORS.placeholder}
+                  secureTextEntry={!showCurrentPassword}
                   value={currentPassword}
-                  onChangeText={
-                    setCurrentPassword
-                  }
+                  onChangeText={setCurrentPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
                   editable={!changingPassword}
                 />
 
                 <TouchableOpacity
-                  style={
-                    styles.passwordToggle
-                  }
+                  style={styles.passwordToggle}
                   onPress={() =>
-                    setShowCurrentPassword(
-                      (previous) =>
-                        !previous,
-                    )
+                    setShowCurrentPassword((prev) => !prev)
                   }
                   disabled={changingPassword}
+                  hitSlop={{
+                    top: 10,
+                    bottom: 10,
+                    left: 10,
+                    right: 10,
+                  }}
                 >
-                  <Text
-                    style={
-                      styles.passwordToggleText
+                  <Ionicons
+                    name={
+                      showCurrentPassword
+                        ? 'eye-off-outline'
+                        : 'eye-outline'
                     }
-                  >
-                    {showCurrentPassword
-                      ? 'HIDE'
-                      : 'SHOW'}
-                  </Text>
+                    size={18}
+                    color={COLORS.primaryDarker}
+                  />
                 </TouchableOpacity>
               </View>
 
-              {/* NEW PASSWORD */}
+              <Text style={styles.fieldLabel}>NEW PASSWORD</Text>
 
-              <Text style={styles.fieldLabel}>
-                New Password
-              </Text>
-
-              <View
-                style={
-                  styles.passwordInputWrapper
-                }
-              >
+              <View style={styles.passwordInputWrapper}>
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="Enter new password"
-                  placeholderTextColor={
-                    COLORS.placeholder
-                  }
-                  secureTextEntry={
-                    !showNewPassword
-                  }
+                  placeholderTextColor={COLORS.placeholder}
+                  secureTextEntry={!showNewPassword}
                   value={newPassword}
                   onChangeText={setNewPassword}
                   autoCapitalize="none"
@@ -1389,26 +1051,25 @@ const CustomerProfileScreen: React.FC<
                 />
 
                 <TouchableOpacity
-                  style={
-                    styles.passwordToggle
-                  }
-                  onPress={() =>
-                    setShowNewPassword(
-                      (previous) =>
-                        !previous,
-                    )
-                  }
+                  style={styles.passwordToggle}
+                  onPress={() => setShowNewPassword((prev) => !prev)}
                   disabled={changingPassword}
+                  hitSlop={{
+                    top: 10,
+                    bottom: 10,
+                    left: 10,
+                    right: 10,
+                  }}
                 >
-                  <Text
-                    style={
-                      styles.passwordToggleText
+                  <Ionicons
+                    name={
+                      showNewPassword
+                        ? 'eye-off-outline'
+                        : 'eye-outline'
                     }
-                  >
-                    {showNewPassword
-                      ? 'HIDE'
-                      : 'SHOW'}
-                  </Text>
+                    size={18}
+                    color={COLORS.primaryDarker}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -1416,36 +1077,23 @@ const CustomerProfileScreen: React.FC<
                 Minimum 6 characters
               </Text>
 
-              {/* CHANGE PASSWORD */}
-
               <TouchableOpacity
                 style={[
                   styles.greenButton,
-                  changingPassword &&
-                    styles.disabledButton,
+                  changingPassword && styles.disabledButton,
                 ]}
-                onPress={
-                  handleChangePassword
-                }
+                onPress={handleChangePassword}
                 disabled={changingPassword}
                 activeOpacity={0.85}
               >
                 {changingPassword ? (
-                  <ActivityIndicator
-                    color={COLORS.white}
-                  />
+                  <ActivityIndicator color={COLORS.dark} />
                 ) : (
-                  <Text
-                    style={
-                      styles.greenButtonText
-                    }
-                  >
+                  <Text style={styles.greenButtonText}>
                     CHANGE PASSWORD
                   </Text>
                 )}
               </TouchableOpacity>
-
-              {/* CANCEL */}
 
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -1453,11 +1101,7 @@ const CustomerProfileScreen: React.FC<
                 disabled={changingPassword}
                 activeOpacity={0.8}
               >
-                <Text
-                  style={styles.cancelText}
-                >
-                  Cancel
-                </Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1474,273 +1118,267 @@ export default CustomerProfileScreen;
 ========================================================= */
 
 const styles = StyleSheet.create({
-  /* =======================================================
-     SAFE AREA
-  ======================================================= */
-
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
 
   container: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 10,
     paddingBottom: 60,
   },
 
-  /* =======================================================
-     PAGE HEADER
-  ======================================================= */
+  fontLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+
+  fontLoadingMark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+
+  fontLoadingMarkText: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
+    letterSpacing: -0.5,
+  },
+
+  fontLoadingText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 10,
+    letterSpacing: 0.3,
+  },
 
   pageHeader: {
-    marginBottom: 22,
+    marginBottom: 18,
   },
 
   pageHeaderBadge: {
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primarySoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDarker,
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 10,
-    fontWeight: '900',
     letterSpacing: 1.5,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 20,
-    marginBottom: 12,
+    marginBottom: 10,
     overflow: 'hidden',
   },
 
   title: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontSize: 26,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.4,
   },
 
   pageHeaderSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
     color: COLORS.textSecondary,
-    marginTop: 5,
+    marginTop: 4,
+    lineHeight: 18,
   },
-
-  /* =======================================================
-     PROFILE CARD
-  ======================================================= */
 
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 28,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 22,
     borderWidth: 1,
     borderColor: COLORS.border,
-
-    shadowColor: '#000',
-
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05,
-    shadowRadius: 16,
-
+    shadowRadius: 14,
     elevation: 3,
+  },
+
+  profileTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
   },
 
   avatarWrapper: {
     position: 'relative',
-    alignSelf: 'center',
-    marginBottom: 16,
+    marginRight: 14,
   },
 
   avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     backgroundColor: COLORS.primary,
-
-    justifyContent: 'center',
     alignItems: 'center',
-
-    shadowColor: COLORS.primary,
-
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-
-    elevation: 8,
+    justifyContent: 'center',
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
   avatarText: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: COLORS.white,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
   },
 
   avatarBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-
+    bottom: -4,
+    right: -4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: COLORS.accent,
-
     alignItems: 'center',
     justifyContent: 'center',
-
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: COLORS.white,
   },
 
   avatarBadgeText: {
-    fontSize: 13,
+    fontSize: 11,
+  },
+
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
   },
 
   name: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 18,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    textAlign: 'center',
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
 
   email: {
-    fontSize: 13,
+    fontSize: 12,
+    fontFamily: 'Poppins_500Medium',
     color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 5,
-    marginBottom: 22,
-    fontWeight: '500',
+    marginTop: 2,
+  },
+
+  rolePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+
+  rolePillText: {
+    color: COLORS.primaryDarker,
+    fontSize: 9,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1,
   },
 
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-
-    paddingVertical: 14,
-
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
   },
 
   label: {
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontFamily: 'Poppins_600SemiBold',
+    flex: 1,
   },
 
   value: {
     color: COLORS.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
-
-    maxWidth: '60%',
-
+    fontFamily: 'Poppins_700Bold',
+    maxWidth: '65%',
     textAlign: 'right',
   },
 
-  rolePill: {
-    backgroundColor: COLORS.primarySoft,
-
-    borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
-
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-
-    borderRadius: 14,
-  },
-
-  rolePillText: {
-    color: COLORS.primaryDark,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-
-  /* =======================================================
-     BUTTONS
-  ======================================================= */
-
-  greenButton: {
-    backgroundColor: COLORS.primary,
-
-    borderRadius: 14,
-
-    paddingVertical: 16,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    marginTop: 18,
-
-    shadowColor: COLORS.primary,
-
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-
-    elevation: 4,
-  },
-
-  greenButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-
-  secondaryButton: {
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-
-    backgroundColor: COLORS.primarySoft,
-
-    borderRadius: 14,
-
-    paddingVertical: 15,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginTop: 12,
   },
 
+  primaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  primaryButtonText: {
+    color: COLORS.dark,
+    fontSize: 12,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
+  },
+
+  secondaryButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.cardSoft,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+
   secondaryButtonText: {
-    color: COLORS.primaryDark,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 1.2,
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
   },
-
-  disabledButton: {
-    opacity: 0.65,
-  },
-
-  /* =======================================================
-     SECTION
-  ======================================================= */
 
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
 
   sectionTitleRow: {
@@ -1749,182 +1387,127 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+    fontSize: 16,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   sectionTitleAccent: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-
-    backgroundColor: COLORS.accent,
-
-    marginLeft: 8,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: COLORS.primary,
+    marginLeft: 7,
     marginTop: 2,
   },
 
   countPill: {
     backgroundColor: COLORS.primarySoft,
-
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-
-    borderRadius: 14,
-
-    minWidth: 28,
-
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    minWidth: 26,
     alignItems: 'center',
   },
 
   countPillText: {
-    fontSize: 11,
-    color: COLORS.primaryDark,
-    fontWeight: '900',
+    fontSize: 10,
+    color: COLORS.primaryDarker,
+    fontFamily: 'Poppins_900Black',
   },
-
-  /* =======================================================
-     LOADING
-  ======================================================= */
 
   loadingBox: {
     backgroundColor: COLORS.primarySoft,
-
     borderRadius: 18,
-
-    padding: 28,
-
+    padding: 24,
     alignItems: 'center',
-
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   loadingText: {
     color: COLORS.textSecondary,
-
-    marginTop: 12,
-
+    marginTop: 10,
     fontSize: 12,
-
-    fontWeight: '600',
-
-    letterSpacing: 0.3,
+    fontFamily: 'Poppins_600SemiBold',
+    letterSpacing: 0.2,
   },
-
-  /* =======================================================
-     EMPTY BOOKINGS
-  ======================================================= */
 
   emptyCard: {
     backgroundColor: COLORS.primarySoft,
-
-    borderRadius: 22,
-
-    padding: 30,
-
+    borderRadius: 20,
+    padding: 26,
     alignItems: 'center',
-
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   emptyIconWrapper: {
-    width: 72,
-    height: 72,
-
-    borderRadius: 36,
-
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: COLORS.white,
-
     alignItems: 'center',
     justifyContent: 'center',
-
-    marginBottom: 14,
-
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
 
   emptyIcon: {
-    fontSize: 30,
+    fontSize: 26,
   },
 
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 15,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   emptyText: {
     color: COLORS.textMuted,
-
-    marginTop: 8,
-
+    marginTop: 6,
     fontSize: 12,
-
+    fontFamily: 'Poppins_400Regular',
     textAlign: 'center',
-
-    lineHeight: 18,
+    lineHeight: 17,
   },
 
   emptyRefreshButton: {
-    marginTop: 18,
-
+    marginTop: 16,
     paddingHorizontal: 18,
     paddingVertical: 10,
-
     borderRadius: 12,
-
-    backgroundColor: COLORS.white,
-
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   emptyRefreshText: {
-    color: COLORS.primaryDark,
-
+    color: COLORS.dark,
     fontSize: 11,
-
-    fontWeight: '900',
-
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1,
   },
 
-  /* =======================================================
-     BOOKING CARD
-  ======================================================= */
-
   bookingCard: {
     backgroundColor: COLORS.card,
-
-    borderRadius: 20,
-
-    padding: 18,
-
-    marginBottom: 14,
-
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-
-    shadowColor: '#000',
-
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    shadowOpacity: 0.05,
-
-    shadowRadius: 12,
-
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
   },
 
@@ -1934,24 +1517,19 @@ const styles = StyleSheet.create({
   },
 
   bookingIconCircle: {
-    width: 48,
-    height: 48,
-
-    borderRadius: 24,
-
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     backgroundColor: COLORS.primarySoft,
-
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-
     alignItems: 'center',
     justifyContent: 'center',
-
-    marginRight: 14,
+    marginRight: 11,
   },
 
   bookingIcon: {
-    fontSize: 22,
+    fontSize: 18,
   },
 
   bookingMainInfo: {
@@ -1960,99 +1538,69 @@ const styles = StyleSheet.create({
   },
 
   bookingTurf: {
-    fontSize: 17,
-
-    fontWeight: '900',
-
+    fontSize: 14,
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
-
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   bookingDateRow: {
     flexDirection: 'row',
-
     alignItems: 'center',
-
-    marginTop: 6,
-  },
-
-  bookingDateIcon: {
-    fontSize: 11,
-
-    marginRight: 5,
+    gap: 4,
+    marginTop: 3,
   },
 
   bookingDate: {
     color: COLORS.textSecondary,
-
-    fontSize: 12,
-
-    fontWeight: '600',
+    fontSize: 11,
+    fontFamily: 'Poppins_600SemiBold',
   },
 
   statusPill: {
-    paddingHorizontal: 10,
-
-    paddingVertical: 6,
-
-    borderRadius: 14,
-
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
-
     marginLeft: 8,
-
-    maxWidth: 100,
   },
 
   statusPillText: {
     fontSize: 8,
-
-    fontWeight: '900',
-
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 0.8,
   },
 
   bookingDivider: {
     height: 1,
-
     backgroundColor: COLORS.borderLight,
-
-    marginVertical: 16,
+    marginVertical: 12,
   },
 
   bookingBottom: {
     flexDirection: 'row',
-
     justifyContent: 'space-between',
-
     alignItems: 'flex-end',
   },
 
   bookingTimeBox: {
     flex: 1,
-
     paddingRight: 10,
   },
 
   bookingTimeLabel: {
     fontSize: 9,
-
     color: COLORS.textMuted,
-
-    fontWeight: '800',
-
+    fontFamily: 'Poppins_800ExtraBold',
     letterSpacing: 1,
-
-    marginBottom: 4,
+    marginBottom: 3,
   },
 
   bookingTime: {
     color: COLORS.textPrimary,
-
-    fontSize: 13,
-
-    fontWeight: '700',
+    fontSize: 15,
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: -0.2,
   },
 
   bookingAmountBox: {
@@ -2061,242 +1609,191 @@ const styles = StyleSheet.create({
 
   bookingAmountLabel: {
     fontSize: 9,
-
     color: COLORS.textMuted,
-
-    fontWeight: '800',
-
+    fontFamily: 'Poppins_800ExtraBold',
     letterSpacing: 1,
-
-    marginBottom: 4,
+    marginBottom: 3,
   },
 
   amount: {
-    fontSize: 20,
-
-    fontWeight: '900',
-
-    color: COLORS.primaryDark,
-
-    letterSpacing: 0.2,
+    fontSize: 17,
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.primaryDarker,
+    letterSpacing: -0.2,
   },
 
-  /* =======================================================
-     LOGOUT
-  ======================================================= */
-
   logoutButton: {
-    marginTop: 28,
-
-    borderWidth: 1.5,
-
-    borderColor: COLORS.dangerBorder,
-
-    backgroundColor: COLORS.dangerSoft,
-
-    borderRadius: 14,
-
-    paddingVertical: 16,
-
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 22,
+    borderWidth: 1.5,
+    borderColor: COLORS.dangerBorder,
+    backgroundColor: COLORS.dangerSoft,
+    borderRadius: 14,
+    paddingVertical: 14,
   },
 
   logoutText: {
     color: COLORS.dangerText,
-
-    fontWeight: '900',
-
-    fontSize: 13,
-
+    fontFamily: 'Poppins_900Black',
+    fontSize: 12,
     letterSpacing: 1.2,
   },
 
-  /* =======================================================
-     MODAL
-  ======================================================= */
-
   modalOverlay: {
     flex: 1,
-
     backgroundColor: COLORS.overlay,
   },
 
   modalScrollContent: {
     flexGrow: 1,
-
     justifyContent: 'center',
-
     padding: 20,
   },
 
   modalCard: {
     backgroundColor: COLORS.white,
-
     borderRadius: 24,
-
-    padding: 24,
-
+    padding: 22,
     borderWidth: 1,
-
     borderColor: COLORS.borderLight,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 26,
+    elevation: 12,
+  },
+
+  modalHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.borderDark,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
 
   modalBadge: {
     alignSelf: 'flex-start',
-
     backgroundColor: COLORS.primarySoft,
-
-    borderWidth: 1.5,
-
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
-
-    color: COLORS.primaryDark,
-
-    fontSize: 9,
-
-    fontWeight: '900',
-
-    letterSpacing: 1.5,
-
-    paddingHorizontal: 12,
-
+    color: COLORS.primaryDarker,
+    fontSize: 10,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1.2,
+    paddingHorizontal: 11,
     paddingVertical: 5,
-
-    borderRadius: 20,
-
-    marginBottom: 12,
-
+    borderRadius: 18,
+    marginBottom: 10,
     overflow: 'hidden',
   },
 
   modalTitle: {
-    fontSize: 22,
-
-    fontWeight: '900',
-
+    fontSize: 20,
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-
-    marginBottom: 20,
-
-    letterSpacing: 0.2,
+    marginBottom: 18,
+    letterSpacing: -0.2,
   },
 
   fieldLabel: {
+    color: COLORS.textPrimary,
     fontSize: 11,
-
-    fontWeight: '800',
-
-    color: COLORS.primaryDark,
-
-    marginBottom: 8,
-
+    fontFamily: 'Poppins_800ExtraBold',
+    marginBottom: 7,
+    marginTop: 6,
     letterSpacing: 1,
-
     textTransform: 'uppercase',
   },
 
   input: {
     borderWidth: 1.5,
-
     borderColor: COLORS.borderLight,
-
-    backgroundColor: COLORS.primarySoft,
-
+    backgroundColor: COLORS.cardSoft,
     borderRadius: 14,
-
     paddingHorizontal: 16,
-
     paddingVertical: 14,
-
-    marginBottom: 16,
-
+    marginBottom: 10,
     color: COLORS.textPrimary,
-
     fontSize: 14,
-
-    fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
+    minHeight: 50,
   },
-
-  /* =======================================================
-     PASSWORD INPUT
-  ======================================================= */
 
   passwordInputWrapper: {
     flexDirection: 'row',
-
     alignItems: 'center',
-
     borderWidth: 1.5,
-
     borderColor: COLORS.borderLight,
-
-    backgroundColor: COLORS.primarySoft,
-
+    backgroundColor: COLORS.cardSoft,
     borderRadius: 14,
-
-    marginBottom: 16,
-
+    marginBottom: 10,
     overflow: 'hidden',
+    minHeight: 50,
   },
 
   passwordInput: {
     flex: 1,
-
     paddingHorizontal: 16,
-
     paddingVertical: 14,
-
     color: COLORS.textPrimary,
-
     fontSize: 14,
-
-    fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   passwordToggle: {
-    paddingHorizontal: 12,
-
+    paddingHorizontal: 14,
     paddingVertical: 12,
-  },
-
-  passwordToggleText: {
-    color: COLORS.primaryDark,
-
-    fontSize: 9,
-
-    fontWeight: '900',
-
-    letterSpacing: 0.8,
   },
 
   helperText: {
     fontSize: 11,
-
     color: COLORS.textMuted,
+    fontFamily: 'Poppins_500Medium',
+    marginTop: -2,
+    marginBottom: 14,
+    letterSpacing: 0.2,
+  },
 
-    marginTop: -8,
+  greenButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    minHeight: 50,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.20,
+    shadowRadius: 10,
+    elevation: 4,
+  },
 
-    marginBottom: 16,
+  greenButtonText: {
+    color: COLORS.dark,
+    fontSize: 12,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1.2,
+  },
 
-    letterSpacing: 0.3,
+  disabledButton: {
+    opacity: 0.65,
   },
 
   cancelButton: {
-    paddingVertical: 15,
-
+    paddingVertical: 14,
     alignItems: 'center',
-
-    marginTop: 8,
+    marginTop: 6,
   },
 
   cancelText: {
-    color: COLORS.textMuted,
-
-    fontWeight: '800',
-
+    color: COLORS.textSecondary,
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 13,
-
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
 });

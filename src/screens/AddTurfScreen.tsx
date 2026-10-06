@@ -77,41 +77,57 @@ console.log('IMAGE URL:', `${API_BASE_URL}/upload/turf-image`);
 console.log('========================================');
 
 /* =========================================================
-   THEME
+   THEME — matched to HomeScreen / OwnerProfileScreen
 ========================================================= */
 
 const COLORS = {
-  primary: '#16A34A',
-  primaryDark: '#15803D',
-  primaryDeep: '#065F46',
-  primaryLight: '#DCFCE7',
-  primarySoft: '#F0FDF4',
-  primaryFaint: '#F7FDF9',
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
 
-  accent: '#F97316',
-  accentLight: '#FFEDD5',
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
+  accentText: '#6D28D9',
 
-  bg: '#FFFFFF',
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
   card: '#FFFFFF',
-  cardSoft: '#F9FAFB',
+  cardSoft: '#FCFCFE',
 
-  border: '#E5E7EB',
-  borderLight: '#D1FAE5',
-  borderSoft: '#BBF7D0',
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
 
-  textPrimary: '#111827',
-  textSecondary: '#4B5563',
-  textMuted: '#9CA3AF',
-  placeholder: '#9CA3AF',
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
+  placeholder: '#8A92A3',
 
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
   dangerBorder: '#FECACA',
+  dangerText: '#B91C1C',
 
   warning: '#F59E0B',
-  warningSoft: '#FEF3C7',
+  warningSoft: '#FFFBEB',
+  warningBorder: '#FDE68A',
+  warningText: '#92400E',
+
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
 
   white: '#FFFFFF',
+  black: '#000000',
+  dark: '#0B1220',
 };
 
 /* =========================================================
@@ -144,10 +160,6 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
   route,
   user,
 }) => {
-  /* =======================================================
-     OWNER
-  ======================================================= */
-
   const ownerId =
     user?._id ||
     user?.id ||
@@ -156,55 +168,19 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
     route?.params?.user?.id ||
     '';
 
-  /* =======================================================
-     TURF DETAILS
-
-     IMPORTANT:
-     Turf contains only venue-level details.
-     Court-specific details such as:
-       ❌ pricePerHour
-       ❌ sports
-       ❌ openingTime
-       ❌ closingTime
-       ❌ operatingHours
-     are managed by Court.
-
-     Turf location is stored as GeoJSON:
-       location: {
-         type: 'Point',
-         coordinates: [longitude, latitude],
-       }
-  ======================================================= */
-
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [amenities, setAmenities] = useState('');
 
-  /* =======================================================
-     TURF LOCATION
-
-     Backend requires:
-       location.type = "Point"
-       location.coordinates = [longitude, latitude]
-  ======================================================= */
-
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
-  /* =======================================================
-     IMAGE
-  ======================================================= */
-
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState('');
   const [imageUploading, setImageUploading] = useState(false);
-
-  /* =======================================================
-     LOADING
-  ======================================================= */
 
   const [loading, setLoading] = useState(false);
 
@@ -230,9 +206,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
     }
 
     if (!file.size || file.size <= 0) {
-      throw new Error(
-        'Selected image file is empty.',
-      );
+      throw new Error('Selected image file is empty.');
     }
 
     const mimeType = file.type || 'image/jpeg';
@@ -246,33 +220,20 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
     console.log('========================================');
 
     try {
-      const result = await file.upload(
-        uploadUrl,
-        {
-          httpMethod: 'POST',
-          uploadType: UploadType.MULTIPART,
-          fieldName: 'image',
-          mimeType,
-          headers: {
-            Accept: 'application/json',
-          },
+      const result = await file.upload(uploadUrl, {
+        httpMethod: 'POST',
+        uploadType: UploadType.MULTIPART,
+        fieldName: 'image',
+        mimeType,
+        headers: {
+          Accept: 'application/json',
         },
-      );
+      });
 
-      console.log(
-        'IMAGE UPLOAD STATUS:',
-        result.status,
-      );
+      console.log('IMAGE UPLOAD STATUS:', result.status);
+      console.log('IMAGE UPLOAD RESPONSE:', result.body);
 
-      console.log(
-        'IMAGE UPLOAD RESPONSE:',
-        result.body,
-      );
-
-      if (
-        result.status < 200 ||
-        result.status >= 300
-      ) {
+      if (result.status < 200 || result.status >= 300) {
         throw new Error(
           `Image upload failed (${result.status}): ${
             result.body || 'Unknown server error'
@@ -304,27 +265,17 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         );
       }
 
-      console.log(
-        'UPLOADED IMAGE URL:',
-        imageUrl,
-      );
+      console.log('UPLOADED IMAGE URL:', imageUrl);
 
       return String(imageUrl);
     } catch (error) {
-      console.error(
-        'IMAGE UPLOAD ERROR:',
-        error,
-      );
+      console.error('IMAGE UPLOAD ERROR:', error);
 
       if (error instanceof Error) {
-        throw new Error(
-          `Image upload failed.\n\n${error.message}`,
-        );
+        throw new Error(`Image upload failed.\n\n${error.message}`);
       }
 
-      throw new Error(
-        'Unable to upload turf image.',
-      );
+      throw new Error('Unable to upload turf image.');
     }
   };
 
@@ -345,13 +296,12 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         return;
       }
 
-      const result =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [16, 9],
-          quality: 0.8,
-        });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
 
       if (result.canceled) {
         return;
@@ -360,10 +310,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       const asset = result.assets?.[0];
 
       if (!asset?.uri) {
-        Alert.alert(
-          'Image Error',
-          'Could not get the selected image.',
-        );
+        Alert.alert('Image Error', 'Could not get the selected image.');
         return;
       }
 
@@ -372,9 +319,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       setImageUploading(true);
 
       try {
-        const imageUrl =
-          await uploadImageToBackend(asset.uri);
-
+        const imageUrl = await uploadImageToBackend(asset.uri);
         setUploadedImageUrl(imageUrl);
 
         Alert.alert(
@@ -429,16 +374,12 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         return;
       }
 
-      const currentLocation =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
 
-      const nextLatitude =
-        currentLocation.coords.latitude;
-
-      const nextLongitude =
-        currentLocation.coords.longitude;
+      const nextLatitude = currentLocation.coords.latitude;
+      const nextLongitude = currentLocation.coords.longitude;
 
       if (
         !Number.isFinite(nextLatitude) ||
@@ -460,10 +401,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       console.log('TURF LOCATION CAPTURED');
       console.log('LATITUDE:', nextLatitude);
       console.log('LONGITUDE:', nextLongitude);
-      console.log(
-        'GEOJSON:',
-        [nextLongitude, nextLatitude],
-      );
+      console.log('GEOJSON:', [nextLongitude, nextLatitude]);
       console.log('========================================');
 
       Alert.alert(
@@ -471,10 +409,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         'Your current turf location has been selected successfully.',
       );
     } catch (error) {
-      console.error(
-        'GET TURF LOCATION ERROR:',
-        error,
-      );
+      console.error('GET TURF LOCATION ERROR:', error);
 
       Alert.alert(
         'Location Error',
@@ -493,26 +428,17 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
   const validateForm = (): boolean => {
     if (!name.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the turf name.',
-      );
+      Alert.alert('Validation Error', 'Please enter the turf name.');
       return false;
     }
 
     if (!address.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the turf address.',
-      );
+      Alert.alert('Validation Error', 'Please enter the turf address.');
       return false;
     }
 
     if (!city.trim()) {
-      Alert.alert(
-        'Validation Error',
-        'Please enter the city.',
-      );
+      Alert.alert('Validation Error', 'Please enter the city.');
       return false;
     }
 
@@ -551,10 +477,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
     }
 
     if (imageUploading) {
-      Alert.alert(
-        'Please Wait',
-        'The turf image is still uploading.',
-      );
+      Alert.alert('Please Wait', 'The turf image is still uploading.');
       return false;
     }
 
@@ -591,25 +514,6 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         .map((item) => item.trim())
         .filter(Boolean);
 
-      /*
-       * =====================================================
-       * IMPORTANT NEW TURF PAYLOAD
-       *
-       * Only fields that belong to Turf are sent.
-       *
-       * Removed completely because these belong to Court:
-       * ❌ pricePerHour
-       * ❌ sports
-       * ❌ openingTime
-       * ❌ closingTime
-       * ❌ operatingHours
-       *
-       * Required Turf location:
-       * ✅ GeoJSON Point
-       * ✅ coordinates [longitude, latitude]
-       * =====================================================
-       */
-
       const cleanOwnerId = ownerId.trim();
 
       console.log('OWNER ID CHECK:', {
@@ -631,10 +535,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
         location: {
           type: 'Point' as const,
-          coordinates: [
-            longitude,
-            latitude,
-          ] as [number, number],
+          coordinates: [longitude, latitude] as [number, number],
         },
 
         images: [
@@ -652,48 +553,28 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
       console.log('========================================');
       console.log('CREATE TURF REQUEST');
       console.log('API URL:', turfUrl);
-      console.log(
-        'LOCATION:',
-        {
-          latitude,
-          longitude,
-          geoJsonCoordinates: [
-            longitude,
-            latitude,
-          ],
-        },
-      );
+      console.log('LOCATION:', {
+        latitude,
+        longitude,
+        geoJsonCoordinates: [longitude, latitude],
+      });
 
-      console.log(
-        'PAYLOAD:',
-        JSON.stringify(payload, null, 2),
-      );
+      console.log('PAYLOAD:', JSON.stringify(payload, null, 2));
       console.log('========================================');
 
-      const response = await fetch(
-        turfUrl,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify(payload),
+      const response = await fetch(turfUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
-      );
+        body: JSON.stringify(payload),
+      });
 
-      const responseText =
-        await response.text();
+      const responseText = await response.text();
 
-      console.log(
-        'CREATE TURF STATUS:',
-        response.status,
-      );
-
-      console.log(
-        'CREATE TURF RESPONSE:',
-        responseText,
-      );
+      console.log('CREATE TURF STATUS:', response.status);
+      console.log('CREATE TURF RESPONSE:', responseText);
 
       let data: any = {};
 
@@ -705,34 +586,14 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         }
       }
 
-      /* =====================================================
-         SERVER ERROR
-      ===================================================== */
-
       if (!response.ok) {
-        /*
-         * IMPORTANT:
-         * Your backend returns:
-         *
-         * {
-         *   success: false,
-         *   error: "Failed to create turf.",
-         *   details: "ACTUAL MONGOOSE / SERVER ERROR",
-         *   name: "ValidationError"
-         * }
-         *
-         * Always prefer `details` over the generic `error`
-         * so the real backend problem is visible in the app.
-         */
         const serverDetails =
           typeof data?.details === 'string'
             ? data.details.trim()
             : '';
 
         const serverError =
-          typeof data?.error === 'string'
-            ? data.error.trim()
-            : '';
+          typeof data?.error === 'string' ? data.error.trim() : '';
 
         const serverMessage =
           typeof data?.message === 'string'
@@ -751,70 +612,28 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           rawResponse ||
           `Failed to create turf (${response.status}).`;
 
-        console.error(
-          '========================================',
-        );
-        console.error(
-          'CREATE TURF SERVER ERROR DETAILS',
-        );
-        console.error(
-          'HTTP STATUS:',
-          response.status,
-        );
-        console.error(
-          'SERVER ERROR:',
-          serverError || '(none)',
-        );
-        console.error(
-          'SERVER DETAILS:',
-          serverDetails || '(none)',
-        );
-        console.error(
-          'SERVER MESSAGE:',
-          serverMessage || '(none)',
-        );
-        console.error(
-          'SERVER ERROR NAME:',
-          data?.name || '(none)',
-        );
-        console.error(
-          'RAW RESPONSE:',
-          rawResponse || '(empty)',
-        );
-        console.error(
-          '========================================',
-        );
+        console.error('========================================');
+        console.error('CREATE TURF SERVER ERROR DETAILS');
+        console.error('HTTP STATUS:', response.status);
+        console.error('SERVER ERROR:', serverError || '(none)');
+        console.error('SERVER DETAILS:', serverDetails || '(none)');
+        console.error('SERVER MESSAGE:', serverMessage || '(none)');
+        console.error('SERVER ERROR NAME:', data?.name || '(none)');
+        console.error('RAW RESPONSE:', rawResponse || '(empty)');
+        console.error('========================================');
 
         throw new Error(
           `Server returned ${response.status}: ${bestServerReason}`,
         );
       }
 
-      /* =====================================================
-         CREATED TURF
-      ===================================================== */
-
-      const createdTurf =
-        data?.turf || data?.data || data;
+      const createdTurf = data?.turf || data?.data || data;
 
       const turfId =
-        createdTurf?._id ||
-        createdTurf?.id ||
-        data?.turfId;
+        createdTurf?._id || createdTurf?.id || data?.turfId;
 
-      console.log(
-        'CREATED TURF:',
-        createdTurf,
-      );
-
-      console.log(
-        'CREATED TURF ID:',
-        turfId,
-      );
-
-      /* =====================================================
-         SUCCESS
-      ===================================================== */
+      console.log('CREATED TURF:', createdTurf);
+      console.log('CREATED TURF ID:', turfId);
 
       Alert.alert(
         'Turf Submitted Successfully',
@@ -823,13 +642,10 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
           {
             text: 'Add Court',
             onPress: () => {
-              navigation.navigate(
-                'AddCourtScreen',
-                {
-                  turfId,
-                  turf: createdTurf,
-                },
-              );
+              navigation.navigate('AddCourtScreen', {
+                turfId,
+                turf: createdTurf,
+              });
             },
           },
           {
@@ -842,35 +658,18 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
         ],
       );
     } catch (error) {
-      console.error(
-        '========================================',
-      );
-
-      console.error(
-        'CREATE TURF ERROR:',
-        error,
-      );
-
+      console.error('========================================');
+      console.error('CREATE TURF ERROR:', error);
       console.error(
         'CREATE TURF ERROR MESSAGE:',
-        error instanceof Error
-          ? error.message
-          : String(error),
+        error instanceof Error ? error.message : String(error),
       );
-
       console.error(
         'CREATE TURF REQUEST URL:',
         `${API_BASE_URL}/turfs`,
       );
-
-      console.error(
-        'CREATE TURF OWNER ID:',
-        ownerId,
-      );
-
-      console.error(
-        '========================================',
-      );
+      console.error('CREATE TURF OWNER ID:', ownerId);
+      console.error('========================================');
 
       const message =
         error instanceof Error
@@ -879,10 +678,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             ? error
             : 'Unable to create turf.';
 
-      Alert.alert(
-        'Create Turf Failed',
-        message,
-      );
+      Alert.alert('Create Turf Failed', message);
     } finally {
       setLoading(false);
     }
@@ -893,81 +689,40 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
   ======================================================= */
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-    >
+    <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={
-          Platform.OS === 'ios'
-            ? 'padding'
-            : undefined
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={
-            styles.scrollContent
-          }
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* =================================================
-              HEADER
-          ================================================= */}
-
+          {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() =>
-                navigation.goBack()
-              }
+              onPress={() => navigation.goBack()}
               activeOpacity={0.7}
             >
-              <Text
-                style={styles.backButtonText}
-              >
-                ‹
-              </Text>
+              <Text style={styles.backButtonText}>‹</Text>
             </TouchableOpacity>
 
-            <View
-              style={
-                styles.headerTextContainer
-              }
-            >
-              <View
-                style={
-                  styles.headerBadgeRow
-                }
-              >
-                <Text
-                  style={styles.headerBadge}
-                >
-                  🏟️ NEW TURF
-                </Text>
+            <View style={styles.headerTextContainer}>
+              <View style={styles.headerBadgeRow}>
+                <Text style={styles.headerBadge}>🏟️ NEW TURF</Text>
               </View>
 
-              <Text
-                style={styles.headerTitle}
-              >
-                Add Turf
-              </Text>
+              <Text style={styles.headerTitle}>Add Turf</Text>
 
-              <Text
-                style={
-                  styles.headerSubtitle
-                }
-              >
-                Create and manage your
-                turf venue
+              <Text style={styles.headerSubtitle}>
+                Create and manage your turf venue
               </Text>
             </View>
           </View>
 
-          {/* =================================================
-              BASIC DETAILS
-          ================================================= */}
-
+          {/* BASIC DETAILS */}
           <View style={styles.card}>
             <SectionHeader
               number="1"
@@ -975,97 +730,61 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
               subtitle="Enter information about your venue"
             />
 
-            <Text style={styles.label}>
-              TURF NAME *
-            </Text>
-
+            <Text style={styles.label}>TURF NAME *</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="e.g. City Sports Arena"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
+              placeholderTextColor={COLORS.placeholder}
               style={styles.input}
               autoCapitalize="words"
             />
 
-            <Text style={styles.label}>
-              DESCRIPTION
-            </Text>
-
+            <Text style={styles.label}>DESCRIPTION</Text>
             <TextInput
               value={description}
-              onChangeText={
-                setDescription
-              }
+              onChangeText={setDescription}
               placeholder="Describe your turf, facilities and services"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
-              style={[
-                styles.input,
-                styles.textArea,
-              ]}
+              placeholderTextColor={COLORS.placeholder}
+              style={[styles.input, styles.textArea]}
               multiline
               textAlignVertical="top"
             />
 
-            <Text style={styles.label}>
-              ADDRESS *
-            </Text>
-
+            <Text style={styles.label}>ADDRESS *</Text>
             <TextInput
               value={address}
               onChangeText={setAddress}
               placeholder="Enter complete turf address"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
+              placeholderTextColor={COLORS.placeholder}
               style={styles.input}
             />
 
-            <Text style={styles.label}>
-              CITY *
-            </Text>
-
+            <Text style={styles.label}>CITY *</Text>
             <TextInput
               value={city}
               onChangeText={setCity}
               placeholder="Enter city"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
+              placeholderTextColor={COLORS.placeholder}
               style={styles.input}
               autoCapitalize="words"
             />
 
-            <Text style={styles.label}>
-              AMENITIES
-            </Text>
-
+            <Text style={styles.label}>AMENITIES</Text>
             <TextInput
               value={amenities}
               onChangeText={setAmenities}
               placeholder="Parking, Washroom, Changing Room"
-              placeholderTextColor={
-                COLORS.placeholder
-              }
+              placeholderTextColor={COLORS.placeholder}
               style={styles.input}
             />
 
-            <Text
-              style={styles.helperText}
-            >
-              Separate multiple amenities
-              with commas.
+            <Text style={styles.helperText}>
+              Separate multiple amenities with commas.
             </Text>
           </View>
 
-          {/* =================================================
-              LOCATION
-          ================================================= */}
-
+          {/* LOCATION */}
           <View style={styles.card}>
             <SectionHeader
               number="2"
@@ -1075,9 +794,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
 
             <View style={styles.locationInfoBox}>
               <View style={styles.locationInfoIcon}>
-                <Text style={styles.locationInfoIconText}>
-                  📍
-                </Text>
+                <Text style={styles.locationInfoIconText}>📍</Text>
               </View>
 
               <View style={styles.locationInfoContent}>
@@ -1086,8 +803,8 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
                 </Text>
 
                 <Text style={styles.locationInfoText}>
-                  Your turf location is saved as GeoJSON
-                  coordinates for nearby turf search and maps.
+                  Your turf location is saved as GeoJSON coordinates for
+                  nearby turf search and maps.
                 </Text>
               </View>
             </View>
@@ -1095,8 +812,7 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             <TouchableOpacity
               style={[
                 styles.locationButton,
-                locationLoading &&
-                  styles.locationButtonDisabled,
+                locationLoading && styles.locationButtonDisabled,
               ]}
               onPress={getCurrentLocation}
               disabled={locationLoading}
@@ -1104,24 +820,16 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             >
               {locationLoading ? (
                 <View style={styles.locationButtonContent}>
-                  <ActivityIndicator
-                    size="small"
-                    color={COLORS.white}
-                  />
-
+                  <ActivityIndicator size="small" color={COLORS.dark} />
                   <Text style={styles.locationButtonText}>
                     Getting Location...
                   </Text>
                 </View>
               ) : (
                 <View style={styles.locationButtonContent}>
-                  <Text style={styles.locationButtonIcon}>
-                    📍
-                  </Text>
-
+                  <Text style={styles.locationButtonIcon}>📍</Text>
                   <Text style={styles.locationButtonText}>
-                    {latitude !== null &&
-                    longitude !== null
+                    {latitude !== null && longitude !== null
                       ? 'Update Turf Location'
                       : 'Use Current Location'}
                   </Text>
@@ -1129,65 +837,50 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
               )}
             </TouchableOpacity>
 
-            {latitude !== null &&
-              longitude !== null && (
-                <View style={styles.coordinatesCard}>
-                  <View style={styles.coordinateRow}>
-                    <Text style={styles.coordinateLabel}>
-                      Latitude
-                    </Text>
-
-                    <Text style={styles.coordinateValue}>
-                      {latitude.toFixed(6)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.coordinateDivider} />
-
-                  <View style={styles.coordinateRow}>
-                    <Text style={styles.coordinateLabel}>
-                      Longitude
-                    </Text>
-
-                    <Text style={styles.coordinateValue}>
-                      {longitude.toFixed(6)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.geoJsonBox}>
-                    <Text style={styles.geoJsonLabel}>
-                      GeoJSON coordinates
-                    </Text>
-
-                    <Text style={styles.geoJsonValue}>
-                      [{longitude.toFixed(6)}, {latitude.toFixed(6)}]
-                    </Text>
-                  </View>
-
-                  <View style={styles.locationSuccessRow}>
-                    <Text style={styles.locationSuccessIcon}>
-                      ✓
-                    </Text>
-
-                    <Text style={styles.locationSuccessText}>
-                      Turf location is ready to submit
-                    </Text>
-                  </View>
+            {latitude !== null && longitude !== null && (
+              <View style={styles.coordinatesCard}>
+                <View style={styles.coordinateRow}>
+                  <Text style={styles.coordinateLabel}>Latitude</Text>
+                  <Text style={styles.coordinateValue}>
+                    {latitude.toFixed(6)}
+                  </Text>
                 </View>
-              )}
 
-            {latitude === null &&
-              longitude === null && (
-                <Text style={styles.locationHelperText}>
-                  Location is required before you can create the turf.
-                </Text>
-              )}
+                <View style={styles.coordinateDivider} />
+
+                <View style={styles.coordinateRow}>
+                  <Text style={styles.coordinateLabel}>Longitude</Text>
+                  <Text style={styles.coordinateValue}>
+                    {longitude.toFixed(6)}
+                  </Text>
+                </View>
+
+                <View style={styles.geoJsonBox}>
+                  <Text style={styles.geoJsonLabel}>
+                    GeoJSON coordinates
+                  </Text>
+                  <Text style={styles.geoJsonValue}>
+                    [{longitude.toFixed(6)}, {latitude.toFixed(6)}]
+                  </Text>
+                </View>
+
+                <View style={styles.locationSuccessRow}>
+                  <Text style={styles.locationSuccessIcon}>✓</Text>
+                  <Text style={styles.locationSuccessText}>
+                    Turf location is ready to submit
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {latitude === null && longitude === null && (
+              <Text style={styles.locationHelperText}>
+                Location is required before you can create the turf.
+              </Text>
+            )}
           </View>
 
-          {/* =================================================
-              IMAGE
-          ================================================= */}
-
+          {/* IMAGE */}
           <View style={styles.card}>
             <SectionHeader
               number="3"
@@ -1198,250 +891,115 @@ const AddTurfScreen: React.FC<AddTurfScreenProps> = ({
             <TouchableOpacity
               style={[
                 styles.imagePickerButton,
-                imageUploading &&
-                  styles.disabledButton,
+                imageUploading && styles.disabledButton,
               ]}
               onPress={pickImage}
               disabled={imageUploading}
               activeOpacity={0.8}
             >
               {imageUploading ? (
-                <View
-                  style={
-                    styles.uploadButtonContent
-                  }
-                >
-                  <ActivityIndicator
-                    size="small"
-                    color={
-                      COLORS.primaryDark
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.imagePickerButtonText
-                    }
-                  >
+                <View style={styles.uploadButtonContent}>
+                  <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+                  <Text style={styles.imagePickerButtonText}>
                     Uploading Image...
                   </Text>
                 </View>
               ) : (
                 <>
-                  <View
-                    style={styles.plusCircle}
-                  >
-                    <Text
-                      style={styles.plusText}
-                    >
-                      +
-                    </Text>
+                  <View style={styles.plusCircle}>
+                    <Text style={styles.plusText}>+</Text>
                   </View>
-
-                  <Text
-                    style={
-                      styles.imagePickerButtonText
-                    }
-                  >
-                    {imageUri
-                      ? 'Change Turf Image'
-                      : 'Select Turf Image'}
+                  <Text style={styles.imagePickerButtonText}>
+                    {imageUri ? 'Change Turf Image' : 'Select Turf Image'}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
 
             {imageUri && (
-              <View
-                style={
-                  styles.imagePreviewContainer
-                }
-              >
+              <View style={styles.imagePreviewContainer}>
                 <Image
-                  source={{
-                    uri: imageUri,
-                  }}
-                  style={
-                    styles.imagePreview
-                  }
+                  source={{ uri: imageUri }}
+                  style={styles.imagePreview}
                   resizeMode="cover"
                 />
 
                 {imageUploading && (
-                  <View
-                    style={
-                      styles.imageUploadingOverlay
-                    }
-                  >
-                    <ActivityIndicator
-                      size="large"
-                      color={COLORS.white}
-                    />
-
-                    <Text
-                      style={
-                        styles.uploadingText
-                      }
-                    >
-                      Uploading...
-                    </Text>
+                  <View style={styles.imageUploadingOverlay}>
+                    <ActivityIndicator size="large" color={COLORS.white} />
+                    <Text style={styles.uploadingText}>Uploading...</Text>
                   </View>
                 )}
 
-                {!imageUploading &&
-                  uploadedImageUrl && (
-                    <View
-                      style={
-                        styles.imageSuccessBadge
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.imageSuccessBadgeText
-                        }
-                      >
-                        ✓ UPLOADED
-                      </Text>
-                    </View>
-                  )}
+                {!imageUploading && uploadedImageUrl && (
+                  <View style={styles.imageSuccessBadge}>
+                    <Text style={styles.imageSuccessBadgeText}>
+                      ✓ UPLOADED
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
             {uploadedImageUrl ? (
-              <View
-                style={
-                  styles.successBadge
-                }
-              >
-                <Text
-                  style={
-                    styles.successBadgeText
-                  }
-                >
-                  ✓ Image uploaded
-                  successfully
+              <View style={styles.successBadge}>
+                <Text style={styles.successBadgeText}>
+                  ✓ Image uploaded successfully
                 </Text>
               </View>
             ) : null}
           </View>
 
-          {/* =================================================
-              STRUCTURE INFO
-          ================================================= */}
-
+          {/* STRUCTURE INFO */}
           <View style={styles.infoCard}>
-            <View
-              style={styles.infoHeader}
-            >
-              <View
-                style={
-                  styles.infoIconCircle
-                }
-              >
-                <Text
-                  style={styles.infoIcon}
-                >
-                  i
-                </Text>
+            <View style={styles.infoHeader}>
+              <View style={styles.infoIconCircle}>
+                <Text style={styles.infoIcon}>i</Text>
               </View>
-
-              <Text
-                style={styles.infoTitle}
-              >
-                Turf & Court Structure
-              </Text>
+              <Text style={styles.infoTitle}>Turf & Court Structure</Text>
             </View>
 
             <Text style={styles.infoText}>
-              This screen creates the main
-              turf venue.
+              This screen creates the main turf venue.
             </Text>
 
             <Text style={styles.infoText}>
-              After creating the turf, you
-              can add individual courts with
+              After creating the turf, you can add individual courts with
               their sport and hourly price.
             </Text>
 
             <Text style={styles.infoText}>
-              Court-specific pricing, sport,
-              slots and booking configuration
-              should be managed from the
-              court section.
+              Court-specific pricing, sport, slots and booking configuration
+              should be managed from the court section.
             </Text>
           </View>
 
-          {/* =================================================
-              SUBMIT
-          ================================================= */}
-
+          {/* SUBMIT */}
           <TouchableOpacity
             style={[
               styles.submitButton,
-              (loading ||
-                imageUploading) &&
-                styles.submitButtonDisabled,
+              (loading || imageUploading) && styles.submitButtonDisabled,
             ]}
             onPress={handleSubmit}
-            disabled={
-              loading ||
-              imageUploading
-            }
+            disabled={loading || imageUploading}
             activeOpacity={0.85}
           >
             {loading ? (
-              <View
-                style={
-                  styles.submitButtonContent
-                }
-              >
-                <ActivityIndicator
-                  size="small"
-                  color={COLORS.white}
-                />
-
-                <Text
-                  style={
-                    styles.submitButtonText
-                  }
-                >
-                  Creating Turf...
-                </Text>
+              <View style={styles.submitButtonContent}>
+                <ActivityIndicator size="small" color={COLORS.dark} />
+                <Text style={styles.submitButtonText}>Creating Turf...</Text>
               </View>
             ) : (
-              <View
-                style={
-                  styles.submitButtonContent
-                }
-              >
-                <Text
-                  style={
-                    styles.submitButtonIcon
-                  }
-                >
-                  +
-                </Text>
-
-                <Text
-                  style={
-                    styles.submitButtonText
-                  }
-                >
-                  CREATE TURF
-                </Text>
+              <View style={styles.submitButtonContent}>
+                <Text style={styles.submitButtonIcon}>+</Text>
+                <Text style={styles.submitButtonText}>CREATE TURF</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          <Text
-            style={styles.requiredText}
-          >
-            * Required fields
-          </Text>
+          <Text style={styles.requiredText}>* Required fields</Text>
 
-          <View
-            style={styles.bottomSpacing}
-          />
+          <View style={styles.bottomSpacing} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1464,44 +1022,23 @@ const SectionHeader = ({
   return (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionIcon}>
-        <Text
-          style={styles.sectionIconText}
-        >
-          {number}
-        </Text>
+        <Text style={styles.sectionIconText}>{number}</Text>
       </View>
 
-      <View
-        style={styles.sectionHeaderText}
-      >
-        <View
-          style={styles.sectionTitleRow}
-        >
-          <Text
-            style={styles.sectionTitle}
-          >
-            {title}
-          </Text>
-
-          <View
-            style={
-              styles.sectionTitleAccent
-            }
-          />
+      <View style={styles.sectionHeaderText}>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <View style={styles.sectionTitleAccent} />
         </View>
 
-        <Text
-          style={styles.sectionSubtitle}
-        >
-          {subtitle}
-        </Text>
+        <Text style={styles.sectionSubtitle}>{subtitle}</Text>
       </View>
     </View>
   );
 };
 
 /* =========================================================
-   STYLES
+   STYLES — matched to HomeScreen / OwnerProfileScreen
 ========================================================= */
 
 const styles = StyleSheet.create({
@@ -1515,9 +1052,9 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 30,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 44,
   },
 
   /* HEADER */
@@ -1531,23 +1068,27 @@ const styles = StyleSheet.create({
   backButton: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor:
-      COLORS.primarySoft,
+    borderRadius: 15,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderLight,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
   backButtonText: {
-    fontSize: 32,
-    lineHeight: 34,
-    color: COLORS.primaryDark,
-    marginTop: -3,
-    fontWeight: '600',
+    fontSize: 30,
+    lineHeight: 32,
+    color: COLORS.textPrimary,
+    marginTop: -4,
+    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
   },
 
   headerTextContainer: {
@@ -1555,60 +1096,59 @@ const styles = StyleSheet.create({
   },
 
   headerBadgeRow: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
 
   headerBadge: {
     alignSelf: 'flex-start',
-    backgroundColor:
-      COLORS.primarySoft,
+    backgroundColor: COLORS.primarySoft,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderLight,
+    borderColor: COLORS.borderLight,
     color: COLORS.primaryDark,
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     letterSpacing: 1.5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     overflow: 'hidden',
   },
 
   headerTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     color: COLORS.textPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.4,
   },
 
   headerSubtitle: {
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
+    lineHeight: 19,
   },
 
   /* CARD */
 
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    elevation: 3,
   },
 
-  /* SECTION */
+  /* SECTION HEADER */
 
   sectionHeader: {
     flexDirection: 'row',
@@ -1624,20 +1164,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
     elevation: 3,
   },
 
   sectionIconText: {
     fontSize: 15,
     fontWeight: '900',
-    color: COLORS.white,
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.dark,
   },
 
   sectionHeaderText: {
@@ -1651,7 +1189,8 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '900',
+    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -1660,7 +1199,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
     marginLeft: 8,
     marginTop: 2,
   },
@@ -1670,32 +1209,34 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 3,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   /* INPUTS */
 
   label: {
     fontSize: 11,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
+    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
+    color: COLORS.textPrimary,
     marginBottom: 8,
     marginTop: 14,
     letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 
   input: {
     width: '100%',
-    minHeight: 50,
+    minHeight: 52,
     borderWidth: 1.5,
-    borderColor:
-      COLORS.borderLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderColor: COLORS.borderLight,
+    borderRadius: 14,
+    paddingHorizontal: 16,
     fontSize: 14,
     color: COLORS.textPrimary,
-    backgroundColor:
-      COLORS.primarySoft,
+    backgroundColor: COLORS.cardSoft,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   textArea: {
@@ -1709,6 +1250,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 17,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   /* LOCATION */
@@ -1716,22 +1258,24 @@ const styles = StyleSheet.create({
   locationInfoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    borderRadius: 14,
-    padding: 13,
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 14,
   },
 
   locationInfoIcon: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primaryLight,
+    borderRadius: 12,
+    backgroundColor: COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
 
   locationInfoIconText: {
@@ -1743,9 +1287,10 @@ const styles = StyleSheet.create({
   },
 
   locationInfoTitle: {
-    color: COLORS.primaryDeep,
+    color: COLORS.textPrimary,
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
     marginBottom: 3,
   },
 
@@ -1754,15 +1299,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   locationButton: {
-    minHeight: 52,
-    borderRadius: 13,
+    minHeight: 54,
+    borderRadius: 15,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
   locationButtonDisabled: {
@@ -1781,15 +1332,16 @@ const styles = StyleSheet.create({
   },
 
   locationButtonText: {
-    color: COLORS.white,
-    fontSize: 13,
+    color: COLORS.dark,
+    fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 0.2,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1,
   },
 
   coordinatesCard: {
     marginTop: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: COLORS.cardSoft,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -1806,12 +1358,14 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
   },
 
   coordinateValue: {
     color: COLORS.textPrimary,
     fontSize: 13,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     fontVariant: ['tabular-nums'],
   },
 
@@ -1823,26 +1377,28 @@ const styles = StyleSheet.create({
 
   geoJsonBox: {
     marginTop: 12,
-    borderRadius: 10,
-    backgroundColor: COLORS.primarySoft,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    padding: 10,
+    padding: 12,
   },
 
   geoJsonLabel: {
     color: COLORS.textMuted,
     fontSize: 10,
     fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
 
   geoJsonValue: {
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
   },
 
   locationSuccessRow: {
@@ -1856,19 +1412,22 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     backgroundColor: COLORS.primary,
-    color: COLORS.white,
+    color: COLORS.dark,
     textAlign: 'center',
     lineHeight: 20,
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     marginRight: 7,
+    overflow: 'hidden',
   },
 
   locationSuccessText: {
     flex: 1,
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   locationHelperText: {
@@ -1877,18 +1436,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   /* IMAGE */
 
   imagePickerButton: {
-    minHeight: 58,
-    borderRadius: 14,
+    minHeight: 60,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
     borderStyle: 'dashed',
-    backgroundColor:
-      COLORS.primarySoft,
+    backgroundColor: COLORS.primaryFaint,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -1902,21 +1461,20 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor:
-      COLORS.primaryLight,
+    backgroundColor: COLORS.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderSoft,
+    borderColor: COLORS.borderSoft,
   },
 
   plusText: {
     fontSize: 20,
     lineHeight: 22,
     fontWeight: '900',
-    color: COLORS.primaryDark,
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.textPrimary,
     marginTop: -1,
   },
 
@@ -1926,10 +1484,11 @@ const styles = StyleSheet.create({
   },
 
   imagePickerButtonText: {
-    color: COLORS.primaryDark,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.3,
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
+    letterSpacing: 0.4,
     marginLeft: 10,
   },
 
@@ -1939,11 +1498,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 14,
-    backgroundColor:
-      COLORS.cardSoft,
+    backgroundColor: COLORS.cardSoft,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderLight,
+    borderColor: COLORS.borderLight,
     position: 'relative',
   },
 
@@ -1958,8 +1515,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor:
-      'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(11, 18, 32, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1969,52 +1525,51 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   imageSuccessBadge: {
     position: 'absolute',
     right: 10,
     top: 10,
-    backgroundColor:
-      COLORS.primary,
+    backgroundColor: COLORS.primary,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
 
   imageSuccessBadgeText: {
-    color: COLORS.white,
+    color: COLORS.dark,
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 0.6,
   },
 
   successBadge: {
     marginTop: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor:
-      COLORS.primarySoft,
+    backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderSoft,
+    borderColor: COLORS.borderLight,
   },
 
   successBadgeText: {
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: 'Poppins_800ExtraBold',
   },
 
   /* INFO */
 
   infoCard: {
-    backgroundColor:
-      COLORS.primaryFaint,
+    backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
-    borderColor:
-      COLORS.borderLight,
-    borderRadius: 18,
+    borderColor: COLORS.borderLight,
+    borderRadius: 20,
     padding: 18,
     marginBottom: 18,
   },
@@ -2029,24 +1584,28 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor:
-      COLORS.primaryLight,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
 
   infoIcon: {
-    color: COLORS.primaryDark,
+    color: COLORS.textPrimary,
     fontSize: 16,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
   },
 
   infoTitle: {
     flex: 1,
-    color: COLORS.primaryDeep,
+    color: COLORS.textPrimary,
     fontSize: 15,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: -0.1,
   },
 
   infoText: {
@@ -2055,6 +1614,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 8,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   /* SUBMIT */
@@ -2062,17 +1622,13 @@ const styles = StyleSheet.create({
   submitButton: {
     minHeight: 58,
     borderRadius: 16,
-    backgroundColor:
-      COLORS.primary,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
     elevation: 5,
   },
 
@@ -2087,17 +1643,19 @@ const styles = StyleSheet.create({
   },
 
   submitButtonIcon: {
-    color: COLORS.white,
+    color: COLORS.dark,
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
     marginRight: 8,
   },
 
   submitButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
+    color: COLORS.dark,
+    fontSize: 13,
     fontWeight: '900',
-    letterSpacing: 1,
+    fontFamily: 'Poppins_900Black',
+    letterSpacing: 1.2,
   },
 
   requiredText: {
@@ -2106,6 +1664,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 12,
     fontWeight: '500',
+    fontFamily: 'Poppins_500Medium',
   },
 
   bottomSpacing: {

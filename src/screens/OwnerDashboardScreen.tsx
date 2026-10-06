@@ -9,6 +9,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+} from '@expo-google-fonts/poppins';
+import { useFonts } from 'expo-font';
 
 /* =========================================================
    API CONFIGURATION
@@ -33,13 +41,13 @@ const buildApiUrl = (path: string): string => {
 ========================================================= */
 
 const COLORS = {
-  primary: '#22C55E',
-  primaryDark: '#16A34A',
-  primaryDeep: '#15803D',
+  primary: '#7DC25B',
+  primaryDark: '#6AAF4A',
+  primaryDeep: '#5A9A3E',
 
-  primaryLight: '#DCFCE7',
-  primarySoft: '#F0FDF4',
-  primaryFaint: '#F7FEF9',
+  primaryLight: '#E4F3DA',
+  primarySoft: '#F2F9EC',
+  primaryFaint: '#F9FCF6',
 
   accent: '#F97316',
   accentLight: '#FFEDD5',
@@ -51,19 +59,19 @@ const COLORS = {
   infoBorder: '#BFDBFE',
 
   bg: '#FFFFFF',
-  bgSoft: '#FAFEFB',
+  bgSoft: '#FCFEFB',
 
   card: '#FFFFFF',
-  cardSoft: '#F9FDFA',
+  cardSoft: '#FBFDF9',
 
-  border: '#E8F5EC',
-  borderLight: '#D1FAE5',
-  borderSoft: '#BBF7D0',
+  border: '#E8F3E0',
+  borderLight: '#D9EDCB',
+  borderSoft: '#C5E4B0',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
-  placeholder: '#94A3B8',
+  textPrimary: '#0F1A0B',
+  textSecondary: '#4A5A42',
+  textMuted: '#8B9A82',
+  placeholder: '#8B9A82',
 
   danger: '#EF4444',
   dangerSoft: '#FEF2F2',
@@ -546,6 +554,14 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
   onManageSlots,
   onViewBookings,
 }) => {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+  });
+
   const [dashboard, setDashboard] =
     useState<DashboardData>(emptyDashboard);
 
@@ -650,8 +666,22 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
   }, [dashboard.revenue, period]);
 
   /* =========================================================
-     LOADING SCREEN
+     FONT / LOADING SCREEN
   ========================================================= */
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingLogo}>
+            <Text style={[styles.loadingLogoText, { fontFamily: 'Poppins_800ExtraBold' }]}>T</Text>
+          </View>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={[styles.loadingText, { fontFamily: 'Poppins_600SemiBold' }]}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (loading) {
     return (
@@ -662,8 +692,8 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           </View>
 
           <ActivityIndicator
-            size="large"
-            color={COLORS.primary}
+            size="small"
+            color="#C7F36B"
           />
 
           <Text style={styles.loadingText}>
@@ -699,11 +729,11 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.headerBadge}>
-              📊 OWNER
+              ⌁ OWNER
             </Text>
 
             <Text style={styles.greeting}>
-              Hello, {user?.name || 'Owner'} 👋
+              Hello, {user?.name || 'Owner'} 
             </Text>
 
             <Text style={styles.turfCount}>
@@ -717,7 +747,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
 
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>
-              📊
+              ⌁
             </Text>
           </View>
         </View>
@@ -785,7 +815,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
                 >
                   <View style={styles.turfIcon}>
                     <Text style={styles.turfIconText}>
-                      🏟️
+                      ⌂
                     </Text>
                   </View>
 
@@ -878,7 +908,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
               <Text style={styles.statIconText}>
-                📅
+                ▣
               </Text>
             </View>
 
@@ -896,7 +926,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
               <Text style={styles.statIconText}>
-                🎟️
+                ◫
               </Text>
             </View>
 
@@ -914,7 +944,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
               <Text style={styles.statIconText}>
-                📊
+                ⌁
               </Text>
             </View>
 
@@ -972,7 +1002,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
             {visibleRevenue.length === 0 ? (
               <View style={styles.emptyChart}>
                 <Text style={styles.emptyChartIcon}>
-                  📈
+                  ↗
                 </Text>
 
                 <Text style={styles.emptyText}>
@@ -1175,7 +1205,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
               <Text style={styles.emptyIcon}>
-                🏟️
+                ⌂
               </Text>
             </View>
 
@@ -1448,7 +1478,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
               <Text style={styles.emptyIcon}>
-                📅
+                ▣
               </Text>
             </View>
 
@@ -1503,7 +1533,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
                     <Text
                       style={styles.bookingDate}
                     >
-                      📅{' '}
+                      ▣{' '}
                       {formatDate(
                         booking.bookingDate,
                       )}
@@ -1639,7 +1669,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
               <Text style={styles.emptyIcon}>
-                🕐
+                ◷
               </Text>
             </View>
 
@@ -1724,7 +1754,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           >
             <View style={styles.actionIconCircle}>
               <Text style={styles.actionIcon}>
-                🏟️
+                ⌂
               </Text>
             </View>
 
@@ -1742,7 +1772,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           >
             <View style={styles.actionIconCircle}>
               <Text style={styles.actionIcon}>
-                🕐
+                ◷
               </Text>
             </View>
 
@@ -1760,7 +1790,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
           >
             <View style={styles.actionIconCircle}>
               <Text style={styles.actionIcon}>
-                📋
+                ☷
               </Text>
             </View>
 
@@ -1787,7 +1817,8 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 12,
     paddingBottom: 110,
   },
 
@@ -1803,35 +1834,37 @@ const styles = StyleSheet.create({
   },
 
   loadingLogo: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: '#0B1220',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: COLORS.primary,
+    marginBottom: 14,
+    shadowColor: '#0B1220',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 6,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 8,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
   loadingLogoText: {
-    color: COLORS.white,
-    fontSize: 34,
-    fontWeight: '900',
+    color: '#C7F36B',
+    fontSize: 25,
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
   },
 
   loadingText: {
-    marginTop: 14,
+    marginTop: 9,
     color: COLORS.textSecondary,
-    fontSize: 13,
+    fontSize: 11,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
-    letterSpacing: 0.3,
+    letterSpacing: 0.15,
   },
 
   /* =======================================================
@@ -1857,7 +1890,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderLight,
     color: COLORS.primaryDark,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1.5,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -1868,7 +1902,8 @@ const styles = StyleSheet.create({
 
   greeting: {
     fontSize: 26,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -1877,6 +1912,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textMuted,
     marginTop: 6,
+    fontFamily: 'Poppins_500Medium',
     fontWeight: '500',
   },
 
@@ -1924,12 +1960,14 @@ const styles = StyleSheet.create({
   errorIconText: {
     fontSize: 24,
     color: COLORS.dangerText,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
   },
 
   errorTitle: {
     fontSize: 16,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.dangerText,
     letterSpacing: 0.2,
   },
@@ -1961,7 +1999,8 @@ const styles = StyleSheet.create({
   retryText: {
     color: COLORS.white,
     fontSize: 11,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1.2,
   },
 
@@ -1973,12 +2012,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
-    marginTop: 10,
+    marginTop: 8,
   },
 
   sectionTitle: {
     fontSize: 19,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2003,7 +2043,8 @@ const styles = StyleSheet.create({
   viewText: {
     color: COLORS.primaryDark,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1.2,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -2036,7 +2077,8 @@ const styles = StyleSheet.create({
   liveText: {
     color: COLORS.primaryDark,
     fontSize: 9,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1,
   },
 
@@ -2046,7 +2088,7 @@ const styles = StyleSheet.create({
 
   turfCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
     marginBottom: 22,
     borderWidth: 1,
@@ -2063,7 +2105,8 @@ const styles = StyleSheet.create({
 
   turfCardTitle: {
     fontSize: 18,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2104,6 +2147,7 @@ const styles = StyleSheet.create({
 
   turfName: {
     fontSize: 15,
+    fontFamily: 'Poppins_800ExtraBold',
     fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.1,
@@ -2113,6 +2157,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 4,
+    fontFamily: 'Poppins_500Medium',
     fontWeight: '500',
   },
 
@@ -2125,7 +2170,8 @@ const styles = StyleSheet.create({
 
   statusText: {
     fontSize: 9,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1,
   },
 
@@ -2139,7 +2185,8 @@ const styles = StyleSheet.create({
 
   statusTextSmall: {
     fontSize: 8,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 0.8,
   },
 
@@ -2155,7 +2202,7 @@ const styles = StyleSheet.create({
   },
 
   statCard: {
-    width: '48%',
+    width: '48.5%',
     backgroundColor: COLORS.card,
     borderRadius: 20,
     padding: 16,
@@ -2186,13 +2233,15 @@ const styles = StyleSheet.create({
 
   statIconText: {
     fontSize: 20,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.primaryDark,
   },
 
   statValue: {
     fontSize: 24,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2201,6 +2250,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 5,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
@@ -2209,33 +2259,36 @@ const styles = StyleSheet.create({
   ======================================================= */
 
   revenueCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 22,
+    backgroundColor: '#0B1220',
+    borderRadius: 24,
     padding: 20,
     marginBottom: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
+    borderColor: '#273247',
+    shadowColor: '#0B1220',
     shadowOffset: {
       width: 0,
-      height: 5,
+      height: 8,
     },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 5,
+    overflow: 'hidden',
   },
 
   revenueLabel: {
     fontSize: 10,
-    color: COLORS.textMuted,
-    fontWeight: '900',
+    color: '#AAB4C5',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 1.2,
   },
 
   revenueAmount: {
     fontSize: 32,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
+    color: '#C7F36B',
     marginTop: 8,
     letterSpacing: 0.3,
   },
@@ -2247,7 +2300,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-around',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    borderBottomColor: '#273247',
   },
 
   chartColumn: {
@@ -2260,22 +2313,23 @@ const styles = StyleSheet.create({
   bar: {
     width: 20,
     borderRadius: 8,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#C7F36B',
     marginBottom: 8,
-    shadowColor: COLORS.primary,
+    shadowColor: '#C7F36B',
     shadowOffset: {
       width: 0,
       height: 3,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 2,
   },
 
   dayText: {
     fontSize: 9,
-    color: COLORS.textMuted,
+    color: '#AAB4C5',
     marginBottom: 6,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
@@ -2288,6 +2342,7 @@ const styles = StyleSheet.create({
   emptyChartIcon: {
     fontSize: 30,
     marginBottom: 10,
+    color: '#C7F36B',
   },
 
   periodRow: {
@@ -2297,39 +2352,41 @@ const styles = StyleSheet.create({
   },
 
   activePeriod: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#C7F36B',
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 22,
-    shadowColor: COLORS.primary,
+    shadowColor: '#C7F36B',
     shadowOffset: {
       width: 0,
       height: 3,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
   },
 
   activePeriodText: {
-    color: COLORS.white,
+    color: '#0B1220',
     fontSize: 11,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
 
   periodButton: {
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor: '#151F30',
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: '#344057',
   },
 
   periodText: {
-    color: COLORS.textSecondary,
+    color: '#D5DCE7',
     fontSize: 11,
+    fontFamily: 'Poppins_800ExtraBold',
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -2340,7 +2397,7 @@ const styles = StyleSheet.create({
 
   slotSummaryCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
     marginBottom: 22,
     borderWidth: 1,
@@ -2388,12 +2445,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: COLORS.textSecondary,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
   slotValue: {
     fontSize: 17,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
   },
 
@@ -2403,7 +2462,7 @@ const styles = StyleSheet.create({
 
   courtCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
     marginBottom: 14,
     borderWidth: 1,
@@ -2431,7 +2490,8 @@ const styles = StyleSheet.create({
 
   courtName: {
     fontSize: 16,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2450,7 +2510,8 @@ const styles = StyleSheet.create({
   sportPillText: {
     color: COLORS.primaryDark,
     fontSize: 9,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 0.8,
   },
 
@@ -2458,12 +2519,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 7,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
   courtPercentage: {
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.primaryDark,
     letterSpacing: 0.2,
   },
@@ -2494,6 +2557,7 @@ const styles = StyleSheet.create({
   courtRevenue: {
     fontSize: 12,
     color: COLORS.textSecondary,
+    fontFamily: 'Poppins_700Bold',
     fontWeight: '700',
   },
 
@@ -2504,7 +2568,7 @@ const styles = StyleSheet.create({
   bookingSummary: {
     backgroundColor: COLORS.card,
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 22,
@@ -2550,7 +2614,8 @@ const styles = StyleSheet.create({
 
   bookingNumber: {
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 0.2,
   },
 
@@ -2558,6 +2623,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: COLORS.textMuted,
     marginTop: 5,
+    fontFamily: 'Poppins_800ExtraBold',
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -2614,7 +2680,8 @@ const styles = StyleSheet.create({
 
   avatarText: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.primaryDark,
     letterSpacing: 0.5,
   },
@@ -2627,7 +2694,8 @@ const styles = StyleSheet.create({
 
   customerName: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.1,
   },
@@ -2636,6 +2704,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 4,
+    fontFamily: 'Poppins_500Medium',
     fontWeight: '500',
   },
 
@@ -2643,6 +2712,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textMuted,
     marginTop: 4,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
@@ -2653,7 +2723,8 @@ const styles = StyleSheet.create({
 
   bookingAmount: {
     fontSize: 15,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2689,12 +2760,14 @@ const styles = StyleSheet.create({
   paymentLabel: {
     fontSize: 13,
     color: COLORS.textSecondary,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
   paymentValue: {
     fontSize: 14,
     color: COLORS.textPrimary,
+    fontFamily: 'Poppins_800ExtraBold',
     fontWeight: '800',
   },
 
@@ -2710,14 +2783,16 @@ const styles = StyleSheet.create({
 
   ownerAmountLabel: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
 
   ownerAmount: {
     fontSize: 22,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.primaryDark,
     letterSpacing: 0.2,
   },
@@ -2759,7 +2834,8 @@ const styles = StyleSheet.create({
   slotDate: {
     fontSize: 11,
     color: COLORS.primaryDark,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     letterSpacing: 0.3,
   },
 
@@ -2770,7 +2846,8 @@ const styles = StyleSheet.create({
 
   slotCourt: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.1,
   },
@@ -2779,12 +2856,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 4,
+    fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
   },
 
   slotPrice: {
     fontSize: 14,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.primaryDark,
     letterSpacing: 0.2,
   },
@@ -2821,7 +2900,8 @@ const styles = StyleSheet.create({
 
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.2,
   },
@@ -2832,6 +2912,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 18,
+    fontFamily: 'Poppins_500Medium',
     fontWeight: '500',
   },
 
@@ -2853,7 +2934,8 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: COLORS.white,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     fontSize: 11,
     letterSpacing: 1.2,
   },
@@ -2869,7 +2951,7 @@ const styles = StyleSheet.create({
   },
 
   actionButton: {
-    width: '48%',
+    width: '48.5%',
     backgroundColor: COLORS.card,
     borderRadius: 20,
     paddingVertical: 20,
@@ -2906,7 +2988,8 @@ const styles = StyleSheet.create({
 
   actionText: {
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: 0.3,
     textAlign: 'center',

@@ -18,6 +18,16 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+  Poppins_800ExtraBold,
+  Poppins_900Black,
+  useFonts,
+} from '@expo-google-fonts/poppins';
+
 /* =========================================================
    TYPES
 ========================================================= */
@@ -30,77 +40,55 @@ type TurfImage = {
 type OperatingHour = {
   day?: string;
   dayOfWeek?: string;
-
   openingTime?: string;
   closingTime?: string;
-
   openTime?: string;
   closeTime?: string;
-
   isClosed?: boolean;
 };
 
 type TurfCourt = {
   _id?: string;
   id?: string;
-
   name?: string;
   courtName?: string;
-
   sport?: string;
   sports?: string[];
-
   pricePerHour?: number;
-
   status?: string;
-
   hasNightPricing?: boolean;
   nightPricePerHour?: number;
   nightStartHour?: number;
   nightEndHour?: number;
-
   fullDayDiscountPercent?: number;
 };
 
 type Turf = {
   _id?: string;
   id?: string;
-
   name?: string;
   description?: string;
-
   city?: string;
   address?: string;
-
   pricePerHour?: number;
-
   sports?: string[];
   amenities?: string[];
-
   images?: TurfImage[];
-
   openingTime?: string;
   closingTime?: string;
-
   operatingHours?: OperatingHour[];
-
   courts?: TurfCourt[];
 };
 
 type Slot = {
   id: string;
   bookingKey: string;
-
   startTime: string;
   endTime: string;
-
   startMinutes: number;
   endMinutes: number;
-
   price: number;
-
   isNight: boolean;
-
   booked: boolean;
 };
 
@@ -108,14 +96,10 @@ type BookingDay = {
   date: string;
   courtId: string;
   slots: Slot[];
-
   slotCount: number;
-
   subtotal: number;
-
   discountAmount: number;
   discountPercent: number;
-
   totalAmount: number;
 };
 
@@ -125,8 +109,59 @@ type Props = {
       turf?: Turf;
     };
   };
-
   navigation: any;
+};
+
+/* =========================================================
+   THEME COLORS
+========================================================= */
+
+const COLORS = {
+  primary: '#C7F36B',
+  primaryDark: '#A8D94F',
+  primaryDeep: '#87B936',
+  primaryDarker: '#6F9D28',
+  primaryLight: '#E8F9B8',
+  primarySoft: '#F4FBE6',
+  primaryFaint: '#FAFDF4',
+  primaryMuted: '#D9EDA4',
+
+  accent: '#8B5CF6',
+  accentLight: '#EDE9FE',
+  accentSoft: '#F5F3FF',
+  accentText: '#6D28D9',
+
+  bg: '#F7F8FC',
+  bgSoft: '#FBFBFD',
+  bgMuted: '#F1F3F8',
+  card: '#FFFFFF',
+  cardSoft: '#FCFCFE',
+
+  border: '#E6E8EF',
+  borderLight: '#ECEEF4',
+  borderSoft: '#D9DCE7',
+  borderDark: '#C9CDD9',
+
+  textPrimary: '#0B1220',
+  textSecondary: '#5E6677',
+  textMuted: '#8A92A3',
+  textLight: '#B7BDCA',
+
+  danger: '#EF4444',
+  dangerSoft: '#FEF2F2',
+  dangerBorder: '#FECACA',
+  dangerText: '#B91C1C',
+
+  warning: '#F59E0B',
+  warningSoft: '#FFFBEB',
+  warningBorder: '#FDE68A',
+  warningText: '#92400E',
+
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
+
+  white: '#FFFFFF',
+  dark: '#0B1220',
 };
 
 /* =========================================================
@@ -137,32 +172,9 @@ const API_URL = (
   process.env.EXPO_PUBLIC_API_URL || ''
 ).replace(/\/+$/, '');
 
-/*
- * Default full-day discount.
- *
- * If backend court contains:
- *
- * fullDayDiscountPercent
- *
- * then that value will be used instead.
- */
 const DEFAULT_FULL_DAY_DISCOUNT_PERCENT = 10;
-
-/*
- * Minimum booking for Full Day mode.
- *
- * IMPORTANT:
- * User cannot select less than 5 hours.
- */
 const MIN_FULL_DAY_HOURS = 5;
-
-/*
- * Full Day Booking is fixed to EXACTLY 5 continuous hours.
- *
- * The user can choose the starting time, but the duration is always 5 hours.
- * This applies to normal and 24-hour turfs.
- */
-const MAX_FULL_DAY_HOURS = MIN_FULL_DAY_HOURS;
+const MAX_FULL_DAY_HOURS = 12;
 
 const DAYS = [
   'Sunday',
@@ -178,190 +190,107 @@ const DAYS = [
    HELPERS
 ========================================================= */
 
-const getTurfId = (turf: Turf): string => {
-  return String(turf._id || turf.id || '');
-};
+const getTurfId = (turf: Turf): string =>
+  String(turf._id || turf.id || '');
 
-const getCourtId = (court: TurfCourt): string => {
-  return String(court._id || court.id || '');
-};
+const getCourtId = (court: TurfCourt): string =>
+  String(court._id || court.id || '');
 
 const getCourtName = (
   court: TurfCourt,
   index: number,
-): string => {
-  return (
-    court.name ||
-    court.courtName ||
-    `Court ${index + 1}`
-  );
-};
+): string =>
+  court.name ||
+  court.courtName ||
+  `Court ${index + 1}`;
 
-/* =========================================================
-   TIME HELPERS
-========================================================= */
+const normalizeTime = (value?: string): string =>
+  String(value || '').trim().toUpperCase();
 
-const normalizeTime = (
-  value?: string,
-): string => {
-  return String(value || '')
-    .trim()
-    .toUpperCase();
-};
-
-const parseTimeToMinutes = (
-  value?: string,
-): number => {
-  if (!value) {
-    return 0;
-  }
+const parseTimeToMinutes = (value?: string): number => {
+  if (!value) return 0;
 
   const normalized = normalizeTime(value);
 
-  /*
-   * Explicit 24:00 support.
-   */
-  if (normalized === '24:00') {
-    return 1440;
-  }
+  if (normalized === '24:00') return 1440;
 
   const match = normalized.match(
     /^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/,
   );
 
-  if (!match) {
-    return 0;
-  }
+  if (!match) return 0;
 
   let hour = Number(match[1]);
-
   const minute = Number(match[2]);
-
   const period = match[3];
 
   if (period) {
     if (period === 'AM') {
-      if (hour === 12) {
-        hour = 0;
-      }
+      if (hour === 12) hour = 0;
     } else {
-      if (hour !== 12) {
-        hour += 12;
-      }
+      if (hour !== 12) hour += 12;
     }
   }
 
   return hour * 60 + minute;
 };
 
-const formatMinutes = (
-  minutes: number,
-): string => {
-  const normalized =
-    ((minutes % 1440) + 1440) % 1440;
-
-  const hour = Math.floor(
-    normalized / 60,
-  );
-
+const formatMinutes = (minutes: number): string => {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(normalized / 60);
   const minute = normalized % 60;
-
-  return `${String(hour).padStart(
-    2,
-    '0',
-  )}:${String(minute).padStart(2, '0')}`;
+  return `${String(hour).padStart(2, '0')}:${String(
+    minute,
+  ).padStart(2, '0')}`;
 };
 
-const formatDisplayTime = (
-  minutes: number,
-): string => {
-  const normalized =
-    ((minutes % 1440) + 1440) % 1440;
-
-  let hour = Math.floor(
-    normalized / 60,
-  );
-
+const formatDisplayTime = (minutes: number): string => {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  let hour = Math.floor(normalized / 60);
   const minute = normalized % 60;
-
-  const suffix =
-    hour >= 12 ? 'PM' : 'AM';
-
+  const suffix = hour >= 12 ? 'PM' : 'AM';
   hour = hour % 12;
-
-  if (hour === 0) {
-    hour = 12;
-  }
-
-  return `${hour}:${String(minute).padStart(
-    2,
-    '0',
-  )} ${suffix}`;
+  if (hour === 0) hour = 12;
+  return `${hour}:${String(minute).padStart(2, '0')} ${suffix}`;
 };
 
-const formatDate = (
-  date: Date,
-): string => {
+const formatCompactTime = (minutes: number): string => {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  let hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const suffix = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+  return minute === 0
+    ? `${hour} ${suffix}`
+    : `${hour}:${String(minute).padStart(2, '0')} ${suffix}`;
+};
+
+const formatDate = (date: Date): string => {
   const year = date.getFullYear();
-
-  const month = String(
-    date.getMonth() + 1,
-  ).padStart(2, '0');
-
-  const day = String(
-    date.getDate(),
-  ).padStart(2, '0');
-
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-const addDays = (
-  date: Date,
-  amount: number,
-): Date => {
+const addDays = (date: Date, amount: number): Date => {
   const result = new Date(date);
-
-  result.setDate(
-    result.getDate() + amount,
-  );
-
+  result.setDate(result.getDate() + amount);
   return result;
 };
-
-/* =========================================================
-   24 HOUR DETECTION
-========================================================= */
 
 const is24HourOperatingDay = (
   openingTime: string,
   closingTime: string,
 ): boolean => {
-  const open =
-    normalizeTime(openingTime);
-
-  const close =
-    normalizeTime(closingTime);
-
-  /*
-   * Supported 24-hour formats:
-   *
-   * 00:00 -> 00:00
-   * 12:00 AM -> 12:00 AM
-   * 00:00 -> 24:00
-   */
+  const open = normalizeTime(openingTime);
+  const close = normalizeTime(closingTime);
   return (
-    (open === '00:00' &&
-      close === '00:00') ||
-    (open === '12:00 AM' &&
-      close === '12:00 AM') ||
-    (open === '00:00' &&
-      close === '24:00')
+    (open === '00:00' && close === '00:00') ||
+    (open === '12:00 AM' && close === '12:00 AM') ||
+    (open === '00:00' && close === '24:00')
   );
 };
-
-/* =========================================================
-   OPERATING HOURS
-========================================================= */
 
 const getOperatingHours = (
   turf: Turf,
@@ -371,21 +300,13 @@ const getOperatingHours = (
   closingTime: string;
   isClosed: boolean;
 } => {
-  const dayName =
-    DAYS[date.getDay()];
+  const dayName = DAYS[date.getDay()];
 
-  const item = (
-    turf.operatingHours || []
-  ).find((hour) => {
+  const item = (turf.operatingHours || []).find((hour) => {
     const day = String(
-      hour.dayOfWeek ||
-        hour.day ||
-        '',
+      hour.dayOfWeek || hour.day || '',
     ).toLowerCase();
-
-    return (
-      day === dayName.toLowerCase()
-    );
+    return day === dayName.toLowerCase();
   });
 
   if (item) {
@@ -395,50 +316,30 @@ const getOperatingHours = (
         item.openTime ||
         turf.openingTime ||
         '06:00 AM',
-
       closingTime:
         item.closingTime ||
         item.closeTime ||
         turf.closingTime ||
         '11:00 PM',
-
-      isClosed:
-        item.isClosed === true,
+      isClosed: item.isClosed === true,
     };
   }
 
   return {
-    openingTime:
-      turf.openingTime ||
-      '06:00 AM',
-
-    closingTime:
-      turf.closingTime ||
-      '11:00 PM',
-
+    openingTime: turf.openingTime || '06:00 AM',
+    closingTime: turf.closingTime || '11:00 PM',
     isClosed: false,
   };
 };
-
-/* =========================================================
-   NIGHT PRICING
-========================================================= */
 
 const isNightSlot = (
   startMinutes: number,
   court: TurfCourt,
 ): boolean => {
-  if (!court.hasNightPricing) {
-    return false;
-  }
+  if (!court.hasNightPricing) return false;
 
-  const startHour = Number(
-    court.nightStartHour,
-  );
-
-  const endHour = Number(
-    court.nightEndHour,
-  );
+  const startHour = Number(court.nightStartHour);
+  const endHour = Number(court.nightEndHour);
 
   if (
     !Number.isInteger(startHour) ||
@@ -451,97 +352,52 @@ const isNightSlot = (
     return false;
   }
 
-  const nightStart =
-    startHour * 60;
+  const nightStart = startHour * 60;
+  const nightEnd = endHour * 60;
 
-  const nightEnd =
-    endHour * 60;
+  if (nightStart === nightEnd) return true;
 
-  /*
-   * Same start/end means full-day night pricing.
-   */
-  if (nightStart === nightEnd) {
-    return true;
-  }
-
-  /*
-   * Normal range.
-   */
   if (nightStart < nightEnd) {
-    return (
-      startMinutes >= nightStart &&
-      startMinutes < nightEnd
-    );
+    return startMinutes >= nightStart && startMinutes < nightEnd;
   }
 
-  /*
-   * Overnight range.
-   *
-   * Example:
-   * 22:00 -> 06:00
-   */
-  return (
-    startMinutes >= nightStart ||
-    startMinutes < nightEnd
-  );
+  return startMinutes >= nightStart || startMinutes < nightEnd;
 };
-
-/* =========================================================
-   SLOT PRICE
-========================================================= */
 
 const getSlotPrice = (
   court: TurfCourt,
   turf: Turf,
   startMinutes: number,
-): {
-  price: number;
-  isNight: boolean;
-} => {
+): { price: number; isNight: boolean } => {
   const regularPrice = Number(
-    court.pricePerHour ??
-      turf.pricePerHour ??
-      0,
+    court.pricePerHour ?? turf.pricePerHour ?? 0,
   );
+  const night = isNightSlot(startMinutes, court);
 
-  const night = isNightSlot(
-    startMinutes,
-    court,
-  );
-
-  if (
-    night &&
-    court.nightPricePerHour !==
-      undefined
-  ) {
-    const nightPrice = Number(
-      court.nightPricePerHour,
-    );
-
-    if (
-      Number.isFinite(nightPrice)
-    ) {
-      return {
-        price: nightPrice,
-        isNight: true,
-      };
+  if (night && court.nightPricePerHour !== undefined) {
+    const nightPrice = Number(court.nightPricePerHour);
+    if (Number.isFinite(nightPrice)) {
+      return { price: nightPrice, isNight: true };
     }
   }
 
   return {
-    price: Number.isFinite(
-      regularPrice,
-    )
-      ? regularPrice
-      : 0,
-
+    price: Number.isFinite(regularPrice) ? regularPrice : 0,
     isNight: night,
   };
 };
 
-/* =========================================================
-   GENERATE SLOTS
-========================================================= */
+const isPastSlot = (
+  slot: Slot,
+  dateString: string,
+): boolean => {
+  const today = formatDate(new Date());
+  if (dateString !== today) return false;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return slot.startMinutes <= currentMinutes;
+};
 
 const generateSlots = (
   turf: Turf,
@@ -549,26 +405,8 @@ const generateSlots = (
   date: Date,
 ): Slot[] => {
   const hours = getOperatingHours(turf, date);
+  if (hours.isClosed) return [];
 
-  if (hours.isClosed) {
-    return [];
-  }
-
-  /*
-   * =======================================================
-   * 24-HOUR SLOT MODE ONLY
-   * =======================================================
-   *
-   * SlotScreen always renders exactly 24 one-hour slots for
-   * an open day. The backend /api/slots response is used only
-   * to update availability/status/price.
-   *
-   * 00:00 -> 01:00
-   * 01:00 -> 02:00
-   * ...
-   * 22:00 -> 23:00
-   * 23:00 -> 00:00
-   */
   const slots: Slot[] = [];
   const dateString = formatDate(date);
   const courtId = getCourtId(court);
@@ -594,106 +432,43 @@ const generateSlots = (
   return slots;
 };
 
-/* =========================================================
-   API BOOKED SLOTS
-========================================================= */
-
-const extractBookedSlots = (
-  data: any,
-): any[] => {
-  if (
-    Array.isArray(
-      data?.bookedSlots,
-    )
-  ) {
-    return data.bookedSlots;
+const extractBookedSlots = (data: any): any[] => {
+  if (Array.isArray(data?.bookedSlots)) return data.bookedSlots;
+  if (Array.isArray(data?.slots)) {
+    return data.slots.filter((slot: any) => {
+      const status = String(slot.status || '').toLowerCase();
+      return (
+        status === 'booked' ||
+        status === 'reserved' ||
+        status === 'blocked'
+      );
+    });
   }
-
-  if (
-    Array.isArray(data?.slots)
-  ) {
-    return data.slots.filter(
-      (slot: any) => {
-        const status =
-          String(
-            slot.status || '',
-          ).toLowerCase();
-
-        return (
-          status === 'booked' ||
-          status === 'reserved'
-        );
-      },
-    );
-  }
-
-  if (
-    Array.isArray(
-      data?.data?.bookedSlots,
-    )
-  ) {
+  if (Array.isArray(data?.data?.bookedSlots)) {
     return data.data.bookedSlots;
   }
-
   return [];
 };
 
-const getBookedKey = (
-  value: any,
-): string | null => {
-  if (
-    typeof value === 'string'
-  ) {
-    return value;
-  }
-
-  if (!value) {
-    return null;
-  }
-
-  if (
-    typeof value.bookingKey ===
-    'string'
-  ) {
-    return value.bookingKey;
-  }
-
-  if (
-    typeof value.startTime ===
-    'string'
-  ) {
-    return value.startTime;
-  }
-
-  if (
-    typeof value.startMinutes ===
-    'number'
-  ) {
-    return String(
-      value.startMinutes,
-    );
-  }
-
+const getBookedKey = (value: any): string | null => {
+  if (typeof value === 'string') return value;
+  if (!value) return null;
+  if (typeof value.bookingKey === 'string') return value.bookingKey;
+  if (typeof value.startTime === 'string') return value.startTime;
+  if (typeof value.startMinutes === 'number')
+    return String(value.startMinutes);
   return null;
 };
 
 const extractApiSlots = (data: any): any[] => {
-  if (Array.isArray(data?.slots)) {
-    return data.slots;
-  }
-
-  if (Array.isArray(data?.data?.slots)) {
-    return data.data.slots;
-  }
-
+  if (Array.isArray(data?.slots)) return data.slots;
+  if (Array.isArray(data?.data?.slots)) return data.data.slots;
   return [];
 };
 
 const isApiSlotUnavailable = (slot: any): boolean => {
   if (!slot) return false;
-
   const status = String(slot.status ?? '').trim().toLowerCase();
-
   return (
     slot.booked === true ||
     slot.available === false ||
@@ -708,127 +483,46 @@ const normalizeApiTime = (value: any): string => {
   return Number.isFinite(minutes) ? formatMinutes(minutes) : '';
 };
 
-/* =========================================================
-   DISCOUNT
-========================================================= */
-
 const getFullDayDiscountPercent = (
   court: TurfCourt,
 ): number => {
-  const backendValue = Number(
-    court.fullDayDiscountPercent,
-  );
-
-  if (
-    Number.isFinite(
-      backendValue,
-    ) &&
-    backendValue > 0
-  ) {
+  const backendValue = Number(court.fullDayDiscountPercent);
+  if (Number.isFinite(backendValue) && backendValue > 0) {
     return backendValue;
   }
-
-  return (
-    DEFAULT_FULL_DAY_DISCOUNT_PERCENT
-  );
+  return DEFAULT_FULL_DAY_DISCOUNT_PERCENT;
 };
 
 const calculateDiscount = (
   subtotal: number,
   slotCount: number,
   court: TurfCourt,
-): {
-  discountAmount: number;
-  discountPercent: number;
-} => {
-  /*
-   * Minimum 5 hours.
-   */
-  if (
-    slotCount <
-    MIN_FULL_DAY_HOURS
-  ) {
-    return {
-      discountAmount: 0,
-      discountPercent: 0,
-    };
+): { discountAmount: number; discountPercent: number } => {
+  if (slotCount < MIN_FULL_DAY_HOURS) {
+    return { discountAmount: 0, discountPercent: 0 };
   }
 
-  const discountPercent =
-    getFullDayDiscountPercent(
-      court,
-    );
-
-  const discountAmount =
-    Math.round(
-      subtotal *
-        (discountPercent /
-          100),
-    );
-
-  return {
-    discountAmount,
-    discountPercent,
-  };
-};
-
-/* =========================================================
-   CHECK CONTIGUOUS SLOTS
-========================================================= */
-
-/*
- * Returns true when the selected slots form
- * continuous hourly booking.
- */
-const areSlotsContinuous = (
-  slots: Slot[],
-): boolean => {
-  if (slots.length <= 1) {
-    return true;
-  }
-
-  const sorted = [
-    ...slots,
-  ].sort(
-    (a, b) =>
-      a.startMinutes -
-      b.startMinutes,
+  const discountPercent = getFullDayDiscountPercent(court);
+  const discountAmount = Math.round(
+    subtotal * (discountPercent / 100),
   );
 
-  for (
-    let index = 1;
-    index < sorted.length;
-    index++
-  ) {
-    const previous =
-      sorted[index - 1];
+  return { discountAmount, discountPercent };
+};
 
-    const current =
-      sorted[index];
+const areSlotsContinuous = (slots: Slot[]): boolean => {
+  if (slots.length <= 1) return true;
 
-    /*
-     * Normal continuous case.
-     */
-    if (
-      current.startMinutes ===
-      previous.endMinutes
-    ) {
-      continue;
-    }
+  const sorted = [...slots].sort(
+    (a, b) => a.startMinutes - b.startMinutes,
+  );
 
-    /*
-     * 24-hour midnight case:
-     *
-     * 23:00 -> 00:00
-     */
-    if (
-      previous.endMinutes ===
-        0 &&
-      current.startMinutes ===
-        0
-    ) {
-      continue;
-    }
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1];
+    const curr = sorted[i];
+
+    if (curr.startMinutes === prev.endMinutes) continue;
+    if (prev.endMinutes === 0 && curr.startMinutes === 0) continue;
 
     return false;
   }
@@ -837,2809 +531,1351 @@ const areSlotsContinuous = (
 };
 
 /* =========================================================
-   COMPONENT
+   SLOT CARD — compact with "N" night badge
+========================================================= */
+
+type SlotCardProps = {
+  slot: Slot;
+  selected: boolean;
+  dateString: string;
+  onPress: (slot: Slot) => void;
+};
+
+const SlotCard = React.memo(
+  ({
+    slot,
+    selected,
+    dateString,
+    onPress,
+  }: SlotCardProps) => {
+    const past = isPastSlot(slot, dateString);
+    const disabled = slot.booked || past;
+
+    const statusLabel = past
+      ? 'PAST'
+      : slot.booked
+        ? 'BOOKED'
+        : selected
+          ? 'SELECTED'
+          : 'AVAILABLE';
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        disabled={disabled}
+        onPress={() => onPress(slot)}
+        accessibilityRole="button"
+        accessibilityLabel={`${formatDisplayTime(
+          slot.startMinutes,
+        )} to ${formatDisplayTime(
+          slot.endMinutes,
+        )}, ${statusLabel}, ₹${slot.price}`}
+        accessibilityState={{ disabled, selected }}
+        style={[
+          styles.slotCard,
+          disabled && styles.slotCardDisabled,
+          selected && styles.slotCardSelected,
+        ]}
+      >
+        {/* TOP: start time + N badge */}
+        <View style={styles.slotTopRow}>
+          <Text
+            style={[
+              styles.slotStartTime,
+              disabled && styles.slotTextDisabled,
+              selected && styles.slotTextSelected,
+            ]}
+            numberOfLines={1}
+          >
+            {formatCompactTime(slot.startMinutes)}
+          </Text>
+
+          {slot.isNight && (
+            <View
+              style={[
+                styles.nightBadge,
+                selected && styles.nightBadgeSelected,
+                disabled && styles.nightBadgeDisabled,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.nightBadgeText,
+                  selected && styles.nightBadgeTextSelected,
+                ]}
+              >
+                N
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* END TIME */}
+        <Text
+          style={[
+            styles.slotEndTime,
+            disabled && styles.slotTextDisabled,
+            selected && styles.slotTextSelected,
+          ]}
+          numberOfLines={1}
+        >
+          {formatCompactTime(slot.endMinutes)}
+        </Text>
+
+        {/* PRICE */}
+        <Text
+          style={[
+            styles.slotPrice,
+            disabled && styles.slotPriceDisabled,
+            selected && styles.slotPriceSelected,
+          ]}
+          numberOfLines={1}
+        >
+          ₹{slot.price}
+        </Text>
+
+        {/* STATUS */}
+        <Text
+          style={[
+            styles.slotStatus,
+            past && styles.slotStatusPast,
+            slot.booked && !past && styles.slotStatusBooked,
+            selected && styles.slotStatusSelected,
+          ]}
+          numberOfLines={1}
+        >
+          {statusLabel}
+        </Text>
+      </TouchableOpacity>
+    );
+  },
+);
+
+SlotCard.displayName = 'SlotCard';
+
+/* =========================================================
+   FULL DAY MODAL
+========================================================= */
+
+type FullDayModalProps = {
+  visible: boolean;
+  slots: Slot[];
+  selectedDate: string;
+  selectedCourt?: TurfCourt;
+  allowWrap: boolean;
+  onClose: () => void;
+  onApply: (selected: Slot[], hours: number) => void;
+};
+
+const FullDayModal = ({
+  visible,
+  slots,
+  selectedDate,
+  selectedCourt,
+  allowWrap,
+  onClose,
+  onApply,
+}: FullDayModalProps) => {
+  const [startKey, setStartKey] = useState('');
+  const [hours, setHours] = useState(MIN_FULL_DAY_HOURS);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setStartKey('');
+      setHours(MIN_FULL_DAY_HOURS);
+      setDropdownOpen(false);
+    }
+  }, [visible]);
+
+  const findContinuous = useCallback(
+    (startIndex: number, h: number): Slot[] => {
+      if (slots.length === 0) return [];
+      const result: Slot[] = [];
+
+      if (allowWrap) {
+        for (let offset = 0; offset < h; offset++) {
+          const index = (startIndex + offset) % slots.length;
+          const slot = slots[index];
+          if (
+            !slot ||
+            slot.booked ||
+            isPastSlot(slot, selectedDate)
+          ) {
+            return [];
+          }
+          result.push(slot);
+        }
+        return result;
+      }
+
+      const sliced = slots.slice(startIndex, startIndex + h);
+      if (sliced.length !== h) return [];
+      if (
+        sliced.some(
+          (s) => s.booked || isPastSlot(s, selectedDate),
+        )
+      ) {
+        return [];
+      }
+      if (!areSlotsContinuous(sliced)) return [];
+      return sliced;
+    },
+    [slots, selectedDate, allowWrap],
+  );
+
+  const availableStartSlots = useMemo(() => {
+    return slots.filter((slot, index) => {
+      if (slot.booked || isPastSlot(slot, selectedDate)) return false;
+      return (
+        findContinuous(index, MIN_FULL_DAY_HOURS).length ===
+        MIN_FULL_DAY_HOURS
+      );
+    });
+  }, [slots, selectedDate, findContinuous]);
+
+  const startIndex = useMemo(
+    () => slots.findIndex((s) => s.bookingKey === startKey),
+    [slots, startKey],
+  );
+
+  const availableHours = useMemo(() => {
+    if (startIndex < 0) return [];
+    const result: number[] = [];
+    const maxHours = Math.min(MAX_FULL_DAY_HOURS, slots.length);
+    for (let h = MIN_FULL_DAY_HOURS; h <= maxHours; h++) {
+      const continuous = findContinuous(startIndex, h);
+      if (continuous.length === h) {
+        result.push(h);
+      } else if (!allowWrap) {
+        break;
+      }
+    }
+    return result;
+  }, [startIndex, slots, findContinuous, allowWrap]);
+
+  const selectedSlots = useMemo(() => {
+    if (startIndex < 0) return [];
+    return findContinuous(startIndex, hours);
+  }, [startIndex, hours, findContinuous]);
+
+  const startTime =
+    startIndex >= 0 ? slots[startIndex]?.startMinutes ?? 0 : 0;
+
+  const endTime = selectedSlots.length
+    ? selectedSlots[selectedSlots.length - 1].endMinutes
+    : 0;
+
+  const discountPercent = selectedCourt
+    ? getFullDayDiscountPercent(selectedCourt)
+    : DEFAULT_FULL_DAY_DISCOUNT_PERCENT;
+
+  if (!visible) return null;
+
+  return (
+    <View style={styles.modalOverlay}>
+      <View style={styles.fullDayModal}>
+        <View style={styles.modalHandle} />
+
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={styles.modalTitle}>Full Day Booking</Text>
+            <Text style={styles.modalSmallText}>
+              Minimum {MIN_FULL_DAY_HOURS} continuous hours
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.modalClose}>×</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
+          <Text style={styles.modalSectionTitle}>
+            1. Select Start Time
+          </Text>
+          <Text style={styles.modalDescription}>
+            Only times with at least {MIN_FULL_DAY_HOURS} continuous
+            available hours are shown.
+          </Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.startRow}
+          >
+            {availableStartSlots.map((slot) => {
+              const active = startKey === slot.bookingKey;
+              return (
+                <TouchableOpacity
+                  key={slot.bookingKey}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.startChip,
+                    active && styles.startChipActive,
+                  ]}
+                  onPress={() => {
+                    setStartKey(slot.bookingKey);
+                    setHours(MIN_FULL_DAY_HOURS);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.startChipText,
+                      active && styles.startChipTextActive,
+                    ]}
+                  >
+                    {formatDisplayTime(slot.startMinutes)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {startKey !== '' && (
+            <View style={styles.rangeBox}>
+              <View style={styles.rangeItem}>
+                <Text style={styles.rangeLabel}>Start</Text>
+                <Text style={styles.rangeValue}>
+                  {formatDisplayTime(startTime)}
+                </Text>
+              </View>
+
+              <View style={styles.rangeDivider} />
+
+              <View style={styles.rangeItem}>
+                <Text style={styles.rangeLabel}>End</Text>
+                <Text style={styles.rangeValue}>
+                  {selectedSlots.length
+                    ? formatDisplayTime(endTime)
+                    : '--'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <Text style={styles.modalSectionTitle}>
+            2. Confirm Duration
+          </Text>
+          <Text style={styles.modalDescription}>
+            Choose between {MIN_FULL_DAY_HOURS} and{' '}
+            {MAX_FULL_DAY_HOURS} continuous hours.
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={!startKey}
+            style={[
+              styles.dropdown,
+              !startKey && styles.dropdownDisabled,
+            ]}
+            onPress={() => setDropdownOpen((v) => !v)}
+          >
+            <Text style={styles.dropdownText}>{hours} hours</Text>
+            <Text style={styles.dropdownArrow}>
+              {dropdownOpen ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+
+          {dropdownOpen && startKey !== '' && (
+            <View style={styles.dropdownList}>
+              {availableHours.map((h) => {
+                const active = hours === h;
+                return (
+                  <TouchableOpacity
+                    key={h}
+                    style={[
+                      styles.dropdownItem,
+                      active && styles.dropdownItemActive,
+                    ]}
+                    onPress={() => {
+                      setHours(h);
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        active && styles.dropdownItemTextActive,
+                      ]}
+                    >
+                      {h} hours
+                    </Text>
+                    {active && <Text style={styles.check}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          <View style={styles.discountBox}>
+            <Text style={styles.discountTitle}>
+              🎉 {discountPercent}% Full Day Discount
+            </Text>
+            <Text style={styles.discountText}>
+              Applied automatically for bookings of{' '}
+              {MIN_FULL_DAY_HOURS}+ continuous hours.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={!startKey || availableHours.length === 0}
+            style={[
+              styles.applyButton,
+              (!startKey || availableHours.length === 0) &&
+                styles.applyButtonDisabled,
+            ]}
+            onPress={() => onApply(selectedSlots, hours)}
+          >
+            <Text style={styles.applyButtonText}>
+              BOOK {hours} HOURS
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </View>
+  );
+};
+
+/* =========================================================
+   MAIN SCREEN
 ========================================================= */
 
 export default function SlotScreen({
   route,
   navigation,
 }: Props) {
-  const turf =
-    route.params?.turf;
+  const [fontsLoaded, fontError] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+    Poppins_900Black,
+  });
 
-  const [
-    selectedCourtId,
-    setSelectedCourtId,
-  ] = useState<string>('');
+  const turf = route.params?.turf;
 
-  const [
-    selectedDate,
-    setSelectedDate,
-  ] = useState<string>(
+  const [selectedCourtId, setSelectedCourtId] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(
     formatDate(new Date()),
   );
-
-  const [
-    selectedDates,
-    setSelectedDates,
-  ] = useState<string[]>([
+  const [selectedDates, setSelectedDates] = useState<string[]>([
     formatDate(new Date()),
   ]);
-
-  const [
-    slotsByDate,
-    setSlotsByDate,
-  ] = useState<
+  const [slotsByDate, setSlotsByDate] = useState<
     Record<string, Slot[]>
   >({});
-
-  const [
-    selectedSlots,
-    setSelectedSlots,
-  ] = useState<
+  const [selectedSlots, setSelectedSlots] = useState<
     Record<string, string[]>
   >({});
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(false);
-
-  const [
-    refreshing,
-    setRefreshing,
-  ] = useState(false);
-
-  const [
-    bookingLoading,
-    setBookingLoading,
-  ] = useState(false);
-
-  const [
-    multiDateMode,
-    setMultiDateMode,
-  ] = useState(false);
-
-  /*
-   * Full day modal.
-   */
-  const [
-    fullDayMode,
-    setFullDayMode,
-  ] = useState(false);
-
-  /*
-   * User-selected start slot.
-   */
-  const [
-    fullDayStartKey,
-    setFullDayStartKey,
-  ] = useState<string>('');
-
-  /*
-   * User-selected number of hours.
-   *
-   * Minimum = 5.
-   */
-  const [
-    fullDayHours,
-    setFullDayHours,
-  ] = useState(
-    MIN_FULL_DAY_HOURS,
-  );
-
-  const [
-    showSummary,
-    setShowSummary,
-  ] = useState(false);
-
-  /* =======================================================
-     ACTIVE COURTS
-  ======================================================= */
-
-  const activeCourts =
-    useMemo(() => {
-      if (!turf?.courts) {
-        return [];
-      }
-
-      return turf.courts.filter(
-        (court) =>
-          String(
-            court.status ||
-              'active',
-          ).toLowerCase() ===
-          'active',
-      );
-    }, [turf]);
-
-  /* =======================================================
-     SELECTED COURT
-  ======================================================= */
-
-  const selectedCourt =
-    useMemo(() => {
-      return activeCourts.find(
-        (court) =>
-          getCourtId(court) ===
-          selectedCourtId,
-      );
-    }, [
-      activeCourts,
-      selectedCourtId,
-    ]);
-
-  /* =======================================================
-     DEFAULT COURT
-  ======================================================= */
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [fullDayMode, setFullDayMode] = useState(false);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    if (
-      !selectedCourtId &&
-      activeCourts.length > 0
-    ) {
-      setSelectedCourtId(
-        getCourtId(
-          activeCourts[0],
-        ),
-      );
-    }
-  }, [
-    activeCourts,
-    selectedCourtId,
-  ]);
+    const timer = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
-  /* =======================================================
-     LOAD SLOTS
-  ======================================================= */
-
-  const loadSlots =
-    useCallback(
-      async (
-        dateString: string,
-        court: TurfCourt,
-        silent = false,
-      ): Promise<Slot[]> => {
-        if (!turf) {
-          return [];
-        }
-
-        if (!silent) {
-          setLoading(true);
-        }
-
-        try {
-          const localDate =
-            new Date(
-              `${dateString}T00:00:00`,
-            );
-
-          const generated =
-            generateSlots(
-              turf,
-              court,
-              localDate,
-            );
-
-          /*
-           * If API URL doesn't exist,
-           * use locally generated slots.
-           */
-          if (!API_URL) {
-            setSlotsByDate(
-              (previous) => ({
-                ...previous,
-                [dateString]:
-                  generated,
-              }),
-            );
-
-            return generated;
-          }
-
-          const turfId =
-            getTurfId(turf);
-
-          const courtId =
-            getCourtId(court);
-
-          const url =
-            `${API_URL}/api/slots?` +
-            `turfId=${encodeURIComponent(
-              turfId,
-            )}` +
-            `&courtId=${encodeURIComponent(
-              courtId,
-            )}` +
-            `&date=${encodeURIComponent(
-              dateString,
-            )}`;
-
-          const response =
-            await fetch(url);
-
-          const data =
-            await response.json();
-
-          if (!response.ok) {
-            throw new Error(
-              data?.message ||
-                'Failed to load slots',
-            );
-          }
-
-          const booked = extractBookedSlots(data);
-          const apiSlots = extractApiSlots(data);
-
-          const bookedKeys = new Set<string>();
-          booked.forEach((item) => {
-            const key = getBookedKey(item);
-            if (key) bookedKeys.add(key);
-          });
-
-          const apiByStartTime = new Map<string, any>();
-          apiSlots.forEach((item) => {
-            const start = normalizeApiTime(item?.startTime);
-            if (start) apiByStartTime.set(start, item);
-          });
-
-          const finalSlots = generated.map((slot) => {
-            const apiSlot = apiByStartTime.get(slot.startTime);
-
-            const isBooked =
-              bookedKeys.has(slot.bookingKey) ||
-              bookedKeys.has(slot.startTime) ||
-              bookedKeys.has(String(slot.startMinutes)) ||
-              isApiSlotUnavailable(apiSlot);
-
-            const apiPrice = Number(apiSlot?.price);
-
-            return {
-              ...slot,
-              price: Number.isFinite(apiPrice) && apiPrice >= 0
-                ? apiPrice
-                : slot.price,
-              booked: isBooked,
-            };
-          });
-
-          setSlotsByDate(
-            (previous) => ({
-              ...previous,
-              [dateString]:
-                finalSlots,
-            }),
-          );
-
-          return finalSlots;
-        } catch (error: any) {
-          if (!silent) {
-            Alert.alert(
-              'Slots',
-              error?.message ||
-                'Unable to load slots.',
-            );
-          }
-
-          const fallback =
-            generateSlots(
-              turf,
-              court,
-              new Date(
-                `${dateString}T00:00:00`,
-              ),
-            );
-
-          setSlotsByDate(
-            (previous) => ({
-              ...previous,
-              [dateString]:
-                previous[dateString] ||
-                fallback,
-            }),
-          );
-
-          return (
-            slotsByDate[dateString] ||
-            fallback
-          );
-        } finally {
-          if (!silent) {
-            setLoading(false);
-          }
-        }
-      },
-      [turf],
+  const activeCourts = useMemo(() => {
+    if (!turf?.courts) return [];
+    return turf.courts.filter(
+      (court) =>
+        String(court.status || 'active').toLowerCase() === 'active',
     );
-
-  /* =======================================================
-     LOAD CURRENT DATE
-  ======================================================= */
-
-  useEffect(() => {
-    if (!turf || !selectedCourt) {
-      return;
-    }
-
-    /*
-     * Always load the active date. This is required in both modes:
-     * - Single Date: one active date
-     * - Multiple Dates: the tapped date is the active date while all
-     *   selected dates remain in selectedDates for payment.
-     */
-    void loadSlots(
-      selectedDate,
-      selectedCourt,
-    );
-  }, [
-    turf,
-    selectedCourt,
-    selectedDate,
-    loadSlots,
-  ]);
-
-  /* =======================================================
-     REFRESH
-  ======================================================= */
-
-  const refreshAvailability =
-    useCallback(
-      async () => {
-        if (
-          !turf ||
-          !selectedCourt
-        ) {
-          return;
-        }
-
-        setRefreshing(true);
-
-        try {
-          const dates =
-            multiDateMode
-              ? selectedDates
-              : [selectedDate];
-
-          for (
-            const date of dates
-          ) {
-            await loadSlots(
-              date,
-              selectedCourt,
-              true,
-            );
-          }
-        } finally {
-          setRefreshing(false);
-        }
-      },
-      [
-        turf,
-        selectedCourt,
-        multiDateMode,
-        selectedDates,
-        selectedDate,
-        loadSlots,
-      ],
-    );
-
-  /* =======================================================
-     DATE SELECTION
-  ======================================================= */
-
-  const toggleDate = (
-    date: string,
-  ) => {
-    /*
-     * SINGLE DATE MODE
-     * -----------------
-     * Only the tapped date remains active.
-     * Any selections belonging to other dates are removed so they
-     * can never accidentally reach Payment after switching back
-     * from Multiple Dates.
-     */
-    if (!multiDateMode) {
-      setSelectedDate(date);
-      setSelectedDates([date]);
-
-      setSelectedSlots((previous) => ({
-        [date]: previous[date] || [],
-      }));
-
-      if (selectedCourt) {
-        void loadSlots(date, selectedCourt, true);
-      }
-
-      return;
-    }
-
-    /*
-     * MULTIPLE DATE MODE
-     * ------------------
-     * Tap once = add date.
-     * Tap again = remove date.
-     * At least one date always stays selected.
-     * The tapped date becomes the active date whose slots are shown.
-     */
-    setSelectedDates((previous) => {
-      if (previous.includes(date)) {
-        if (previous.length === 1) {
-          return previous;
-        }
-
-        const next = previous
-          .filter((item) => item !== date)
-          .sort();
-
-        /* If the currently displayed date was removed, move the
-           slot view to another still-selected date. */
-        if (selectedDate === date) {
-          const nextActiveDate = next[0];
-          if (nextActiveDate) {
-            setSelectedDate(nextActiveDate);
-            if (selectedCourt) {
-              void loadSlots(
-                nextActiveDate,
-                selectedCourt,
-                true,
-              );
-            }
-          }
-        }
-
-        return next;
-      }
-
-      const next = [...previous, date].sort();
-
-      setSelectedDate(date);
-
-      if (selectedCourt) {
-        void loadSlots(date, selectedCourt, true);
-      }
-
-      return next;
-    });
-  };
-
-  /* =======================================================
-     SLOT SELECTION
-  ======================================================= */
-
-  const toggleSlot = (
-    slot: Slot,
-  ) => {
-    if (slot.booked) {
-      return;
-    }
-
-    const date =
-      selectedDate;
-
-    setSelectedSlots(
-      (previous) => {
-        const current =
-          previous[date] || [];
-
-        if (
-          current.includes(
-            slot.bookingKey,
-          )
-        ) {
-          return {
-            ...previous,
-            [date]:
-              current.filter(
-                (key) =>
-                  key !==
-                  slot.bookingKey,
-              ),
-          };
-        }
-
-        return {
-          ...previous,
-
-          [date]: [
-            ...current,
-            slot.bookingKey,
-          ],
-        };
-      },
-    );
-  };
-
-  /* =======================================================
-     SELECTED SLOT OBJECTS
-  ======================================================= */
-
-  const selectedSlotObjects =
-    useMemo(() => {
-      const slots =
-        slotsByDate[
-          selectedDate
-        ] || [];
-
-      const selected =
-        new Set(
-          selectedSlots[
-            selectedDate
-          ] || [],
-        );
-
-      return slots.filter(
-        (slot) =>
-          selected.has(
-            slot.bookingKey,
-          ),
-      );
-    }, [
-      slotsByDate,
-      selectedDate,
-      selectedSlots,
-    ]);
-
-  /* =======================================================
-     DAY SUBTOTAL
-  ======================================================= */
-
-  const getDaySubtotal = (
-    date: string,
-  ): number => {
-    const slots =
-      slotsByDate[date] || [];
-
-    const selected =
-      new Set(
-        selectedSlots[date] ||
-          [],
-      );
-
-    return slots
-      .filter((slot) =>
-        selected.has(
-          slot.bookingKey,
-        ),
-      )
-      .reduce(
-        (sum, slot) =>
-          sum + slot.price,
-        0,
-      );
-  };
-
-  /* =======================================================
-     DAY SLOTS
-  ======================================================= */
-
-  const getDaySlots = (
-    date: string,
-  ): Slot[] => {
-    const slots =
-      slotsByDate[date] || [];
-
-    const selected =
-      new Set(
-        selectedSlots[date] ||
-          [],
-      );
-
-    return slots.filter(
-      (slot) =>
-        selected.has(
-          slot.bookingKey,
-        ),
-    );
-  };
-
-  /* =======================================================
-     TOTALS
-  ======================================================= */
-
-  const grandOriginalTotal =
-    selectedDates.reduce(
-      (sum, date) =>
-        sum +
-        getDaySubtotal(date),
-      0,
-    );
-
-  const totalSelectedSlots =
-    selectedDates.reduce(
-      (sum, date) =>
-        sum +
-        getDaySlots(date).length,
-      0,
-    );
-
-  const grandDiscount =
-    selectedCourt
-      ? selectedDates.reduce(
-          (sum, date) => {
-            const subtotal =
-              getDaySubtotal(
-                date,
-              );
-
-            const count =
-              getDaySlots(
-                date,
-              ).length;
-
-            return (
-              sum +
-              calculateDiscount(
-                subtotal,
-                count,
-                selectedCourt,
-              ).discountAmount
-            );
-          },
-          0,
-        )
-      : 0;
-
-  const grandTotal =
-    Math.max(
-      0,
-      grandOriginalTotal -
-        grandDiscount,
-    );
-
-  /* =======================================================
-     CLEAR DATE
-  ======================================================= */
-
-  const clearSelectionForDate = (
-    date: string,
-  ) => {
-    setSelectedSlots(
-      (previous) => ({
-        ...previous,
-        [date]: [],
-      }),
-    );
-  };
-
-  /* =======================================================
-     FULL DAY AVAILABLE START TIMES
-  ======================================================= */
-
-  const fullDayAvailableSlots =
-    useMemo(() => {
-      if (!selectedCourt) {
-        return [];
-      }
-
-      return (
-        slotsByDate[
-          selectedDate
-        ] || []
-      ).filter(
-        (slot) =>
-          !slot.booked,
-      );
-    }, [
-      slotsByDate,
-      selectedDate,
-      selectedCourt,
-    ]);
-
-  /* =======================================================
-     IS 24 HOUR CURRENT DATE
-  ======================================================= */
-
-  const isCurrentDate24Hours = useMemo(() => {
-    /* SlotScreen is intentionally 24-hour only. */
-    return Boolean(turf);
   }, [turf]);
 
-  /* =======================================================
-     FIND CONTINUOUS BOOKING
-  ======================================================= */
+  const selectedCourt = useMemo(
+    () =>
+      activeCourts.find(
+        (court) => getCourtId(court) === selectedCourtId,
+      ),
+    [activeCourts, selectedCourtId],
+  );
 
-  const getContinuousSlots = (
-    startIndex: number,
-    hours: number,
-  ): Slot[] => {
-    const slots =
-      slotsByDate[
-        selectedDate
-      ] || [];
-
-    if (
-      slots.length === 0
-    ) {
-      return [];
+  useEffect(() => {
+    if (!selectedCourtId && activeCourts.length > 0) {
+      setSelectedCourtId(getCourtId(activeCourts[0]));
     }
+  }, [activeCourts, selectedCourtId]);
 
-    /*
-     * 24-hour turf can wrap:
-     *
-     * 22:00
-     * 23:00
-     * 00:00
-     * 01:00
-     * 02:00
-     */
-    if (isCurrentDate24Hours) {
-      const result: Slot[] = [];
-
-      for (
-        let offset = 0;
-        offset < hours;
-        offset++
-      ) {
-        const index =
-          (startIndex +
-            offset) %
-          slots.length;
-
-        const slot =
-          slots[index];
-
-        if (
-          !slot ||
-          slot.booked
-        ) {
-          return [];
-        }
-
-        result.push(slot);
-      }
-
-      return result;
-    }
-
-    /*
-     * Normal turf cannot wrap around.
-     */
-    const result =
-      slots.slice(
-        startIndex,
-        startIndex + hours,
-      );
-
-    if (
-      result.length !== hours
-    ) {
-      return [];
-    }
-
-    if (
-      result.some(
-        (slot) => slot.booked,
-      )
-    ) {
-      return [];
-    }
-
-    if (
-      !areSlotsContinuous(
-        result,
-      )
-    ) {
-      return [];
-    }
-
-    return result;
-  };
-
-  /* =======================================================
-     AVAILABLE HOURS FOR SELECTED START
-  ======================================================= */
-
-  const availableHoursForStart =
-    useMemo(() => {
-      if (
-        !fullDayStartKey
-      ) {
-        return [];
-      }
-
-      const slots =
-        slotsByDate[
-          selectedDate
-        ] || [];
-
-      const startIndex =
-        slots.findIndex(
-          (slot) =>
-            slot.bookingKey ===
-            fullDayStartKey,
-        );
-
-      if (
-        startIndex < 0
-      ) {
-        return [];
-      }
-
-      const result: number[] =
-        [];
-
-      const maxHours =
-        Math.min(
-          MAX_FULL_DAY_HOURS,
-          slots.length,
-        );
-
-      for (
-        let hours =
-          MIN_FULL_DAY_HOURS;
-        hours <= maxHours;
-        hours++
-      ) {
-        const continuous =
-          getContinuousSlots(
-            startIndex,
-            hours,
-          );
-
-        if (
-          continuous.length ===
-          hours
-        ) {
-          result.push(hours);
-        } else {
-          /*
-           * Once continuity breaks,
-           * larger durations also won't
-           * work for a normal turf.
-           *
-           * For 24-hour turf, a booked
-           * slot can also break it.
-           */
-          if (
-            !isCurrentDate24Hours
-          ) {
-            break;
-          }
-        }
-      }
-
-      return result;
-    }, [
-      fullDayStartKey,
-      slotsByDate,
-      selectedDate,
-      isCurrentDate24Hours,
-    ]);
-
-  /* =======================================================
-     FULL DAY START SELECTION
-  ======================================================= */
-
-  const selectFullDayStart = (
-    slot: Slot,
-  ) => {
-    if (slot.booked) {
-      return;
-    }
-
-    setFullDayStartKey(
-      slot.bookingKey,
+  const isCurrentDate24Hours = useMemo(() => {
+    if (!turf) return false;
+    const hours = getOperatingHours(
+      turf,
+      new Date(`${selectedDate}T00:00:00`),
     );
-
-    /*
-     * Reset to minimum 5 hours
-     * whenever start time changes.
-     */
-    setFullDayHours(
-      MIN_FULL_DAY_HOURS,
+    return is24HourOperatingDay(
+      hours.openingTime,
+      hours.closingTime,
     );
-  };
+  }, [turf, selectedDate]);
 
-  /* =======================================================
-     APPLY CUSTOM FULL DAY
-  ======================================================= */
+  const loadSlots = useCallback(
+    async (
+      dateString: string,
+      court: TurfCourt,
+      silent = false,
+    ): Promise<Slot[]> => {
+      if (!turf) return [];
+      if (!silent) setLoading(true);
 
-  const applyFullDayBooking =
-    () => {
-      if (!selectedCourt) {
-        Alert.alert(
-          'Court required',
-          'Please select a court first.',
-        );
-
-        return;
-      }
-
-      if (
-        !fullDayStartKey
-      ) {
-        Alert.alert(
-          'Start time required',
-          'Please select your Full Day starting time.',
-        );
-
-        return;
-      }
-
-      if (
-        fullDayHours !==
-        MIN_FULL_DAY_HOURS
-      ) {
-        Alert.alert(
-          '5 Hours Required',
-          'Full Day Booking is available for exactly 5 continuous hours.',
-        );
-
-        return;
-      }
-
-      const slots =
-        slotsByDate[
-          selectedDate
-        ] || [];
-
-      const startIndex =
-        slots.findIndex(
-          (slot) =>
-            slot.bookingKey ===
-            fullDayStartKey,
-        );
-
-      if (
-        startIndex < 0
-      ) {
-        Alert.alert(
-          'Start time unavailable',
-          'Please select another starting time.',
-        );
-
-        return;
-      }
-
-      const selected =
-        getContinuousSlots(
-          startIndex,
-          fullDayHours,
-        );
-
-      /*
-       * IMPORTANT:
-       * All slots must be available.
-       */
-      if (
-        selected.length !==
-        fullDayHours
-      ) {
-        Alert.alert(
-          'Slots unavailable',
-          `The selected ${fullDayHours}-hour period contains a booked slot. Please choose another starting time or duration.`,
-        );
-
-        return;
-      }
-
-      /*
-       * Apply selected continuous slots.
-       */
-      setSelectedSlots(
-        (previous) => ({
-          ...previous,
-          [selectedDate]:
-            selected.map(
-              (slot) =>
-                slot.bookingKey,
-            ),
+      const localDate = new Date(`${dateString}T00:00:00`);
+      const generated = generateSlots(turf, court, localDate).map(
+        (slot) => ({
+          ...slot,
+          booked: isPastSlot(slot, dateString),
         }),
       );
 
-      setFullDayMode(false);
+      const fallback = () => {
+        setSlotsByDate((prev) => ({
+          ...prev,
+          [dateString]: prev[dateString]?.length
+            ? prev[dateString]
+            : generated,
+        }));
+        return generated;
+      };
 
-      Alert.alert(
-        'Full Day Selected',
-        `${fullDayHours} hours selected from ${formatDisplayTime(
-          selected[0]
-            .startMinutes,
-        )}.`,
+      try {
+        const turfId = getTurfId(turf);
+        const courtId = getCourtId(court);
+
+        if (!API_URL || !turfId || !courtId) {
+          setSlotsByDate((prev) => ({
+            ...prev,
+            [dateString]: generated,
+          }));
+          return generated;
+        }
+
+        const query = new URLSearchParams({
+          turfId,
+          courtId,
+          date: dateString,
+        }).toString();
+
+        const response = await fetch(
+          `${API_URL}/slots?${query}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        let data: any = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+
+        if (!response.ok) return fallback();
+
+        const booked = extractBookedSlots(data);
+        const apiSlots = extractApiSlots(data);
+
+        const bookedKeys = new Set<string>();
+        booked.forEach((item) => {
+          const key = getBookedKey(item);
+          if (!key) return;
+          bookedKeys.add(key);
+          const normalized = normalizeApiTime(key);
+          if (normalized) bookedKeys.add(normalized);
+        });
+
+        const apiByStart = new Map<string, any>();
+        apiSlots.forEach((item) => {
+          const start = normalizeApiTime(
+            item?.startTime ?? item?.start ?? item?.time,
+          );
+          if (start) apiByStart.set(start, item);
+        });
+
+        const finalSlots = generated.map((slot) => {
+          const apiSlot = apiByStart.get(slot.startTime);
+          const isBooked =
+            bookedKeys.has(slot.bookingKey) ||
+            bookedKeys.has(slot.startTime) ||
+            bookedKeys.has(String(slot.startMinutes)) ||
+            isApiSlotUnavailable(apiSlot);
+
+          const apiPrice = Number(apiSlot?.price);
+
+          return {
+            ...slot,
+            price:
+              Number.isFinite(apiPrice) && apiPrice >= 0
+                ? apiPrice
+                : slot.price,
+            booked: isBooked || isPastSlot(slot, dateString),
+          };
+        });
+
+        setSlotsByDate((prev) => ({
+          ...prev,
+          [dateString]: finalSlots,
+        }));
+
+        return finalSlots;
+      } catch {
+        return fallback();
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [turf],
+  );
+
+  useEffect(() => {
+    if (!turf || !selectedCourt) return;
+    void loadSlots(selectedDate, selectedCourt);
+  }, [turf, selectedCourt, selectedDate, loadSlots]);
+
+  const refreshAvailability = useCallback(async () => {
+    if (!turf || !selectedCourt) return;
+    setRefreshing(true);
+    try {
+      const dates = selectedDates.length ? selectedDates : [selectedDate];
+      for (const date of dates) {
+        await loadSlots(date, selectedCourt, true);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [turf, selectedCourt, selectedDates, selectedDate, loadSlots]);
+
+  const toggleDate = (date: string) => {
+    const hasAnySelectedSlot = Object.values(selectedSlots).some(
+      (keys) => Array.isArray(keys) && keys.length > 0,
+    );
+
+    setSelectedDate(date);
+
+    if (selectedCourt) {
+      void loadSlots(date, selectedCourt, true);
+    }
+
+    setSelectedDates((prev) => {
+      const dateHasSlots =
+        (selectedSlots[date] || []).length > 0;
+
+      if (dateHasSlots) {
+        return prev.includes(date) ? prev : [...prev, date].sort();
+      }
+
+      if (!hasAnySelectedSlot) return [date];
+
+      return prev.filter(
+        (d) => (selectedSlots[d] || []).length > 0,
       );
-    };
+    });
+  };
 
-  /* =======================================================
-     OPEN FULL DAY MODAL
-  ======================================================= */
+  const toggleSlot = (slot: Slot) => {
+    if (slot.booked || isPastSlot(slot, selectedDate)) return;
+
+    const date = selectedDate;
+
+    setSelectedSlots((prev) => {
+      const current = prev[date] || [];
+      const already = current.includes(slot.bookingKey);
+
+      const next = already
+        ? current.filter((k) => k !== slot.bookingKey)
+        : [...current, slot.bookingKey];
+
+      setSelectedDates((prevDates) => {
+        if (next.length > 0) {
+          return prevDates.includes(date)
+            ? prevDates
+            : [...prevDates, date].sort();
+        }
+        const remaining = prevDates.filter((d) => d !== date);
+        return remaining.length === 0 ? [date] : remaining;
+      });
+
+      return { ...prev, [date]: next };
+    });
+  };
+
+  const slotsForSelectedDate = slotsByDate[selectedDate] || [];
+
+  const selectedKeySet = useMemo(
+    () => new Set(selectedSlots[selectedDate] || []),
+    [selectedSlots, selectedDate],
+  );
+
+  const selectedSlotObjects = useMemo(
+    () =>
+      slotsForSelectedDate.filter((s) =>
+        selectedKeySet.has(s.bookingKey),
+      ),
+    [slotsForSelectedDate, selectedKeySet],
+  );
+
+  const daySubtotals = useMemo(() => {
+    const subtotal: Record<string, number> = {};
+    const count: Record<string, number> = {};
+
+    selectedDates.forEach((date) => {
+      const slots = slotsByDate[date] || [];
+      const keys = new Set(selectedSlots[date] || []);
+
+      let s = 0;
+      let c = 0;
+
+      slots.forEach((slot) => {
+        if (keys.has(slot.bookingKey)) {
+          s += slot.price;
+          c += 1;
+        }
+      });
+
+      subtotal[date] = s;
+      count[date] = c;
+    });
+
+    return { subtotal, count };
+  }, [selectedDates, slotsByDate, selectedSlots]);
+
+  const grandOriginalTotal = selectedDates.reduce(
+    (sum, d) => sum + (daySubtotals.subtotal[d] || 0),
+    0,
+  );
+
+  const totalSelectedSlots = selectedDates.reduce(
+    (sum, d) => sum + (daySubtotals.count[d] || 0),
+    0,
+  );
+
+  const grandDiscount = selectedCourt
+    ? selectedDates.reduce((sum, date) => {
+        const subtotal = daySubtotals.subtotal[date] || 0;
+        const count = daySubtotals.count[date] || 0;
+        return (
+          sum +
+          calculateDiscount(subtotal, count, selectedCourt)
+            .discountAmount
+        );
+      }, 0)
+    : 0;
+
+  const grandTotal = Math.max(0, grandOriginalTotal - grandDiscount);
+
+  const hasAnyFullDayStart = useMemo(() => {
+    if (!selectedCourt) return false;
+    const slots = slotsByDate[selectedDate] || [];
+
+    return slots.some((slot, index) => {
+      if (slot.booked) return false;
+
+      const check = (h: number): number => {
+        const result: Slot[] = [];
+
+        if (isCurrentDate24Hours) {
+          for (let o = 0; o < h; o++) {
+            const idx = (index + o) % slots.length;
+            const s = slots[idx];
+            if (!s || s.booked || isPastSlot(s, selectedDate)) {
+              return 0;
+            }
+            result.push(s);
+          }
+          return result.length;
+        }
+
+        const sliced = slots.slice(index, index + h);
+        if (sliced.length !== h) return 0;
+        if (
+          sliced.some(
+            (s) => s.booked || isPastSlot(s, selectedDate),
+          )
+        ) {
+          return 0;
+        }
+        if (!areSlotsContinuous(sliced)) return 0;
+        return sliced.length;
+      };
+
+      return check(MIN_FULL_DAY_HOURS) === MIN_FULL_DAY_HOURS;
+    });
+  }, [
+    selectedCourt,
+    selectedDate,
+    slotsByDate,
+    isCurrentDate24Hours,
+  ]);
 
   const openFullDayModal = () => {
     if (!selectedCourt) {
-      Alert.alert(
-        'Court required',
-        'Please select a court first.',
-      );
-
+      Alert.alert('Court required', 'Please select a court first.');
       return;
     }
 
-    if (
-      fullDayAvailableSlots.length <
-      MIN_FULL_DAY_HOURS
-    ) {
+    if (!hasAnyFullDayStart) {
       Alert.alert(
-        'Not enough slots',
-        `At least ${MIN_FULL_DAY_HOURS} consecutive available hours are required for Full Day Booking.`,
+        'Full Day unavailable',
+        `No ${MIN_FULL_DAY_HOURS}-hour continuous period is available. Please choose another date.`,
       );
-
       return;
     }
-
-    /*
-     * Reset previous Full Day
-     * selection.
-     */
-    setFullDayStartKey('');
-
-    setFullDayHours(
-      MIN_FULL_DAY_HOURS,
-    );
 
     setFullDayMode(true);
   };
 
-  /* =======================================================
-     BOOK NOW
-  ======================================================= */
+  const applyFullDay = (slots: Slot[], hours: number) => {
+    setSelectedSlots((prev) => ({
+      ...prev,
+      [selectedDate]: slots.map((s) => s.bookingKey),
+    }));
 
-  const handleBookNow =
-    async () => {
-      if (!turf) {
-        return;
-      }
-
-      if (!selectedCourt) {
-        Alert.alert(
-          'Court required',
-          'Please select a court.',
-        );
-
-        return;
-      }
-
-      const dates =
-        multiDateMode
-          ? selectedDates
-          : [selectedDate];
-
-      const hasSelection =
-        dates.some(
-          (date) =>
-            getDaySlots(date)
-              .length > 0,
-        );
-
-      if (!hasSelection) {
-        Alert.alert(
-          'Select slot',
-          'Please select at least one available slot.',
-        );
-
-        return;
-      }
-
-      /*
-       * Validate each selected day.
-       */
-      for (
-        const date of dates
-      ) {
-        const daySlots =
-          getDaySlots(date);
-
-        if (
-          daySlots.length === 0
-        ) {
-          continue;
-        }
-
-        if (
-          daySlots.some(
-            (slot) =>
-              slot.booked,
-          )
-        ) {
-          Alert.alert(
-            'Slot unavailable',
-            `One of the selected slots on ${date} is no longer available.`,
-          );
-
-          return;
-        }
-      }
-
-      setBookingLoading(true);
-
-      try {
-        /*
-         * Refresh selected dates immediately
-         * before payment.
-         */
-        const refreshedSlotsByDate:
-          Record<
-            string,
-            Slot[]
-          > = {};
-
-        for (
-          const date of dates
-        ) {
-          refreshedSlotsByDate[
-            date
-          ] = await loadSlots(
-            date,
-            selectedCourt,
-            true,
-          );
-        }
-
-        /*
-         * Build payment data from fresh
-         * availability.
-         */
-        const paymentBookings:
-          BookingDay[] = dates
-          .map((date) => {
-            const freshSlots =
-              refreshedSlotsByDate[
-                date
-              ] || [];
-
-            const selectedKeys =
-              new Set(
-                selectedSlots[
-                  date
-                ] || [],
-              );
-
-            const slots =
-              freshSlots.filter(
-                (slot) =>
-                  selectedKeys.has(
-                    slot.bookingKey,
-                  ) &&
-                  !slot.booked,
-              );
-
-            const subtotal =
-              slots.reduce(
-                (sum, slot) =>
-                  sum +
-                  slot.price,
-                0,
-              );
-
-            const discount =
-              calculateDiscount(
-                subtotal,
-                slots.length,
-                selectedCourt,
-              );
-
-            return {
-              date,
-
-              courtId:
-                getCourtId(
-                  selectedCourt,
-                ),
-
-              slots,
-
-              slotCount:
-                slots.length,
-
-              subtotal,
-
-              discountAmount:
-                discount.discountAmount,
-
-              discountPercent:
-                discount.discountPercent,
-
-              totalAmount:
-                Math.max(
-                  0,
-                  subtotal -
-                    discount.discountAmount,
-                ),
-            };
-          })
-          .filter(
-            (booking) =>
-              booking.slots.length >
-              0,
-          );
-
-        if (
-          paymentBookings.length ===
-          0
-        ) {
-          Alert.alert(
-            'Slots unavailable',
-            'The selected slots are no longer available. Please select them again.',
-          );
-
-          /*
-           * Remove stale selections.
-           */
-          setSelectedSlots({});
-
-          return;
-        }
-
-        const originalTotal =
-          paymentBookings.reduce(
-            (sum, booking) =>
-              sum +
-              booking.subtotal,
-            0,
-          );
-
-        const discountAmount =
-          paymentBookings.reduce(
-            (sum, booking) =>
-              sum +
-              booking.discountAmount,
-            0,
-          );
-
-        const totalAmount =
-          paymentBookings.reduce(
-            (sum, booking) =>
-              sum +
-              booking.totalAmount,
-            0,
-          );
-
-        const firstBooking =
-          paymentBookings[0];
-
-        /*
-         * Navigate to Payment.
-         */
-        navigation.navigate(
-          'Payment',
-          {
-            turf,
-
-            court:
-              selectedCourt,
-
-            turfId:
-              getTurfId(turf),
-
-            courtId:
-              getCourtId(
-                selectedCourt,
-              ),
-
-            bookings:
-              paymentBookings,
-
-            dates:
-              paymentBookings.map(
-                (booking) =>
-                  booking.date,
-              ),
-
-            slotCount:
-              paymentBookings.reduce(
-                (
-                  sum,
-                  booking,
-                ) =>
-                  sum +
-                  booking.slotCount,
-                0,
-              ),
-
-            totalAmount,
-
-            originalTotal,
-
-            discountAmount,
-
-            discountPercent:
-              originalTotal > 0
-                ? Math.round(
-                    (discountAmount /
-                      originalTotal) *
-                      100,
-                  )
-                : 0,
-
-            date:
-              firstBooking.date,
-
-            slots:
-              firstBooking.slots,
-
-            isMultiDate:
-              paymentBookings.length >
-              1,
-
-            isMultiSlot:
-              paymentBookings.some(
-                (booking) =>
-                  booking.slotCount >
-                  1,
-              ),
-          },
-        );
-      } catch (error: any) {
-        Alert.alert(
-          'Booking error',
-          error?.message ||
-            'Unable to continue with booking.',
-        );
-      } finally {
-        setBookingLoading(false);
-      }
-    };
-
-  /* =======================================================
-     VISIBLE DATES
-  ======================================================= */
-
-  const visibleDates =
-    useMemo(() => {
-      const result: string[] =
-        [];
-
-      const start =
-        new Date();
-
-      for (
-        let index = 0;
-        index < 14;
-        index++
-      ) {
-        result.push(
-          formatDate(
-            addDays(
-              start,
-              index,
-            ),
-          ),
-        );
-      }
-
-      return result;
-    }, []);
-
-  /* =======================================================
-     DATE LABEL
-  ======================================================= */
-
-  const getDateLabel = (
-    dateString: string,
-  ): string => {
-    const date =
-      new Date(
-        `${dateString}T00:00:00`,
-      );
-
-    if (
-      dateString ===
-      formatDate(new Date())
-    ) {
-      return 'Today';
-    }
-
-    return date.toLocaleDateString(
-      'en-IN',
-      {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-      },
+    setSelectedDates((prev) =>
+      prev.includes(selectedDate)
+        ? prev
+        : [...prev, selectedDate].sort(),
     );
+
+    setFullDayMode(false);
+
+    Alert.alert('Full Day Selected', `${hours} hours selected.`);
   };
 
-  /* =======================================================
-     NO TURF
-  ======================================================= */
+  const handleBookNow = async () => {
+    if (!turf || !selectedCourt) return;
+
+    const dates = selectedDates.length ? selectedDates : [selectedDate];
+
+    const hasSelection = dates.some((date) => {
+      const keys = new Set(selectedSlots[date] || []);
+      return (slotsByDate[date] || []).some((s) =>
+        keys.has(s.bookingKey),
+      );
+    });
+
+    if (!hasSelection) {
+      Alert.alert(
+        'Select slot',
+        'Please select at least one available slot.',
+      );
+      return;
+    }
+
+    setBookingLoading(true);
+
+    try {
+      const refreshed: Record<string, Slot[]> = {};
+
+      for (const date of dates) {
+        refreshed[date] = await loadSlots(
+          date,
+          selectedCourt,
+          true,
+        );
+      }
+
+      const paymentBookings: BookingDay[] = dates
+        .map((date) => {
+          const fresh = refreshed[date] || [];
+          const keys = new Set(selectedSlots[date] || []);
+          const slots = fresh.filter(
+            (s) => keys.has(s.bookingKey) && !s.booked,
+          );
+
+          const subtotal = slots.reduce(
+            (sum, s) => sum + s.price,
+            0,
+          );
+
+          const discount = calculateDiscount(
+            subtotal,
+            slots.length,
+            selectedCourt,
+          );
+
+          return {
+            date,
+            courtId: getCourtId(selectedCourt),
+            slots,
+            slotCount: slots.length,
+            subtotal,
+            discountAmount: discount.discountAmount,
+            discountPercent: discount.discountPercent,
+            totalAmount: Math.max(
+              0,
+              subtotal - discount.discountAmount,
+            ),
+          };
+        })
+        .filter((b) => b.slots.length > 0);
+
+      if (paymentBookings.length === 0) {
+        Alert.alert(
+          'Slots unavailable',
+          'The selected slots are no longer available.',
+        );
+        setSelectedSlots({});
+        return;
+      }
+
+      const originalTotal = paymentBookings.reduce(
+        (s, b) => s + b.subtotal,
+        0,
+      );
+
+      const discountAmount = paymentBookings.reduce(
+        (s, b) => s + b.discountAmount,
+        0,
+      );
+
+      const totalAmount = paymentBookings.reduce(
+        (s, b) => s + b.totalAmount,
+        0,
+      );
+
+      const first = paymentBookings[0];
+
+      navigation.navigate('Payment', {
+        turf,
+        court: selectedCourt,
+        turfId: getTurfId(turf),
+        courtId: getCourtId(selectedCourt),
+        bookings: paymentBookings,
+        dates: paymentBookings.map((b) => b.date),
+        slotCount: paymentBookings.reduce(
+          (s, b) => s + b.slotCount,
+          0,
+        ),
+        totalAmount,
+        originalTotal,
+        discountAmount,
+        discountPercent:
+          originalTotal > 0
+            ? Math.round((discountAmount / originalTotal) * 100)
+            : 0,
+        date: first.date,
+        slots: first.slots,
+        isMultiDate: paymentBookings.length > 1,
+        isMultiSlot: paymentBookings.some(
+          (b) => b.slotCount > 1,
+        ),
+      });
+    } catch (e: any) {
+      Alert.alert(
+        'Booking error',
+        e?.message || 'Unable to continue.',
+      );
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const visibleDates = useMemo(() => {
+    const result: string[] = [];
+    const start = new Date();
+
+    for (let i = 0; i < 14; i++) {
+      result.push(formatDate(addDays(start, i)));
+    }
+
+    return result;
+  }, []);
+
+  const getDateLabel = (dateString: string): string => {
+    if (dateString === formatDate(new Date())) return 'Today';
+
+    return new Date(
+      `${dateString}T00:00:00`,
+    ).toLocaleDateString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+  };
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.fontLoadingContainer}>
+          <View style={styles.fontLoadingMark}>
+            <Text style={styles.fontLoadingMarkText}>T</Text>
+          </View>
+          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
+          <Text style={styles.fontLoadingText}>TurfBook</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!turf) {
     return (
-      <SafeAreaView
-        style={styles.safeArea}
-      >
-        <View
-          style={styles.center}
-        >
-          <Text
-            style={
-              styles.errorText
-            }
-          >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
             Turf information not found.
           </Text>
-
           <TouchableOpacity
-            style={
-              styles.backButton
-            }
-            onPress={() =>
-              navigation.goBack()
-            }
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
           >
-            <Text
-              style={
-                styles.backButtonText
-              }
-            >
-              Go Back
-            </Text>
+            <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  /* =========================================================
-     RENDER
-  ========================================================== */
-
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={[
-        'top',
-        'bottom',
-      ]}
+      edges={['top', 'bottom']}
     >
-      <View
-        style={styles.container}
-      >
-
-        {/* =================================================
-            HEADER
-        ================================================= */}
-
-        <View
-          style={styles.header}
-        >
+      <View style={styles.container}>
+        {/* HEADER */}
+        <View style={styles.header}>
           <TouchableOpacity
-            style={
-              styles.headerBack
-            }
-            onPress={() =>
-              navigation.goBack()
-            }
+            style={styles.iconButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
-            <Text
-              style={
-                styles.headerBackText
-              }
-            >
-              ‹
-            </Text>
+            <Text style={styles.backArrow}>‹</Text>
           </TouchableOpacity>
 
-          <View
-            style={
-              styles.headerCenter
-            }
-          >
-            <Text
-              style={
-                styles.headerTitle
-              }
-              numberOfLines={1}
-            >
-              Select Slots
-            </Text>
-
-            <Text
-              style={
-                styles.headerSubtitle
-              }
-              numberOfLines={1}
-            >
-              {turf.name ||
-                'Turf Booking'}
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Select Slots</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {turf.name || 'Turf Booking'}
             </Text>
           </View>
 
           <TouchableOpacity
-            style={
-              styles.refreshButton
-            }
-            onPress={
-              refreshAvailability
-            }
+            style={styles.iconButton}
+            onPress={refreshAvailability}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh"
           >
-            <Text
-              style={
-                styles.refreshText
-              }
-            >
-              ↻
-            </Text>
+            <Text style={styles.refreshIcon}>↻</Text>
           </TouchableOpacity>
         </View>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
-
         <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={
-                refreshing
-              }
-              onRefresh={
-                refreshAvailability
-              }
+              refreshing={refreshing}
+              onRefresh={refreshAvailability}
+              tintColor={COLORS.primaryDeep}
+              colors={[COLORS.primary]}
             />
           }
-          contentContainerStyle={
-            styles.scrollContent
-          }
+          contentContainerStyle={styles.scrollContent}
         >
-
-          {/* =================================================
-              MODE
-          ================================================= */}
-
-          <View
-            style={styles.modeRow}
-          >
-            <TouchableOpacity
-              style={[
-                styles.modeButton,
-                !multiDateMode &&
-                  styles.modeButtonActive,
-              ]}
-              onPress={() => {
-                /*
-                 * Returning to Single Date must remove every other
-                 * date from the booking state. The active date and
-                 * its slot selection are preserved.
-                 */
-                setMultiDateMode(false);
-                setSelectedDates([selectedDate]);
-
-                setSelectedSlots((previous) => ({
-                  [selectedDate]: previous[selectedDate] || [],
-                }));
-
-                if (selectedCourt) {
-                  void loadSlots(
-                    selectedDate,
-                    selectedCourt,
-                    true,
-                  );
-                }
-              }}
-            >
-              <Text
-                style={[
-                  styles.modeText,
-                  !multiDateMode &&
-                    styles.modeTextActive,
-                ]}
-              >
-                Single Date
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.modeButton,
-                multiDateMode &&
-                  styles.modeButtonActive,
-              ]}
-              onPress={() => {
-                /*
-                 * Multiple Date mode starts with the currently active
-                 * date. Existing selection for that date is preserved.
-                 */
-                setMultiDateMode(true);
-
-                setSelectedDates((previous) => {
-                  if (previous.length > 0) {
-                    return previous.includes(selectedDate)
-                      ? previous
-                      : [...previous, selectedDate].sort();
-                  }
-
-                  return [selectedDate];
-                });
-
-                if (selectedCourt) {
-                  void loadSlots(
-                    selectedDate,
-                    selectedCourt,
-                    true,
-                  );
-                }
-              }}
-            >
-              <Text
-                style={[
-                  styles.modeText,
-                  multiDateMode &&
-                    styles.modeTextActive,
-                ]}
-              >
-                Multiple Dates
-              </Text>
-            </TouchableOpacity>
+          {/* COURT */}
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Select Court</Text>
+            <View style={styles.sectionTitleAccent} />
           </View>
 
-          {/* =================================================
-              COURT
-          ================================================= */}
-
-          <Text
-            style={
-              styles.sectionTitle
-            }
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalContent}
           >
-            Select Court
-          </Text>
+            {activeCourts.map((court, index) => {
+              const id = getCourtId(court);
+              const active = id === selectedCourtId;
+
+              return (
+                <TouchableOpacity
+                  key={id || String(index)}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.courtChip,
+                    active && styles.courtChipActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedCourtId(id);
+                    setSelectedSlots({});
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.courtName,
+                      active && styles.courtNameActive,
+                    ]}
+                  >
+                    {getCourtName(court, index)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.courtPrice,
+                      active && styles.courtPriceActive,
+                    ]}
+                  >
+                    ₹
+                    {Number(
+                      court.pricePerHour ?? turf.pricePerHour ?? 0,
+                    )}
+                    /hr
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* DATE */}
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Select Date</Text>
+            <View style={styles.sectionTitleAccent} />
+          </View>
 
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={
-              false
-            }
-            contentContainerStyle={
-              styles.horizontalContent
-            }
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalContent}
           >
-            {activeCourts.map(
-              (
-                court,
-                index,
-              ) => {
-                const id =
-                  getCourtId(
-                    court,
-                  );
+            {visibleDates.map((date) => {
+              const hasSlots =
+                (selectedSlots[date] || []).length > 0;
 
-                const active =
-                  id ===
-                  selectedCourtId;
+              const hasAny = Object.values(selectedSlots).some(
+                (k) => k.length > 0,
+              );
 
-                return (
-                  <TouchableOpacity
-                    key={
-                      id ||
-                      String(
-                        index,
-                      )
-                    }
+              const active =
+                hasSlots || (!hasAny && date === selectedDate);
+
+              return (
+                <TouchableOpacity
+                  key={date}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.dateChip,
+                    active && styles.dateChipActive,
+                  ]}
+                  onPress={() => toggleDate(date)}
+                >
+                  <Text
                     style={[
-                      styles.courtSelector,
-                      active &&
-                        styles.courtSelectorActive,
+                      styles.dateText,
+                      active && styles.dateTextActive,
                     ]}
-                    onPress={() => {
-                      setSelectedCourtId(id);
-
-                      /* Court changes invalidate slot selections, but
-                         keep the current Single/Multiple Date mode. */
-                      setSelectedSlots({});
-
-                      setFullDayStartKey('');
-                      setFullDayMode(false);
-                    }}
                   >
-                    <Text
-                      style={[
-                        styles.courtSelectorName,
-                        active &&
-                          styles.courtSelectorNameActive,
-                      ]}
-                    >
-                      {getCourtName(
-                        court,
-                        index,
-                      )}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.courtSelectorPrice,
-                        active &&
-                          styles.courtSelectorPriceActive,
-                      ]}
-                    >
-                      ₹
-                      {Number(
-                        court.pricePerHour ??
-                          turf.pricePerHour ??
-                          0,
-                      )}
-                      /hr
-                    </Text>
-                  </TouchableOpacity>
-                );
-              },
-            )}
+                    {getDateLabel(date)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
-          {/* =================================================
-              DATE
-          ================================================= */}
-
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Select Date
-          </Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={
-              false
-            }
-            contentContainerStyle={
-              styles.horizontalContent
-            }
-          >
-            {visibleDates.map(
-              (date) => {
-                const active =
-                  multiDateMode
-                    ? selectedDates.includes(
-                        date,
-                      )
-                    : selectedDate ===
-                      date;
-
-                return (
-                  <TouchableOpacity
-                    key={date}
-                    style={[
-                      styles.dateCard,
-                      active &&
-                        styles.dateCardActive,
-                    ]}
-                    onPress={() =>
-                      toggleDate(
-                        date,
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.dateText,
-                        active &&
-                          styles.dateTextActive,
-                      ]}
-                    >
-                      {getDateLabel(
-                        date,
-                      )}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              },
-            )}
-          </ScrollView>
-
-          {/* =================================================
-              MULTI DATE INFO
-          ================================================= */}
-
-          {multiDateMode && (
-            <View
-              style={
-                styles.multiDateInfo
-              }
-            >
-              <Text
-                style={
-                  styles.multiDateInfoText
-                }
-              >
-                {selectedDates.length}{' '}
-                date
-                {selectedDates.length !==
-                1
-                  ? 's'
-                  : ''}{' '}
-                selected
+          {selectedDates.length > 1 && (
+            <View style={styles.multiDateInfo}>
+              <Text style={styles.multiDateInfoText}>
+                {selectedDates.length} dates selected • tap dates
+                to add/remove
               </Text>
             </View>
           )}
 
-          {/* =================================================
-              SLOT HEADER
-          ================================================= */}
-
-          <View
-            style={
-              styles.slotHeader
-            }
-          >
-            <View>
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Available Slots
-              </Text>
+          {/* SLOT HEADER */}
+          <View style={styles.slotHeader}>
+            <View style={styles.slotHeaderLeft}>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.sectionTitle}>
+                  Available Slots
+                </Text>
+                <View style={styles.sectionTitleAccent} />
+              </View>
 
               {selectedCourt && (
-                <Text
-                  style={
-                    styles.slotSubTitle
-                  }
-                >
+                <Text style={styles.slotSubtitle}>
                   {
                     getOperatingHours(
                       turf,
-                      new Date(
-                        `${selectedDate}T00:00:00`,
-                      ),
+                      new Date(`${selectedDate}T00:00:00`),
                     ).openingTime
                   }{' '}
-                  -
-                  {' '}
+                  –{' '}
                   {
                     getOperatingHours(
                       turf,
-                      new Date(
-                        `${selectedDate}T00:00:00`,
-                      ),
+                      new Date(`${selectedDate}T00:00:00`),
                     ).closingTime
                   }
                 </Text>
               )}
             </View>
 
-            {/* FULL DAY */}
             <TouchableOpacity
-              style={
-                styles.fullDayButton
-              }
-              onPress={
-                openFullDayModal
-              }
+              activeOpacity={0.85}
+              style={styles.fullDayButton}
+              onPress={openFullDayModal}
             >
-              <Text
-                style={
-                  styles.fullDayButtonText
-                }
-              >
-                FULL DAY
-              </Text>
+              <Text style={styles.fullDayIcon}>☀</Text>
+              <Text style={styles.fullDayButtonText}>Full Day</Text>
             </TouchableOpacity>
           </View>
 
-          {/* =================================================
-              24 HOUR INFO
-          ================================================= */}
-
           {isCurrentDate24Hours && (
-            <View
-              style={
-                styles.twentyFourHourBanner
-              }
-            >
-              <Text
-                style={
-                  styles.twentyFourHourTitle
-                }
-              >
-                🕐 24 Hours Available
-              </Text>
-
-              <Text
-                style={
-                  styles.twentyFourHourText
-                }
-              >
-                All 24 hourly slots are available
-                from 12:00 AM to 12:00 AM.
-              </Text>
+            <View style={styles.banner}>
+              <Text style={styles.bannerIcon}>🕐</Text>
+              <View style={styles.bannerTextWrap}>
+                <Text style={styles.bannerTitle}>
+                  24 Hours Available
+                </Text>
+                <Text style={styles.bannerText}>
+                  Book any hour, from 12:00 AM to 12:00 AM.
+                </Text>
+              </View>
             </View>
           )}
 
-          {/* =================================================
-              LOADING
-          ================================================= */}
-
+          {/* SLOT GRID */}
           {loading ? (
-            <View
-              style={
-                styles.loadingBox
-              }
-            >
+            <View style={styles.loadingBox}>
               <ActivityIndicator
                 size="large"
-                color="#16833B"
+                color={COLORS.primaryDeep}
               />
-
-              <Text
-                style={
-                  styles.loadingText
-                }
-              >
-                Loading slots...
+              <Text style={styles.loadingText}>
+                Loading slots…
               </Text>
             </View>
           ) : selectedCourt ? (
-            <>
-              {/* =================================================
-                  EMPTY
-              ================================================= */}
-
-              {(
-                slotsByDate[
-                  selectedDate
-                ] || []
-              ).length === 0 ? (
-                <View
-                  style={
-                    styles.emptySlots
-                  }
-                >
-                  <Text
-                    style={
-                      styles.emptySlotsTitle
-                    }
-                  >
-                    Turf is closed
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.emptySlotsText
-                    }
-                  >
-                    No booking slots are
-                    available for this date.
-                  </Text>
-                </View>
-              ) : (
-                /* =================================================
-                   SLOT GRID
-                ================================================= */
-
-                <View
-                  style={
-                    styles.slotsGrid
-                  }
-                >
-                  {(
-                    slotsByDate[
-                      selectedDate
-                    ] || []
-                  ).map((slot) => {
-                    const selected =
-                      (
-                        selectedSlots[
-                          selectedDate
-                        ] || []
-                      ).includes(
-                        slot.bookingKey,
-                      );
-
-                    return (
-                      <TouchableOpacity
-                        key={
-                          slot.bookingKey
-                        }
-                        disabled={
-                          slot.booked
-                        }
-                        style={[
-                          styles.slotCard,
-                          slot.booked &&
-                            styles.slotBooked,
-                          selected &&
-                            styles.slotSelected,
-                        ]}
-                        onPress={() =>
-                          toggleSlot(
-                            slot,
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.slotTime,
-                            slot.booked &&
-                              styles.slotBookedText,
-                            selected &&
-                              styles.slotSelectedText,
-                          ]}
-                        >
-                          {formatDisplayTime(
-                            slot.startMinutes,
-                          )}
-                        </Text>
-
-                        <Text
-                          style={[
-                            styles.slotEndTime,
-                            slot.booked &&
-                              styles.slotBookedText,
-                            selected &&
-                              styles.slotSelectedText,
-                          ]}
-                        >
-                          to{' '}
-                          {formatDisplayTime(
-                            slot.endMinutes,
-                          )}
-                        </Text>
-
-                        <Text
-                          style={[
-                            styles.slotPrice,
-                            slot.booked &&
-                              styles.slotBookedText,
-                            selected &&
-                              styles.slotSelectedText,
-                          ]}
-                        >
-                          ₹
-                          {slot.price}
-                        </Text>
-
-                        {slot.isNight && (
-                          <Text
-                            style={[
-                              styles.nightText,
-                              selected &&
-                                styles.slotSelectedText,
-                            ]}
-                          >
-                            NIGHT
-                          </Text>
-                        )}
-
-                        <Text
-                          style={[
-                            styles.slotStatus,
-                            slot.booked &&
-                              styles.slotBookedText,
-                            selected &&
-                              styles.slotSelectedText,
-                          ]}
-                        >
-                          {slot.booked
-                            ? 'Booked'
-                            : selected
-                              ? 'Selected'
-                              : 'Available'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-            </>
+            slotsForSelectedDate.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle}>Turf is closed</Text>
+                <Text style={styles.emptyText}>
+                  No booking slots are available for this date.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.slotGrid}>
+                {slotsForSelectedDate.map((slot) => (
+                  <SlotCard
+                    key={slot.bookingKey}
+                    slot={slot}
+                    selected={selectedKeySet.has(slot.bookingKey)}
+                    dateString={selectedDate}
+                    onPress={toggleSlot}
+                  />
+                ))}
+              </View>
+            )
           ) : (
-            <View
-              style={
-                styles.emptySlots
-              }
-            >
-              <Text
-                style={
-                  styles.emptySlotsText
-                }
-              >
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>
                 Please select a court.
               </Text>
             </View>
           )}
 
-          {/* =================================================
-              SELECTED INFO
-          ================================================= */}
-
-          {selectedSlotObjects.length >
-            0 && (
-            <View
-              style={
-                styles.selectedInfo
-              }
-            >
-              <Text
-                style={
-                  styles.selectedInfoTitle
-                }
-              >
+          {/* SELECTED INFO */}
+          {selectedSlotObjects.length > 0 && (
+            <View style={styles.selectedInfo}>
+              <Text style={styles.selectedInfoTitle}>
                 Selected Slots
               </Text>
-
-              <Text
-                style={
-                  styles.selectedInfoText
-                }
-              >
-                {selectedSlotObjects.length}{' '}
-                slot
-                {selectedSlotObjects.length !==
-                1
-                  ? 's'
-                  : ''}{' '}
-                selected for{' '}
-                {getDateLabel(
-                  selectedDate,
-                )}
+              <Text style={styles.selectedInfoText}>
+                {selectedSlotObjects.length} slot
+                {selectedSlotObjects.length !== 1 ? 's' : ''} on{' '}
+                {getDateLabel(selectedDate)}
               </Text>
-
               <TouchableOpacity
                 onPress={() =>
-                  clearSelectionForDate(
-                    selectedDate,
-                  )
+                  setSelectedSlots((p) => ({
+                    ...p,
+                    [selectedDate]: [],
+                  }))
                 }
               >
-                <Text
-                  style={
-                    styles.clearText
-                  }
-                >
-                  Clear
-                </Text>
+                <Text style={styles.clearText}>Clear</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* =================================================
-              MULTI DATE SUMMARY
-          ================================================= */}
+          {/* MULTI-DATE SUMMARY */}
+          {selectedDates.length > 1 && (
+            <View style={styles.multiDateSummary}>
+              <Text style={styles.summaryTitle}>Selected Dates</Text>
+              {selectedDates.map((date) => (
+                <View key={date} style={styles.summaryRow}>
+                  <Text style={styles.summaryDate}>
+                    {getDateLabel(date)}
+                  </Text>
+                  <Text style={styles.summaryAmount}>
+                    ₹{daySubtotals.subtotal[date] || 0}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-          {multiDateMode &&
-            selectedDates.length >
-              0 && (
-              <View
-                style={
-                  styles.multiDateSummary
-                }
-              >
-                <Text
-                  style={
-                    styles.summaryTitle
-                  }
-                >
-                  Selected Dates
-                </Text>
-
-                {selectedDates.map(
-                  (date) => (
-                    <View
-                      key={date}
-                      style={
-                        styles.summaryRow
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.summaryDate
-                        }
-                      >
-                        {getDateLabel(
-                          date,
-                        )}
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.summaryAmount
-                        }
-                      >
-                        ₹
-                        {getDaySubtotal(
-                          date,
-                        )}
-                      </Text>
-                    </View>
-                  ),
-                )}
-              </View>
-            )}
-
-          <View
-            style={
-              styles.bottomSpacing
-            }
-          />
+          <View style={{ height: 140 }} />
         </ScrollView>
 
-        {/* =================================================
-            BOOKING BAR
-        ================================================= */}
-
-        <View
-          style={
-            styles.bookingBar
-          }
-        >
-          <View
-            style={
-              styles.bookingTotals
-            }
-          >
-            <Text
-              style={
-                styles.bookingCount
-              }
-            >
-              {totalSelectedSlots}{' '}
-              slot
-              {totalSelectedSlots !==
-              1
-                ? 's'
-                : ''}
+        {/* FLOATING BOOKING BAR */}
+        <View style={styles.bookingBar}>
+          <View style={styles.bookingBarLeft}>
+            <Text style={styles.bookingCount}>
+              {totalSelectedSlots} slot
+              {totalSelectedSlots !== 1 ? 's' : ''}
             </Text>
-
             {grandDiscount > 0 && (
-              <Text
-                style={
-                  styles.originalPrice
-                }
-              >
-                ₹
-                {
-                  grandOriginalTotal
-                }
+              <Text style={styles.originalPrice}>
+                ₹{grandOriginalTotal}
               </Text>
             )}
-
-            <Text
-              style={
-                styles.grandTotal
-              }
-            >
-              ₹{grandTotal}
-            </Text>
+            <Text style={styles.grandTotal}>₹{grandTotal}</Text>
           </View>
 
           <TouchableOpacity
+            activeOpacity={0.85}
             style={[
               styles.continueButton,
-              (totalSelectedSlots ===
-                0 ||
-                bookingLoading) &&
-                styles.disabledButton,
+              (totalSelectedSlots === 0 || bookingLoading) &&
+                styles.continueButtonDisabled,
             ]}
-            disabled={
-              totalSelectedSlots ===
-                0 ||
-              bookingLoading
-            }
-            onPress={
-              handleBookNow
-            }
+            disabled={totalSelectedSlots === 0 || bookingLoading}
+            onPress={handleBookNow}
           >
             {bookingLoading ? (
-              <ActivityIndicator
-                color="#FFFFFF"
-              />
+              <ActivityIndicator color={COLORS.dark} />
             ) : (
-              <Text
-                style={
-                  styles.continueText
-                }
-              >
-                CONTINUE
-              </Text>
+              <Text style={styles.continueText}>CONTINUE</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* =================================================
-            CUSTOM FULL DAY MODAL
-        ================================================= */}
-
-        {fullDayMode && (
-          <View
-            style={
-              styles.modalOverlay
-            }
-          >
-            <View
-              style={
-                styles.fullDayModal
-              }
-            >
-
-              {/* MODAL HEADER */}
-
-              <View
-                style={
-                  styles.modalHeader
-                }
-              >
-                <View>
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    Full Day Booking
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.modalSmallText
-                    }
-                  >
-                    Minimum {MIN_FULL_DAY_HOURS}{' '}
-                    hours
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  onPress={() =>
-                    setFullDayMode(
-                      false,
-                    )
-                  }
-                >
-                  <Text
-                    style={
-                      styles.modalClose
-                    }
-                  >
-                    ×
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* =================================================
-                  STEP 1 — START TIME
-              ================================================= */}
-
-              <Text
-                style={
-                  styles.modalSectionTitle
-                }
-              >
-                1. Select Start Time
-              </Text>
-
-              <Text
-                style={
-                  styles.modalDescription
-                }
-              >
-                Choose the time when your booking
-                should start.
-              </Text>
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={
-                  false
-                }
-                contentContainerStyle={
-                  styles.startTimeContainer
-                }
-              >
-                {fullDayAvailableSlots.map(
-                  (slot) => {
-                    const active =
-                      fullDayStartKey ===
-                      slot.bookingKey;
-
-                    /*
-                     * Check whether at least
-                     * 5 continuous hours are
-                     * possible from this time.
-                     */
-                    const index =
-                      (
-                        slotsByDate[
-                          selectedDate
-                        ] || []
-                      ).findIndex(
-                        (item) =>
-                          item.bookingKey ===
-                          slot.bookingKey,
-                      );
-
-                    const minimumPossible =
-                      index >= 0
-                        ? getContinuousSlots(
-                            index,
-                            MIN_FULL_DAY_HOURS,
-                          ).length ===
-                          MIN_FULL_DAY_HOURS
-                        : false;
-
-                    if (
-                      !minimumPossible
-                    ) {
-                      return null;
-                    }
-
-                    return (
-                      <TouchableOpacity
-                        key={
-                          slot.bookingKey
-                        }
-                        style={[
-                          styles.startTimeButton,
-                          active &&
-                            styles.startTimeButtonActive,
-                        ]}
-                        onPress={() =>
-                          selectFullDayStart(
-                            slot,
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.startTimeText,
-                            active &&
-                              styles.startTimeTextActive,
-                          ]}
-                        >
-                          {formatDisplayTime(
-                            slot.startMinutes,
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  },
-                )}
-              </ScrollView>
-
-              {/* =================================================
-                  SELECTED START
-              ================================================= */}
-
-              {fullDayStartKey !==
-                '' && (
-                <View
-                  style={
-                    styles.selectedStartBox
-                  }
-                >
-                  <Text
-                    style={
-                      styles.selectedStartLabel
-                    }
-                  >
-                    Starting from
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.selectedStartValue
-                    }
-                  >
-                    {formatDisplayTime(
-                      (
-                        slotsByDate[
-                          selectedDate
-                        ] || []
-                      ).find(
-                        (slot) =>
-                          slot.bookingKey ===
-                          fullDayStartKey,
-                      )?.startMinutes ??
-                        0,
-                    )}
-                  </Text>
-                </View>
-              )}
-
-              {/* =================================================
-                  STEP 2 — HOURS
-              ================================================= */}
-
-              <Text
-                style={
-                  styles.modalSectionTitle
-                }
-              >
-                2. Select Booking Hours
-              </Text>
-
-              <Text
-                style={
-                  styles.modalDescription
-                }
-              >
-                Minimum {MIN_FULL_DAY_HOURS}{' '}
-                hours. Select as many continuous
-                hours as you need.
-              </Text>
-
-              <View
-                style={
-                  styles.hourSelector
-                }
-              >
-                {availableHoursForStart
-                  .filter(
-                    (hours) =>
-                      hours ===
-                      MIN_FULL_DAY_HOURS,
-                  )
-                  .map(
-                    (hours) => (
-                      <TouchableOpacity
-                        key={hours}
-                        style={[
-                          styles.hourButton,
-                          styles.hourButtonActive,
-                        ]}
-                        onPress={() =>
-                          setFullDayHours(
-                            MIN_FULL_DAY_HOURS,
-                          )
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.hourButtonText,
-                            styles.hourButtonTextActive,
-                          ]}
-                        >
-                          {hours}h
-                        </Text>
-                      </TouchableOpacity>
-                    ),
-                  )}
-              </View>
-
-              {/* =================================================
-                  DISCOUNT
-              ================================================= */}
-
-              <View
-                style={
-                  styles.discountNotice
-                }
-              >
-                <Text
-                  style={
-                    styles.discountNoticeText
-                  }
-                >
-                  🎉{' '}
-                  {selectedCourt
-                    ? getFullDayDiscountPercent(
-                        selectedCourt,
-                      )
-                    : DEFAULT_FULL_DAY_DISCOUNT_PERCENT}
-                  % Full Day Discount
-                </Text>
-
-                <Text
-                  style={
-                    styles.discountSubText
-                  }
-                >
-                  Applied to the exact {MIN_FULL_DAY_HOURS}-hour
-                  Full Day booking.
-                </Text>
-              </View>
-
-              {/* =================================================
-                  PREVIEW
-              ================================================= */}
-
-              {fullDayStartKey !==
-                '' && (
-                <View
-                  style={
-                    styles.bookingPreview
-                  }
-                >
-                  <Text
-                    style={
-                      styles.previewTitle
-                    }
-                  >
-                    Booking Preview
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.previewText
-                    }
-                  >
-                    Start:{' '}
-                    {
-                      formatDisplayTime(
-                        (
-                          slotsByDate[
-                            selectedDate
-                          ] || []
-                        ).find(
-                          (slot) =>
-                            slot.bookingKey ===
-                            fullDayStartKey,
-                        )?.startMinutes ??
-                          0,
-                      )
-                    }
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.previewText
-                    }
-                  >
-                    Duration:{' '}
-                    {fullDayHours}{' '}
-                    hours
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.previewText
-                    }
-                  >
-                    End:{' '}
-                    {(() => {
-                      const selected =
-                        (
-                          slotsByDate[
-                            selectedDate
-                          ] || []
-                        ).find(
-                          (slot) =>
-                            slot.bookingKey ===
-                            fullDayStartKey,
-                        );
-
-                      if (!selected) {
-                        return '--';
-                      }
-
-                      return formatDisplayTime(
-                        selected.startMinutes +
-                          fullDayHours *
-                            60,
-                      );
-                    })()}
-                  </Text>
-
-                  {isCurrentDate24Hours &&
-                    fullDayStartKey !==
-                      '' && (
-                      <Text
-                        style={
-                          styles.midnightSupportText
-                        }
-                      >
-                        ✓ 24-hour booking can
-                        cross midnight.
-                      </Text>
-                    )}
-                </View>
-              )}
-
-              {/* =================================================
-                  APPLY
-              ================================================= */}
-
-              <TouchableOpacity
-                style={[
-                  styles.applyFullDay,
-                  (!fullDayStartKey ||
-                    availableHoursForStart.length ===
-                      0) &&
-                    styles.disabledButton,
-                ]}
-                disabled={
-                  !fullDayStartKey ||
-                  availableHoursForStart.length ===
-                    0
-                }
-                onPress={
-                  applyFullDayBooking
-                }
-              >
-                <Text
-                  style={
-                    styles.applyFullDayText
-                  }
-                >
-                  BOOK 5 HOURS
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* =================================================
-            SUMMARY MODAL
-        ================================================= */}
-
-        {showSummary && (
-          <View
-            style={
-              styles.modalOverlay
-            }
-          >
-            <View
-              style={
-                styles.summaryModal
-              }
-            >
-              <Text
-                style={
-                  styles.modalTitle
-                }
-              >
-                Booking Summary
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryModalText
-                }
-              >
-                {turf.name}
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryModalText
-                }
-              >
-                {selectedCourt
-                  ? getCourtName(
-                      selectedCourt,
-                      0,
-                    )
-                  : ''}
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryModalText
-                }
-              >
-                {totalSelectedSlots}{' '}
-                hours selected
-              </Text>
-
-              <Text
-                style={
-                  styles.summaryModalTotal
-                }
-              >
-                ₹{grandTotal}
-              </Text>
-
-              <TouchableOpacity
-                style={
-                  styles.applyFullDay
-                }
-                onPress={() =>
-                  setShowSummary(
-                    false,
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.applyFullDayText
-                  }
-                >
-                  CLOSE
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* FULL DAY MODAL */}
+        <FullDayModal
+          visible={fullDayMode}
+          slots={slotsForSelectedDate}
+          selectedDate={selectedDate}
+          selectedCourt={selectedCourt}
+          allowWrap={isCurrentDate24Hours}
+          onClose={() => setFullDayMode(false)}
+          onApply={applyFullDay}
+        />
       </View>
     </SafeAreaView>
   );
@@ -3652,42 +1888,124 @@ export default function SlotScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: COLORS.bg,
   },
 
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: COLORS.bg,
   },
 
-  /* =======================================================
-     HEADER
-  ======================================================= */
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 25,
+  },
+
+  fontLoadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bg,
+  },
+
+  fontLoadingMark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+
+  fontLoadingMarkText: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 26,
+    color: COLORS.dark,
+    letterSpacing: -0.5,
+  },
+
+  fontLoadingText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 10,
+    letterSpacing: 0.3,
+  },
+
+  errorText: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 17,
+    color: COLORS.textPrimary,
+    marginBottom: 20,
+  },
+
+  backButton: {
+    paddingHorizontal: 26,
+    paddingVertical: 13,
+    borderRadius: 15,
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+
+  backButtonText: {
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.dark,
+    fontSize: 12,
+    letterSpacing: 0.8,
+  },
+
+  /* HEADER */
 
   header: {
-    height: 60,
-    paddingHorizontal: 15,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E7E9ED',
+    height: 64,
+    paddingHorizontal: 18,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
     flexDirection: 'row',
     alignItems: 'center',
   },
 
-  headerBack: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F3F5',
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
-  headerBackText: {
-    fontSize: 34,
-    color: '#111827',
-    lineHeight: 34,
-    marginTop: -3,
+  backArrow: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 28,
+    color: COLORS.textPrimary,
+    lineHeight: 30,
+    marginTop: -4,
+  },
+
+  refreshIcon: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 20,
+    color: COLORS.primaryDarker,
   },
 
   headerCenter: {
@@ -3697,84 +2015,48 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 17,
-    fontWeight: '900',
-    color: '#111827',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
 
   headerSubtitle: {
-    marginTop: 2,
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 3,
     fontSize: 11,
-    color: '#6B7280',
+    color: COLORS.textMuted,
   },
 
-  refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F3F5',
-  },
-
-  refreshText: {
-    fontSize: 25,
-    color: '#16833B',
-    fontWeight: '800',
-  },
-
-  /* =======================================================
-     SCROLL
-  ======================================================= */
+  /* SCROLL */
 
   scrollContent: {
-    padding: 16,
-    paddingBottom: 120,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 140,
   },
 
-  /* =======================================================
-     MODE
-  ======================================================= */
-
-  modeRow: {
+  sectionTitleRow: {
     flexDirection: 'row',
-    backgroundColor: '#E9ECEF',
-    borderRadius: 12,
-    padding: 4,
-  },
-
-  modeButton: {
-    flex: 1,
-    height: 42,
-    borderRadius: 9,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 18,
+    marginBottom: 12,
   },
-
-  modeButtonActive: {
-    backgroundColor: '#16833B',
-  },
-
-  modeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6B7280',
-  },
-
-  modeTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* =======================================================
-     SECTIONS
-  ======================================================= */
 
   sectionTitle: {
-    marginTop: 20,
-    marginBottom: 10,
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#111827',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 17,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.2,
+  },
+
+  sectionTitleAccent: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+    marginLeft: 8,
+    marginTop: 2,
   },
 
   horizontalContent: {
@@ -3782,152 +2064,193 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  /* =======================================================
-     COURTS
-  ======================================================= */
+  /* COURT CHIPS */
 
-  courtSelector: {
-    minWidth: 100,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+  courtChip: {
+    minWidth: 108,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#E2E5E9',
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
 
-  courtSelectorActive: {
-    backgroundColor: '#16833B',
-    borderColor: '#16833B',
+  courtChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.20,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
-  courtSelectorName: {
+  courtName: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 14,
-    fontWeight: '900',
-    color: '#111827',
+    color: COLORS.textPrimary,
   },
 
-  courtSelectorNameActive: {
-    color: '#FFFFFF',
+  courtNameActive: {
+    color: COLORS.dark,
   },
 
-  courtSelectorPrice: {
+  courtPrice: {
+    fontFamily: 'Poppins_700Bold',
     marginTop: 4,
     fontSize: 12,
-    color: '#16833B',
-    fontWeight: '700',
+    color: COLORS.primaryDarker,
   },
 
-  courtSelectorPriceActive: {
-    color: '#FFFFFF',
+  courtPriceActive: {
+    color: COLORS.primaryDarker,
   },
 
-  /* =======================================================
-     DATES
-  ======================================================= */
+  /* DATE CHIPS */
 
-  dateCard: {
-    minWidth: 85,
-    paddingHorizontal: 13,
+  dateChip: {
+    minWidth: 92,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 13,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#E2E5E9',
+    borderColor: COLORS.border,
     alignItems: 'center',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
 
-  dateCardActive: {
-    backgroundColor: '#16833B',
-    borderColor: '#16833B',
+  dateChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.20,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
   dateText: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 12,
-    fontWeight: '800',
-    color: '#374151',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
   },
 
   dateTextActive: {
-    color: '#FFFFFF',
+    color: COLORS.dark,
   },
 
   multiDateInfo: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#EAF7EE',
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.primaryFaint,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMuted,
   },
 
   multiDateInfoText: {
+    fontFamily: 'Poppins_700Bold',
     textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#16833B',
-  },
-
-  /* =======================================================
-     24 HOURS
-  ======================================================= */
-
-  twentyFourHourBanner: {
-    marginTop: 12,
-    padding: 13,
-    borderRadius: 12,
-    backgroundColor: '#EAF7EE',
-    borderWidth: 1,
-    borderColor: '#C8E8D1',
-  },
-
-  twentyFourHourTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#16833B',
-  },
-
-  twentyFourHourText: {
-    marginTop: 3,
     fontSize: 11,
-    color: '#4B5563',
-    lineHeight: 17,
+    color: COLORS.primaryDarker,
   },
 
-  /* =======================================================
-     SLOT HEADER
-  ======================================================= */
+  /* SLOT HEADER */
 
   slotHeader: {
-    marginTop: 4,
+    marginTop: 20,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 12,
   },
 
-  slotSubTitle: {
+  slotHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  slotSubtitle: {
+    fontFamily: 'Poppins_500Medium',
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.textMuted,
+    marginTop: 5,
   },
 
   fullDayButton: {
-    minWidth: 155,
-    minHeight: 46,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#FFF4D6',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1,
+    borderColor: COLORS.warningBorder,
+    marginTop: 18,
+  },
+
+  fullDayIcon: {
+    fontSize: 13,
+    color: COLORS.warningText,
   },
 
   fullDayButtonText: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 12,
-    fontWeight: '900',
-    color: '#946200',
+    color: COLORS.warningText,
+    letterSpacing: 0.3,
   },
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
+  /* BANNER */
+
+  banner: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryFaint,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMuted,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  bannerIcon: {
+    fontSize: 18,
+  },
+
+  bannerTextWrap: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  bannerTitle: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 13,
+    color: COLORS.primaryDarker,
+  },
+
+  bannerText: {
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 3,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+
+  /* LOADING */
 
   loadingBox: {
     minHeight: 220,
@@ -3936,251 +2259,350 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
-    marginTop: 10,
-    color: '#6B7280',
+    fontFamily: 'Poppins_600SemiBold',
+    marginTop: 12,
+    color: COLORS.textMuted,
     fontSize: 13,
   },
 
-  /* =======================================================
-     SLOTS
-  ======================================================= */
+  /* =====================================================
+     SLOT GRID — 4 per row, compact cards with N badge
+  ===================================================== */
 
-  slotsGrid: {
+  slotGrid: {
+    marginTop: 14,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: 8,
   },
 
   slotCard: {
-    width: '31.5%',
-    minHeight: 96,
-    marginBottom: 10,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    width: '23.5%',
+    height: 88,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#DDE2E7',
+    borderColor: COLORS.border,
+    justifyContent: 'space-between',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
-  slotSelected: {
-    backgroundColor: '#16833B',
-    borderColor: '#16833B',
+  slotCardSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
   },
 
-  slotBooked: {
-    backgroundColor: '#F1F2F4',
-    borderColor: '#E0E2E5',
-    opacity: 0.65,
+  slotCardDisabled: {
+    backgroundColor: COLORS.bgMuted,
+    borderColor: COLORS.borderLight,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    opacity: 0.7,
   },
 
-  slotTime: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#111827',
+  slotTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 3,
+  },
+
+  slotStartTime: {
+    flex: 1,
+    fontFamily: 'Poppins_900Black',
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+
+  /* =====================================================
+     NIGHT BADGE — small "N" pill
+  ===================================================== */
+
+  nightBadge: {
+    minWidth: 14,
+    height: 14,
+    paddingHorizontal: 3,
+    borderRadius: 7,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1,
+    borderColor: COLORS.warningBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  nightBadgeSelected: {
+    backgroundColor: 'rgba(11,18,32,0.16)',
+    borderColor: 'rgba(11,18,32,0.24)',
+  },
+
+  nightBadgeDisabled: {
+    opacity: 0.6,
+  },
+
+  nightBadgeText: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 8,
+    lineHeight: 10,
+    color: COLORS.warningText,
+    letterSpacing: 0,
+  },
+
+  nightBadgeTextSelected: {
+    color: COLORS.dark,
   },
 
   slotEndTime: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#6B7280',
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 0,
+    fontSize: 9,
+    color: COLORS.textMuted,
   },
 
   slotPrice: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#16833B',
+    fontFamily: 'Poppins_900Black',
+    marginTop: 3,
+    fontSize: 12,
+    color: COLORS.primaryDarker,
+    letterSpacing: -0.2,
   },
 
-  nightText: {
-    marginTop: 2,
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#946200',
+  slotPriceSelected: {
+    color: COLORS.dark,
+  },
+
+  slotPriceDisabled: {
+    color: COLORS.textMuted,
   },
 
   slotStatus: {
-    marginTop: 5,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#16833B',
+    fontFamily: 'Poppins_800ExtraBold',
+    marginTop: 1,
+    fontSize: 7,
+    color: COLORS.primaryDarker,
+    letterSpacing: 0.4,
   },
 
-  slotSelectedText: {
-    color: '#FFFFFF',
+  slotStatusPast: {
+    color: COLORS.textMuted,
   },
 
-  slotBookedText: {
-    color: '#8B929B',
+  slotStatusBooked: {
+    color: COLORS.dangerText,
   },
 
-  /* =======================================================
-     EMPTY
-  ======================================================= */
+  slotStatusSelected: {
+    color: COLORS.dark,
+  },
 
-  emptySlots: {
-    padding: 25,
-    marginTop: 10,
-    borderRadius: 15,
-    backgroundColor: '#FFFFFF',
+  slotTextSelected: {
+    color: COLORS.dark,
+  },
+
+  slotTextDisabled: {
+    color: COLORS.textMuted,
+  },
+
+  /* EMPTY */
+
+  emptyBox: {
+    padding: 26,
+    marginTop: 14,
+    borderRadius: 18,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
 
-  emptySlotsTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#111827',
+  emptyTitle: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 16,
+    color: COLORS.textPrimary,
   },
 
-  emptySlotsText: {
+  emptyText: {
+    fontFamily: 'Poppins_400Regular',
     marginTop: 6,
     textAlign: 'center',
-    color: '#6B7280',
-    fontSize: 13,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
   },
 
-  /* =======================================================
-     SELECTED
-  ======================================================= */
+  /* SELECTED INFO */
 
   selectedInfo: {
-    marginTop: 10,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: '#EAF7EE',
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: COLORS.primaryFaint,
     borderWidth: 1,
-    borderColor: '#C8E8D1',
+    borderColor: COLORS.primaryMuted,
   },
 
   selectedInfoTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#16833B',
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 14,
+    color: COLORS.primaryDarker,
   },
 
   selectedInfoText: {
-    marginTop: 5,
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 6,
     fontSize: 12,
-    color: '#4B5563',
+    color: COLORS.textSecondary,
   },
 
   clearText: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#C62828',
+    fontFamily: 'Poppins_800ExtraBold',
+    marginTop: 10,
+    fontSize: 11,
+    color: COLORS.dangerText,
+    letterSpacing: 0.4,
   },
 
-  /* =======================================================
-     MULTI DATE
-  ======================================================= */
+  /* MULTI DATE */
 
   multiDateSummary: {
-    marginTop: 15,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: '#E3E6EA',
+    borderColor: COLORS.border,
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
 
   summaryTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#111827',
-    marginBottom: 8,
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginBottom: 10,
   },
 
   summaryRow: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F1F3',
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.borderLight,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
 
   summaryDate: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '700',
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
 
   summaryAmount: {
-    fontSize: 13,
-    color: '#111827',
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    fontSize: 12,
+    color: COLORS.textPrimary,
   },
 
-  bottomSpacing: {
-    height: 40,
-  },
-
-  /* =======================================================
-     BOOKING BAR
-  ======================================================= */
+  /* FLOATING BOOKING BAR */
 
   bookingBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    minHeight: 82,
-    paddingHorizontal: 16,
+    left: 12,
+    right: 12,
+    bottom: 10,
+    minHeight: 74,
+    paddingHorizontal: 18,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E5E9',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 14,
   },
 
-  bookingTotals: {
+  bookingBarLeft: {
     flex: 1,
   },
 
   bookingCount: {
+    fontFamily: 'Poppins_700Bold',
     fontSize: 11,
-    color: '#6B7280',
+    color: COLORS.textMuted,
+    letterSpacing: 0.3,
   },
 
   originalPrice: {
+    fontFamily: 'Poppins_600SemiBold',
     marginTop: 2,
     fontSize: 11,
-    color: '#9CA3AF',
+    color: COLORS.textLight,
     textDecorationLine: 'line-through',
   },
 
   grandTotal: {
+    fontFamily: 'Poppins_900Black',
     marginTop: 1,
     fontSize: 20,
-    fontWeight: '900',
-    color: '#111827',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
   },
 
   continueButton: {
     minWidth: 145,
     height: 50,
     paddingHorizontal: 20,
-    borderRadius: 13,
-    backgroundColor: '#16833B',
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
-  disabledButton: {
-    backgroundColor: '#AAB0B7',
+  continueButtonDisabled: {
+    backgroundColor: COLORS.borderSoft,
+    shadowOpacity: 0,
+    elevation: 0,
   },
 
   continueText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.dark,
+    fontSize: 12,
+    letterSpacing: 1.2,
   },
 
-  /* =======================================================
-     MODAL
-  ======================================================= */
+  /* FULL DAY MODAL */
 
   modalOverlay: {
     position: 'absolute',
@@ -4188,294 +2610,268 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor:
-      'rgba(0,0,0,0.45)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(11,18,32,0.55)',
     justifyContent: 'flex-end',
   },
 
   fullDayModal: {
     width: '100%',
-    maxHeight: '92%',
-    padding: 20,
-    paddingBottom: 30,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    backgroundColor: '#FFFFFF',
+    maxHeight: '90%',
+    paddingHorizontal: 22,
+    paddingTop: 12,
+    paddingBottom: 28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: COLORS.card,
   },
 
-  summaryModal: {
-    width: '90%',
-    padding: 22,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 'auto',
-    marginTop: 'auto',
+  modalHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.borderDark,
+    alignSelf: 'center',
+    marginBottom: 18,
   },
 
   modalHeader: {
     flexDirection: 'row',
-    justifyContent:
-      'space-between',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
 
   modalTitle: {
+    fontFamily: 'Poppins_900Black',
     fontSize: 20,
-    fontWeight: '900',
-    color: '#111827',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
 
   modalSmallText: {
-    marginTop: 3,
+    fontFamily: 'Poppins_700Bold',
+    marginTop: 4,
     fontSize: 11,
-    fontWeight: '700',
-    color: '#16833B',
+    color: COLORS.primaryDarker,
+    letterSpacing: 0.3,
   },
 
   modalClose: {
     fontSize: 30,
-    color: '#6B7280',
+    color: COLORS.textMuted,
+    lineHeight: 30,
   },
 
   modalSectionTitle: {
-    marginTop: 20,
+    fontFamily: 'Poppins_800ExtraBold',
+    marginTop: 22,
     fontSize: 15,
-    fontWeight: '900',
-    color: '#111827',
+    color: COLORS.textPrimary,
+    letterSpacing: 0.1,
   },
 
   modalDescription: {
-    marginTop: 5,
+    fontFamily: 'Poppins_400Regular',
+    marginTop: 6,
     fontSize: 12,
     lineHeight: 18,
-    color: '#6B7280',
+    color: COLORS.textMuted,
   },
 
-  /* =======================================================
-     START TIME
-  ======================================================= */
-
-  startTimeContainer: {
-    paddingTop: 12,
+  startRow: {
+    paddingTop: 14,
     paddingRight: 10,
     gap: 8,
   },
 
-  startTimeButton: {
-    minWidth: 90,
-    paddingHorizontal: 12,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#F1F3F5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E3E7',
-  },
-
-  startTimeButtonActive: {
-    backgroundColor: '#16833B',
-    borderColor: '#16833B',
-  },
-
-  startTimeText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#374151',
-  },
-
-  startTimeTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* =======================================================
-     SELECTED START
-  ======================================================= */
-
-  selectedStartBox: {
-    marginTop: 12,
-    padding: 13,
-    borderRadius: 12,
-    backgroundColor: '#EAF7EE',
-    borderWidth: 1,
-    borderColor: '#C8E8D1',
-    flexDirection: 'row',
-    justifyContent:
-      'space-between',
-    alignItems: 'center',
-  },
-
-  selectedStartLabel: {
-    fontSize: 12,
-    color: '#4B5563',
-    fontWeight: '700',
-  },
-
-  selectedStartValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#16833B',
-  },
-
-  /* =======================================================
-     HOURS
-  ======================================================= */
-
-  hourSelector: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-
-  hourButton: {
-    width: '100%',
+  startChip: {
+    minWidth: 92,
     height: 46,
-    borderRadius: 10,
-    backgroundColor: '#F1F3F5',
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.card,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E3E7',
   },
 
-  hourButtonActive: {
-    backgroundColor: '#16833B',
-    borderColor: '#16833B',
+  startChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.20,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
-  hourButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#4B5563',
-  },
-
-  hourButtonTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* =======================================================
-     DISCOUNT
-  ======================================================= */
-
-  discountNotice: {
-    marginTop: 15,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#FFF4D6',
-  },
-
-  discountNoticeText: {
-    textAlign: 'center',
+  startChipText: {
+    fontFamily: 'Poppins_800ExtraBold',
     fontSize: 12,
-    fontWeight: '900',
-    color: '#946200',
+    color: COLORS.textPrimary,
   },
 
-  discountSubText: {
-    marginTop: 3,
+  startChipTextActive: {
+    color: COLORS.dark,
+  },
+
+  rangeBox: {
+    marginTop: 16,
+    flexDirection: 'row',
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryFaint,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMuted,
+    overflow: 'hidden',
+  },
+
+  rangeItem: {
+    flex: 1,
+    padding: 14,
+    alignItems: 'center',
+  },
+
+  rangeDivider: {
+    width: 1,
+    backgroundColor: COLORS.primaryMuted,
+  },
+
+  rangeLabel: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 11,
+    color: COLORS.textMuted,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+
+  rangeValue: {
+    fontFamily: 'Poppins_900Black',
+    marginTop: 4,
+    fontSize: 15,
+    color: COLORS.primaryDarker,
+  },
+
+  dropdown: {
+    marginTop: 14,
+    height: 52,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: COLORS.card,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  dropdownDisabled: {
+    opacity: 0.5,
+  },
+
+  dropdownText: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+
+  dropdownArrow: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+
+  dropdownList: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    overflow: 'hidden',
+    shadowColor: COLORS.dark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+
+  dropdownItem: {
+    minHeight: 50,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  dropdownItemActive: {
+    backgroundColor: COLORS.primaryFaint,
+  },
+
+  dropdownItemText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+
+  dropdownItemTextActive: {
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.primaryDarker,
+  },
+
+  check: {
+    fontFamily: 'Poppins_900Black',
+    fontSize: 16,
+    color: COLORS.primaryDarker,
+  },
+
+  discountBox: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.warningSoft,
+    borderWidth: 1,
+    borderColor: COLORS.warningBorder,
+  },
+
+  discountTitle: {
+    fontFamily: 'Poppins_900Black',
+    textAlign: 'center',
+    fontSize: 13,
+    color: COLORS.warningText,
+    letterSpacing: 0.2,
+  },
+
+  discountText: {
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 4,
     textAlign: 'center',
     fontSize: 10,
-    color: '#946200',
+    color: COLORS.warningText,
+    lineHeight: 15,
   },
 
-  /* =======================================================
-     PREVIEW
-  ======================================================= */
-
-  bookingPreview: {
-    marginTop: 12,
-    padding: 13,
-    borderRadius: 12,
-    backgroundColor: '#F7F8FA',
-    borderWidth: 1,
-    borderColor: '#E2E5E9',
-  },
-
-  previewTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#111827',
-    marginBottom: 5,
-  },
-
-  previewText: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#4B5563',
-  },
-
-  midnightSupportText: {
-    marginTop: 7,
-    fontSize: 11,
-    color: '#16833B',
-    fontWeight: '800',
-  },
-
-  /* =======================================================
-     APPLY BUTTON
-  ======================================================= */
-
-  applyFullDay: {
-    height: 50,
-    marginTop: 18,
-    borderRadius: 13,
-    backgroundColor: '#16833B',
+  applyButton: {
+    marginTop: 20,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.primaryDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 5,
   },
 
-  applyFullDayText: {
-    color: '#FFFFFF',
+  applyButtonDisabled: {
+    backgroundColor: COLORS.borderSoft,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  applyButtonText: {
+    fontFamily: 'Poppins_900Black',
+    color: COLORS.dark,
     fontSize: 13,
-    fontWeight: '900',
-  },
-
-  /* =======================================================
-     SUMMARY
-  ======================================================= */
-
-  summaryModalText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#4B5563',
-  },
-
-  summaryModalTotal: {
-    marginTop: 15,
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#111827',
-  },
-
-  /* =======================================================
-     ERROR
-  ======================================================= */
-
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 25,
-  },
-
-  errorText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 20,
-  },
-
-  backButton: {
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#16833B',
-  },
-
-  backButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
+    letterSpacing: 1,
   },
 });
