@@ -182,20 +182,6 @@ interface DashboardData {
     createdAt: string;
   }[];
 
-  upcomingSlots: {
-    _id: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    price: number;
-    status: string;
-
-    court?: {
-      name?: string;
-      sport?: string;
-    };
-  }[];
-
   payments: {
     gross: number;
     platformFee: number;
@@ -242,8 +228,6 @@ const emptyDashboard: DashboardData = {
   },
 
   recentBookings: [],
-
-  upcomingSlots: [],
 
   payments: {
     gross: 0,
@@ -507,24 +491,6 @@ const normalizeDashboard = (data: any): DashboardData => {
         }))
       : [],
 
-    upcomingSlots: Array.isArray(source?.upcomingSlots)
-      ? source.upcomingSlots.map((slot: any) => ({
-          _id: String(slot?._id || Math.random()),
-          date: String(slot?.date || ''),
-          startTime: String(slot?.startTime || ''),
-          endTime: String(slot?.endTime || ''),
-          price: safeNumber(slot?.price),
-          status: String(slot?.status || 'available'),
-
-          court: slot?.court
-            ? {
-                name: slot.court.name,
-                sport: slot.court.sport,
-              }
-            : undefined,
-        }))
-      : [],
-
     payments: {
       gross: safeNumber(source?.payments?.gross),
       platformFee: safeNumber(source?.payments?.platformFee),
@@ -570,6 +536,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
   const [error, setError] = useState('');
 
   const [period, setPeriod] = useState<'7' | '30' | '90'>('7');
+
+  // Booking / slot list expansion states
+  const [showAllRecentBookings, setShowAllRecentBookings] = useState(false);
 
   const ownerId = user?._id || user?.id;
 
@@ -664,6 +633,21 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
 
     return dashboard.revenue.slice(-count);
   }, [dashboard.revenue, period]);
+
+  /* =========================================================
+     RECENT BOOKINGS
+  ========================================================= */
+
+  // Keep every booking returned by the dashboard API, including
+  // bookings from previous dates. The default view shows the
+  // latest 3; SEE ALL expands to the complete returned booking list.
+  const visibleRecentBookings = useMemo(
+    () =>
+      showAllRecentBookings
+        ? dashboard.recentBookings
+        : dashboard.recentBookings.slice(0, 3),
+    [dashboard.recentBookings, showAllRecentBookings],
+  );
 
   /* =========================================================
      FONT / LOADING SCREEN
@@ -1462,13 +1446,19 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
             <View style={styles.sectionTitleAccent} />
           </View>
 
-          {onViewBookings && (
+          {dashboard.recentBookings.length > 3 && (
             <TouchableOpacity
-              onPress={onViewBookings}
+              onPress={() =>
+                setShowAllRecentBookings(
+                  (previous) => !previous,
+                )
+              }
               activeOpacity={0.85}
             >
               <Text style={styles.viewText}>
-                VIEW ALL
+                {showAllRecentBookings
+                  ? 'SHOW LESS'
+                  : 'SEE ALL'}
               </Text>
             </TouchableOpacity>
           )}
@@ -1487,11 +1477,12 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
             </Text>
 
             <Text style={styles.emptyText}>
-              Customer bookings will appear here.
+              Customer bookings, including past bookings,
+              will appear here.
             </Text>
           </View>
         ) : (
-          dashboard.recentBookings.map(
+          visibleRecentBookings.map(
             (booking) => {
               const statusColors =
                 getStatusColors(
@@ -1639,80 +1630,6 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({
             </Text>
           </View>
         </View>
-
-        {/* =====================================================
-            UPCOMING SLOTS
-        ===================================================== */}
-
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>
-              Upcoming Slots
-            </Text>
-
-            <View style={styles.sectionTitleAccent} />
-          </View>
-
-          {onManageSlots && (
-            <TouchableOpacity
-              onPress={onManageSlots}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.viewText}>
-                MANAGE
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {dashboard.upcomingSlots.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIconCircle}>
-              <Text style={styles.emptyIcon}>
-                ◷
-              </Text>
-            </View>
-
-            <Text style={styles.emptyTitle}>
-              No upcoming slots
-            </Text>
-
-            <Text style={styles.emptyText}>
-              Upcoming court slots will appear here.
-            </Text>
-          </View>
-        ) : (
-          dashboard.upcomingSlots
-            .slice(0, 5)
-            .map((slot) => (
-              <View
-                key={slot._id}
-                style={styles.slotCard}
-              >
-                <View style={styles.slotDateBox}>
-                  <Text style={styles.slotDate}>
-                    {formatDate(slot.date)}
-                  </Text>
-                </View>
-
-                <View style={styles.slotInfo}>
-                  <Text style={styles.slotCourt}>
-                    {slot.court?.name ||
-                      'Court'}
-                  </Text>
-
-                  <Text style={styles.slotTime}>
-                    {slot.startTime} -{' '}
-                    {slot.endTime}
-                  </Text>
-                </View>
-
-                <Text style={styles.slotPrice}>
-                  {formatCurrency(slot.price)}
-                </Text>
-              </View>
-            ))
-        )}
 
         {/* =====================================================
             QUICK ACTIONS
@@ -2858,6 +2775,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: 'Poppins_600SemiBold',
     fontWeight: '600',
+  },
+
+  slotPriceBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginLeft: 8,
+    minWidth: 62,
+  },
+
+  slotStatus: {
+    marginTop: 3,
+    fontSize: 8,
+    fontFamily: 'Poppins_800ExtraBold',
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
   },
 
   slotPrice: {

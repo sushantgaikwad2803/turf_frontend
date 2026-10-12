@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import { File, UploadType } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Poppins_400Regular,
@@ -29,9 +32,18 @@ import {
    API
 ========================================================= */
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? '')
-  .trim()
-  .replace(/\/+$/, '');
+const RAW_API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
+
+const normalizeApiBaseUrl = (value: string): string => {
+  let url = value.trim().replace(/^['"]|['"]$/g, '');
+  url = url.replace(/\/+$/, '');
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (!/\/api$/i.test(url)) url = `${url}/api`;
+  return url;
+};
+
+const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
 
 /* =========================================================
    THEME COLORS
@@ -136,6 +148,7 @@ export interface Turf {
   city: string;
   status?: 'active' | 'inactive' | 'maintenance';
   operatingHours?: OperatingHour[];
+  amenities?: string[];
   location?: {
     type: string;
     coordinates: [number, number];
@@ -385,6 +398,55 @@ const getBookingStatusColors = (status?: string) => {
   };
 };
 
+/**
+ * Booking dates shown on the owner dashboard must be today or later.
+ * Past-day bookings are intentionally hidden from both the short list and
+ * the expanded "See All" list.
+ */
+const isBookingTodayOrFuture = (bookingDate?: string): boolean => {
+  if (!bookingDate) return false;
+
+  // Prefer the calendar date from YYYY-MM-DD values so timezone conversion
+  // cannot accidentally move a booking to the previous/next day.
+  const dateMatch = String(bookingDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateMatch) {
+    const bookingYear = Number(dateMatch[1]);
+    const bookingMonth = Number(dateMatch[2]) - 1;
+    const bookingDay = Number(dateMatch[3]);
+
+    const today = new Date();
+    const todayStart = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const bookingStart = new Date(
+      bookingYear,
+      bookingMonth,
+      bookingDay,
+    );
+
+    return bookingStart >= todayStart;
+  }
+
+  const parsed = new Date(bookingDate);
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  const today = new Date();
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const bookingStart = new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate(),
+  );
+
+  return bookingStart >= todayStart;
+};
+
 /* =========================================================
    COMPONENT
 ========================================================= */
@@ -431,6 +493,15 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [turfDescription, setTurfDescription] = useState('');
   const [turfAddress, setTurfAddress] = useState('');
   const [turfCity, setTurfCity] = useState('');
+  const [turfAmenities, setTurfAmenities] = useState('');
+
+  const [turfLatitude, setTurfLatitude] = useState<number | null>(null);
+  const [turfLongitude, setTurfLongitude] = useState<number | null>(null);
+  const [turfLocationLoading, setTurfLocationLoading] = useState(false);
+
+  const [turfImageUri, setTurfImageUri] = useState<string | null>(null);
+  const [turfUploadedImageUrl, setTurfUploadedImageUrl] = useState('');
+  const [turfImageUploading, setTurfImageUploading] = useState(false);
 
   const [operatingHours, setOperatingHours] = useState<OperatingHour[]>(
     cloneDefaultHours(),
@@ -452,6 +523,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   const [turfCourts, setTurfCourts] = useState<Record<string, Court[]>>({});
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [fetchingBookings, setFetchingBookings] = useState(false);
+  const [showAllBookings, setShowAllBookings] = useState(false);
 
   const [expandedTurfId, setExpandedTurfId] = useState<string | null>(null);
 
@@ -726,31 +798,200 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     Alert.alert('Navigation Error', 'Add Turf navigation is not configured.');
   };
 
+  /* =========================================================
+     TURF IMAGE UPLOAD — same flow as Add Turf
+  ========================================================= */
+
+  const uploadTurfImageToBackend = async (selectedImageUri: string): Promise<string> => {
+    if (!selectedImageUri) {
+      throw new Error('No image was selected.');
+    }
+
+    const file = new File(selectedImageUri);
+
+    if (!file.exists) {
+      throw new Error('Selected image file does not exist on the device.');
+    }
+
+    if (!file.size || file.size <= 0) {
+      throw new Error('Selected image file is empty.');
+    }
+
+    const mimeType = file.type || 'image/jpeg';
+    const uploadUrl = buildApiUrl('/upload/turf-image');
+
+    const result = await file.upload(uploadUrl, {
+      httpMethod: 'POST',
+      uploadType: UploadType.MULTIPART,
+      fieldName: 'image',
+      mimeType,
+      headers: { Accept: 'application/json' },
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(
+        `Image upload failed (${result.status}): ${result.body || 'Unknown server error'}`,
+      );
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(result.body);
+    } catch {
+      throw new Error('Backend returned invalid JSON while uploading the image.');
+    }
+
+    const imageUrl =
+      data?.url ||
+      data?.imageUrl ||
+      data?.secure_url ||
+      data?.image?.url;
+
+    if (!imageUrl) {
+      throw new Error(
+        data?.error ||
+          data?.message ||
+          'Image uploaded but server did not return an image URL.',
+      );
+    }
+
+    return String(imageUrl);
+  };
+
+  const pickTurfImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Please allow photo library access to select a turf image.',
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        Alert.alert('Image Error', 'Could not get the selected image.');
+        return;
+      }
+
+      setTurfImageUri(asset.uri);
+      setTurfUploadedImageUrl('');
+      setTurfImageUploading(true);
+
+      try {
+        const imageUrl = await uploadTurfImageToBackend(asset.uri);
+        setTurfUploadedImageUrl(imageUrl);
+        Alert.alert('Upload Successful', 'Turf image uploaded successfully.');
+      } catch (error) {
+        setTurfImageUri(null);
+        setTurfUploadedImageUrl('');
+        Alert.alert(
+          'Upload Failed',
+          getErrorMessage(error, 'Could not upload the image.'),
+        );
+      } finally {
+        setTurfImageUploading(false);
+      }
+    } catch (error) {
+      setTurfImageUploading(false);
+      Alert.alert('Image Error', getErrorMessage(error, 'Could not select the image.'));
+    }
+  };
+
+  /* =========================================================
+     TURF LOCATION — same GeoJSON flow as Add Turf
+  ========================================================= */
+
+  const getTurfCurrentLocation = async () => {
+    if (turfLocationLoading) return;
+
+    try {
+      setTurfLocationLoading(true);
+
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow location access so the turf can be saved on the map.',
+        );
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const nextLatitude = currentLocation.coords.latitude;
+      const nextLongitude = currentLocation.coords.longitude;
+
+      if (
+        !Number.isFinite(nextLatitude) ||
+        !Number.isFinite(nextLongitude) ||
+        nextLatitude < -90 ||
+        nextLatitude > 90 ||
+        nextLongitude < -180 ||
+        nextLongitude > 180
+      ) {
+        throw new Error('The device returned an invalid latitude or longitude.');
+      }
+
+      setTurfLatitude(nextLatitude);
+      setTurfLongitude(nextLongitude);
+
+      Alert.alert(
+        'Location Captured',
+        'The turf location has been updated successfully.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Location Error',
+        getErrorMessage(error, 'Unable to get your current location.'),
+      );
+    } finally {
+      setTurfLocationLoading(false);
+    }
+  };
+
   const handleEditTurf = (turf: Turf) => {
     setSelectedTurf(turf);
     setTurfName(turf.name || '');
     setTurfDescription(turf.description || '');
     setTurfAddress(turf.address || '');
     setTurfCity(turf.city || '');
+    setTurfAmenities(Array.isArray(turf.amenities) ? turf.amenities.join(', ') : '');
 
-    if (turf.operatingHours?.length) {
-      setOperatingHours(
-        DEFAULT_OPERATING_HOURS.map((defaultHour) => {
-          const existingHour = turf.operatingHours?.find(
-            (hour) => hour.day.toLowerCase() === defaultHour.day.toLowerCase(),
-          );
-          if (!existingHour) return { ...defaultHour };
-          return {
-            day: defaultHour.day,
-            openingTime: existingHour.openingTime || defaultHour.openingTime,
-            closingTime: existingHour.closingTime || defaultHour.closingTime,
-            isClosed: existingHour.isClosed ?? defaultHour.isClosed,
-          };
-        }),
-      );
+    const coordinates = turf.location?.coordinates;
+    if (
+      Array.isArray(coordinates) &&
+      coordinates.length === 2 &&
+      Number.isFinite(Number(coordinates[0])) &&
+      Number.isFinite(Number(coordinates[1]))
+    ) {
+      setTurfLongitude(Number(coordinates[0]));
+      setTurfLatitude(Number(coordinates[1]));
     } else {
-      setOperatingHours(cloneDefaultHours());
+      setTurfLongitude(null);
+      setTurfLatitude(null);
     }
+
+    const primaryImage =
+      turf.images?.find((image) => image.isPrimary && image.url) ||
+      turf.images?.find((image) => image.url);
+    setTurfImageUri(primaryImage?.url || null);
+    setTurfUploadedImageUrl(primaryImage?.url || '');
+    setTurfImageUploading(false);
+
     setShowTurfModal(true);
   };
 
@@ -794,62 +1035,158 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     const cleanDescription = turfDescription.trim();
     const cleanAddress = turfAddress.trim();
     const cleanCity = turfCity.trim();
+    const amenityList = turfAmenities
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
 
-    if (!cleanName || !cleanAddress || !cleanCity) {
+    if (!cleanName) {
+      Alert.alert('Validation Error', 'Please enter the turf name.');
+      return;
+    }
+
+    if (!cleanAddress) {
+      Alert.alert('Validation Error', 'Please enter the turf address.');
+      return;
+    }
+
+    if (!cleanCity) {
+      Alert.alert('Validation Error', 'Please enter the city.');
+      return;
+    }
+
+    if (turfImageUploading) {
+      Alert.alert('Please Wait', 'The turf image is still uploading.');
+      return;
+    }
+
+    if (!turfUploadedImageUrl) {
       Alert.alert(
-        'Missing Information',
-        'Please fill in turf name, address and city.',
+        'Image Required',
+        'Please select a turf image and wait for the upload to finish.',
       );
       return;
     }
 
-    for (const hour of operatingHours) {
-      if (hour.isClosed) continue;
-      if (!hour.openingTime || !hour.closingTime) {
-        Alert.alert(
-          'Invalid Hours',
-          `Please select opening and closing time for ${hour.day}.`,
-        );
-        return;
-      }
-      const opening = timeStringToDate(hour.openingTime).getTime();
-      const closing = timeStringToDate(hour.closingTime).getTime();
-      if (opening >= closing) {
-        Alert.alert(
-          'Invalid Hours',
-          `Closing time must be later than opening time on ${hour.day}.`,
-        );
-        return;
+    if (
+      turfLatitude === null ||
+      turfLongitude === null ||
+      !Number.isFinite(turfLatitude) ||
+      !Number.isFinite(turfLongitude)
+    ) {
+      Alert.alert(
+        'Location Required',
+        'Please select the turf location using the "Use Current Location" button.',
+      );
+      return;
+    }
+
+    if (
+      turfLatitude < -90 ||
+      turfLatitude > 90 ||
+      turfLongitude < -180 ||
+      turfLongitude > 180
+    ) {
+      Alert.alert(
+        'Invalid Location',
+        'The selected latitude or longitude is outside the valid range.',
+      );
+      return;
+    }
+
+    // Operating hours are only editable when adding a new turf.
+    // During Edit Turf, the existing operating hours must remain unchanged.
+    const isEditing = Boolean(selectedTurf);
+
+    if (!isEditing) {
+      for (const hour of operatingHours) {
+        if (hour.isClosed) continue;
+        if (!hour.openingTime || !hour.closingTime) {
+          Alert.alert(
+            'Invalid Hours',
+            `Please select opening and closing time for ${hour.day}.`,
+          );
+          return;
+        }
+
+        const opening = timeStringToDate(hour.openingTime).getTime();
+        const closing = timeStringToDate(hour.closingTime).getTime();
+        if (opening >= closing) {
+          Alert.alert(
+            'Invalid Hours',
+            `Closing time must be later than opening time on ${hour.day}.`,
+          );
+          return;
+        }
       }
     }
 
     try {
       setLoading(true);
-      const isEditing = Boolean(selectedTurf);
       const url = isEditing
         ? buildApiUrl(`/turfs/${encodeURIComponent(selectedTurf!._id)}`)
         : buildApiUrl('/turfs');
+
+      const payload: {
+        owner: string;
+        name: string;
+        description: string;
+        address: string;
+        city: string;
+        location: {
+          type: 'Point';
+          coordinates: [number | null, number | null];
+        };
+        images: Array<{ url: string; isPrimary: boolean }>;
+        amenities: string[];
+        operatingHours?: OperatingHour[];
+      } = {
+        owner: user._id,
+        name: cleanName,
+        description: cleanDescription,
+        address: cleanAddress,
+        city: cleanCity,
+        location: {
+          type: 'Point',
+          coordinates: [turfLongitude, turfLatitude],
+        },
+        images: [
+          {
+            url: turfUploadedImageUrl,
+            isPrimary: true,
+          },
+        ],
+        amenities: amenityList,
+      };
+
+      // Never send operatingHours during Edit Turf.
+      // This prevents an edit from accidentally changing existing hours.
+      if (!isEditing) {
+        payload.operatingHours = operatingHours;
+      }
+
       const response = await fetch(url, {
         method: isEditing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner: user._id,
-          name: cleanName,
-          description: cleanDescription,
-          address: cleanAddress,
-          city: cleanCity,
-          operatingHours,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
+
       await parseApiResponse(response);
       closeTurfModal();
       await fetchTurfs();
+
       Alert.alert(
         'Success',
         isEditing ? 'Turf updated successfully.' : 'Turf added successfully.',
       );
     } catch (error) {
-      Alert.alert('Save Failed', getErrorMessage(error, 'Failed to save turf.'));
+      Alert.alert(
+        'Save Failed',
+        getErrorMessage(error, 'Failed to save turf.'),
+      );
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -862,6 +1199,13 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
     setTurfDescription('');
     setTurfAddress('');
     setTurfCity('');
+    setTurfAmenities('');
+    setTurfLatitude(null);
+    setTurfLongitude(null);
+    setTurfLocationLoading(false);
+    setTurfImageUri(null);
+    setTurfUploadedImageUrl('');
+    setTurfImageUploading(false);
     setOperatingHours(cloneDefaultHours());
   };
 
@@ -1308,6 +1652,14 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
   };
 
   /* FONT LOADING */
+  const upcomingBookings = recentBookings.filter((booking) =>
+    isBookingTodayOrFuture(booking.bookingDate),
+  );
+
+  const visibleBookings = showAllBookings
+    ? upcomingBookings
+    : upcomingBookings.slice(0, 3);
+
   if (!fontsLoaded && !fontError) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -1623,10 +1975,24 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
             <View style={styles.sectionTitleAccent} />
           </View>
 
-          <View style={styles.bookingCountPill}>
-            <Text style={styles.bookingCountText}>
-              {recentBookings.length}
-            </Text>
+          <View style={styles.bookingHeaderActions}>
+            {upcomingBookings.length > 3 && (
+              <TouchableOpacity
+                style={styles.seeAllBookingsButton}
+                onPress={() => setShowAllBookings((previous) => !previous)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.seeAllBookingsText}>
+                  {showAllBookings ? 'Show Less' : 'See All'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.bookingCountPill}>
+              <Text style={styles.bookingCountText}>
+                {upcomingBookings.length}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -1637,7 +2003,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
               Loading recent bookings...
             </Text>
           </View>
-        ) : recentBookings.length === 0 ? (
+        ) : upcomingBookings.length === 0 ? (
           <View style={styles.bookingEmptyCard}>
             <View style={styles.bookingEmptyIcon}>
               <Text style={styles.bookingEmptyIconText}>📅</Text>
@@ -1649,7 +2015,7 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
           </View>
         ) : (
           <View style={styles.bookingsList}>
-            {recentBookings.map((booking) => {
+            {visibleBookings.map((booking) => {
               const customer = booking.customer;
               const statusColors = getBookingStatusColors(booking.status);
 
@@ -2035,6 +2401,40 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 {selectedTurf ? 'Edit Turf' : 'Add Turf'}
               </Text>
 
+              <View style={styles.editTurfImageCard}>
+                <Text style={styles.fieldLabel}>TURF IMAGE</Text>
+                {turfImageUri ? (
+                  <Image
+                    source={{ uri: turfImageUri }}
+                    style={styles.editTurfImagePreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.editTurfImagePlaceholder}>
+                    <Text style={styles.editTurfImagePlaceholderIcon}>🏟️</Text>
+                    <Text style={styles.editTurfImagePlaceholderText}>No turf image selected</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.secondaryActionButton}
+                  onPress={pickTurfImage}
+                  disabled={turfImageUploading}
+                  activeOpacity={0.85}
+                >
+                  {turfImageUploading ? (
+                    <ActivityIndicator color={COLORS.textPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="image-outline" size={18} color={COLORS.textPrimary} />
+                      <Text style={styles.secondaryActionButtonText}>
+                        {turfImageUri ? 'CHANGE TURF IMAGE' : 'SELECT TURF IMAGE'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.fieldLabel}>TURF NAME</Text>
               <TextInput
                 style={styles.input}
@@ -2074,77 +2474,147 @@ export const OwnerProfileScreen: React.FC<OwnerProfileScreenProps> = ({
                 autoCapitalize="words"
               />
 
-              <View style={styles.hoursSectionTitleRow}>
-                <Text style={styles.hoursSectionTitle}>Operating Hours</Text>
-                <View style={styles.sectionTitleAccent} />
-              </View>
-
-              <Text style={styles.hoursDescription}>
-                Set the opening and closing time for each day.
+              <Text style={styles.fieldLabel}>AMENITIES</Text>
+              <TextInput
+                style={[styles.input, styles.textAreaSmall]}
+                placeholder="Parking, Washroom, Drinking Water, Changing Room"
+                placeholderTextColor={COLORS.placeholder}
+                value={turfAmenities}
+                onChangeText={setTurfAmenities}
+                multiline
+                textAlignVertical="top"
+              />
+              <Text style={styles.helperText}>
+                Enter amenities separated by commas.
               </Text>
 
-              {operatingHours.map((hour, index) => (
-                <View key={hour.day} style={styles.operatingHourCard}>
-                  <View style={styles.dayHeader}>
-                    <Text style={styles.dayName}>{hour.day}</Text>
-                    <View style={styles.openStatusRow}>
-                      <Text
-                        style={[
-                          styles.statusText,
-                          !hour.isClosed && styles.statusTextOpen,
-                        ]}
-                      >
-                        {hour.isClosed ? 'CLOSED' : 'OPEN'}
-                      </Text>
-                      <Switch
-                        value={!hour.isClosed}
-                        onValueChange={(value) =>
-                          updateOperatingHour(index, 'isClosed', !value)
-                        }
-                        trackColor={{
-                          false: COLORS.border,
-                          true: COLORS.primaryMuted,
-                        }}
-                        thumbColor={
-                          hour.isClosed ? COLORS.textMuted : COLORS.primary
-                        }
-                      />
-                    </View>
+              <View style={styles.locationEditCard}>
+                <View style={styles.locationEditHeader}>
+                  <View style={styles.locationEditIcon}>
+                    <Text style={styles.locationEditIconText}>📍</Text>
                   </View>
+                  <View style={styles.locationEditHeaderText}>
+                    <Text style={styles.locationEditTitle}>Turf Location</Text>
+                    <Text style={styles.locationEditDescription}>
+                      Save the exact venue location as GeoJSON coordinates.
+                    </Text>
+                  </View>
+                </View>
 
-                  {!hour.isClosed && (
-                    <View style={styles.timeRow}>
-                      <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>OPENING</Text>
-                        <TouchableOpacity
-                          style={styles.timeButton}
-                          onPress={() => openTimePicker(index, 'opening')}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.timeButtonText}>
-                            {hour.openingTime}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.timeSeparator}>→</Text>
-
-                      <View style={styles.timeBox}>
-                        <Text style={styles.timeLabel}>CLOSING</Text>
-                        <TouchableOpacity
-                          style={styles.timeButton}
-                          onPress={() => openTimePicker(index, 'closing')}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.timeButtonText}>
-                            {hour.closingTime}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                <TouchableOpacity
+                  style={[
+                    styles.locationEditButton,
+                    turfLocationLoading && styles.locationEditButtonDisabled,
+                  ]}
+                  onPress={getTurfCurrentLocation}
+                  disabled={turfLocationLoading}
+                  activeOpacity={0.85}
+                >
+                  {turfLocationLoading ? (
+                    <View style={styles.locationEditButtonContent}>
+                      <ActivityIndicator color={COLORS.dark} size="small" />
+                      <Text style={styles.locationEditButtonText}>GETTING LOCATION...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.locationEditButtonContent}>
+                      <Text style={styles.locationEditButtonIcon}>📍</Text>
+                      <Text style={styles.locationEditButtonText}>USE CURRENT LOCATION</Text>
                     </View>
                   )}
-                </View>
-              ))}
+                </TouchableOpacity>
+
+                {turfLatitude !== null && turfLongitude !== null && (
+                  <View style={styles.locationCoordinatesBox}>
+                    <Text style={styles.locationCoordinatesTitle}>LOCATION SAVED</Text>
+                    <Text style={styles.locationCoordinatesText}>
+                      Latitude: {turfLatitude.toFixed(6)}
+                    </Text>
+                    <Text style={styles.locationCoordinatesText}>
+                      Longitude: {turfLongitude.toFixed(6)}
+                    </Text>
+                    <Text style={styles.locationCoordinatesGeoJson}>
+                      GeoJSON: [{turfLongitude.toFixed(6)}, {turfLatitude.toFixed(6)}]
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* OPERATING HOURS — Add Turf only */}
+              {!selectedTurf && (
+                <>
+                  <View style={styles.hoursSectionTitleRow}>
+                    <Text style={styles.hoursSectionTitle}>Operating Hours</Text>
+                    <View style={styles.sectionTitleAccent} />
+                  </View>
+
+                  <Text style={styles.hoursDescription}>
+                    Set the opening and closing time for each day.
+                  </Text>
+
+                  {operatingHours.map((hour, index) => (
+                    <View key={hour.day} style={styles.operatingHourCard}>
+                      <View style={styles.dayHeader}>
+                        <Text style={styles.dayName}>{hour.day}</Text>
+                        <View style={styles.openStatusRow}>
+                          <Text
+                            style={[
+                              styles.statusText,
+                              !hour.isClosed && styles.statusTextOpen,
+                            ]}
+                          >
+                            {hour.isClosed ? 'CLOSED' : 'OPEN'}
+                          </Text>
+                          <Switch
+                            value={!hour.isClosed}
+                            onValueChange={(value) =>
+                              updateOperatingHour(index, 'isClosed', !value)
+                            }
+                            trackColor={{
+                              false: COLORS.border,
+                              true: COLORS.primaryMuted,
+                            }}
+                            thumbColor={
+                              hour.isClosed ? COLORS.textMuted : COLORS.primary
+                            }
+                          />
+                        </View>
+                      </View>
+
+                      {!hour.isClosed && (
+                        <View style={styles.timeRow}>
+                          <View style={styles.timeBox}>
+                            <Text style={styles.timeLabel}>OPENING</Text>
+                            <TouchableOpacity
+                              style={styles.timeButton}
+                              onPress={() => openTimePicker(index, 'opening')}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.timeButtonText}>
+                                {hour.openingTime}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <Text style={styles.timeSeparator}>→</Text>
+
+                          <View style={styles.timeBox}>
+                            <Text style={styles.timeLabel}>CLOSING</Text>
+                            <TouchableOpacity
+                              style={styles.timeButton}
+                              onPress={() => openTimePicker(index, 'closing')}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.timeButtonText}>
+                                {hour.closingTime}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </>
+              )}
 
               <TouchableOpacity
                 style={styles.primaryButtonFull}
@@ -3300,6 +3770,29 @@ const styles = StyleSheet.create({
 
   /* BOOKINGS */
 
+  bookingHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  seeAllBookingsButton: {
+    minHeight: 30,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  seeAllBookingsText: {
+    color: COLORS.primaryDarker,
+    fontSize: 10,
+    fontFamily: 'Poppins_900Black',
+  },
+
   bookingCountPill: {
     minWidth: 26,
     height: 26,
@@ -3675,6 +4168,178 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'flex-end',
     padding: 12,
+  },
+
+  editTurfImageCard: {
+    backgroundColor: COLORS.bgSoft,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+
+  editTurfImagePreview: {
+    width: '100%',
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: COLORS.bgMuted,
+    marginBottom: 10,
+  },
+
+  editTurfImagePlaceholder: {
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: COLORS.bgMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+
+  editTurfImagePlaceholderIcon: {
+    fontSize: 34,
+    marginBottom: 6,
+  },
+
+  editTurfImagePlaceholderText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+
+  secondaryActionButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderDark,
+    backgroundColor: COLORS.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  secondaryActionButtonText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.3,
+  },
+
+  textAreaSmall: {
+    minHeight: 76,
+  },
+
+  locationEditCard: {
+    backgroundColor: COLORS.primaryFaint,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 14,
+    marginBottom: 18,
+  },
+
+  locationEditHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  locationEditIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  locationEditIconText: {
+    fontSize: 18,
+  },
+
+  locationEditHeaderText: {
+    flex: 1,
+  },
+
+  locationEditTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 13,
+    color: COLORS.textPrimary,
+  },
+
+  locationEditDescription: {
+    fontFamily: 'Poppins_400Regular',
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+  locationEditButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  locationEditButtonDisabled: {
+    opacity: 0.7,
+  },
+
+  locationEditButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  locationEditButtonIcon: {
+    fontSize: 15,
+  },
+
+  locationEditButtonText: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 10,
+    color: COLORS.dark,
+    letterSpacing: 0.5,
+  },
+
+  locationCoordinatesBox: {
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: 12,
+    padding: 11,
+    marginTop: 10,
+  },
+
+  locationCoordinatesTitle: {
+    fontFamily: 'Poppins_800ExtraBold',
+    fontSize: 9,
+    color: COLORS.primaryDarker,
+    letterSpacing: 0.8,
+    marginBottom: 5,
+  },
+
+  locationCoordinatesText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+
+  locationCoordinatesGeoJson: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 9,
+    color: COLORS.textPrimary,
+    marginTop: 6,
   },
 
   modalCard: {

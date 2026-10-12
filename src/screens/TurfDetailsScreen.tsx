@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Linking,
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -80,12 +81,15 @@ type Turf = {
   amenities?: string[];
   images?: TurfImage[];
   image?: string;
+
   location?: {
     coordinates?: number[];
   };
+
   operatingHours?: OperatingHour[];
   openingTime?: string;
   closingTime?: string;
+
   courts?: TurfCourt[];
 };
 
@@ -159,6 +163,7 @@ const API_URL = (
 ).replace(/\/+$/, '');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const HERO_HEIGHT = Math.round(SCREEN_WIDTH * 0.48);
 
 const DAYS = [
@@ -194,6 +199,7 @@ const getCourtPrice = (
   const price = Number(
     court.pricePerHour ?? turf.pricePerHour ?? 0,
   );
+
   return Number.isFinite(price) ? price : 0;
 };
 
@@ -203,7 +209,9 @@ const getCourtSports = (
   if (Array.isArray(court.sports) && court.sports.length) {
     return court.sports;
   }
+
   if (court.sport) return [court.sport];
+
   return [];
 };
 
@@ -211,7 +219,9 @@ const resolveImageUrl = (
   image?: string,
 ): string | undefined => {
   if (!image) return undefined;
+
   const trimmed = image.trim();
+
   if (!trimmed) return undefined;
 
   if (
@@ -224,14 +234,20 @@ const resolveImageUrl = (
   }
 
   if (!API_URL) return trimmed;
-  if (trimmed.startsWith('/')) return `${API_URL}${trimmed}`;
+
+  if (trimmed.startsWith('/')) {
+    return `${API_URL}${trimmed}`;
+  }
+
   return `${API_URL}/${trimmed}`;
 };
 
 const getGalleryImages = (turf: Turf): string[] => {
   const urls = (turf.images || [])
     .map((img) => resolveImageUrl(img?.url))
-    .filter((url): url is string => Boolean(url));
+    .filter(
+      (url): url is string => Boolean(url),
+    );
 
   if (urls.length) {
     const primary = (turf.images || []).find(
@@ -240,8 +256,12 @@ const getGalleryImages = (turf: Turf): string[] => {
 
     if (primary?.url) {
       const primaryUrl = resolveImageUrl(primary.url);
+
       if (primaryUrl) {
-        return [primaryUrl, ...urls.filter((u) => u !== primaryUrl)];
+        return [
+          primaryUrl,
+          ...urls.filter((u) => u !== primaryUrl),
+        ];
       }
     }
 
@@ -249,6 +269,7 @@ const getGalleryImages = (turf: Turf): string[] => {
   }
 
   const single = resolveImageUrl(turf.image);
+
   return single ? [single] : [];
 };
 
@@ -263,6 +284,7 @@ const findHoursForDay = (
     const value = String(
       item.dayOfWeek || item.day || '',
     ).toLowerCase();
+
     return value === target;
   });
 };
@@ -284,11 +306,13 @@ const getHoursForDay = (
         item.openTime ||
         turf.openingTime ||
         '06:00 AM',
+
       closingTime:
         item.closingTime ||
         item.closeTime ||
         turf.closingTime ||
         '11:00 PM',
+
       isClosed: item.isClosed === true,
     };
   }
@@ -337,22 +361,37 @@ const ImageGallery = ({ images }: GalleryProps) => {
   const [loading, setLoading] = useState(true);
 
   const onScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offsetX = event.nativeEvent.contentOffset.x;
-      const index = Math.round(offsetX / SCREEN_WIDTH);
-      if (index !== activeIndex) setActiveIndex(index);
+    (
+      event: NativeSyntheticEvent<NativeScrollEvent>,
+    ) => {
+      const offsetX =
+        event.nativeEvent.contentOffset.x;
+
+      const index = Math.round(
+        offsetX / SCREEN_WIDTH,
+      );
+
+      if (index !== activeIndex) {
+        setActiveIndex(index);
+      }
     },
     [activeIndex],
   );
 
-  const onLayout = useCallback((_e: LayoutChangeEvent) => {
-    /* Reserved */
-  }, []);
+  const onLayout = useCallback(
+    (_e: LayoutChangeEvent) => {
+      /* Reserved */
+    },
+    [],
+  );
 
   if (!images.length) {
     return (
       <View style={styles.heroPlaceholder}>
-        <Text style={styles.heroPlaceholderIcon}>🏟️</Text>
+        <Text style={styles.heroPlaceholderIcon}>
+          🏟️
+        </Text>
+
         <Text style={styles.heroPlaceholderText}>
           No image available
         </Text>
@@ -361,7 +400,10 @@ const ImageGallery = ({ images }: GalleryProps) => {
   }
 
   return (
-    <View style={{ height: HERO_HEIGHT }} onLayout={onLayout}>
+    <View
+      style={{ height: HERO_HEIGHT }}
+      onLayout={onLayout}
+    >
       <ScrollView
         horizontal
         pagingEnabled
@@ -403,14 +445,18 @@ const ImageGallery = ({ images }: GalleryProps) => {
               key={index}
               style={[
                 styles.dot,
-                index === activeIndex && styles.dotActive,
+                index === activeIndex &&
+                  styles.dotActive,
               ]}
             />
           ))}
         </View>
       )}
 
-      <View style={styles.heroGradientTop} pointerEvents="none" />
+      <View
+        style={styles.heroGradientTop}
+        pointerEvents="none"
+      />
     </View>
   );
 };
@@ -435,7 +481,8 @@ export default function TurfDetailsScreen({
   const turf = route.params?.turf;
 
   const [refreshing, setRefreshing] = useState(false);
-  const [hoursExpanded, setHoursExpanded] = useState(false);
+  const [hoursExpanded, setHoursExpanded] =
+    useState(false);
 
   const images = useMemo(
     () => (turf ? getGalleryImages(turf) : []),
@@ -446,7 +493,9 @@ export default function TurfDetailsScreen({
     () =>
       (turf?.courts || []).filter(
         (court) =>
-          String(court.status || 'active').toLowerCase() === 'active',
+          String(
+            court.status || 'active',
+          ).toLowerCase() === 'active',
       ),
     [turf],
   );
@@ -461,9 +510,15 @@ export default function TurfDetailsScreen({
       .filter((p) => p > 0);
 
     if (!prices.length) {
-      const fallback = Number(turf.pricePerHour || 0);
+      const fallback = Number(
+        turf.pricePerHour || 0,
+      );
+
       return fallback > 0
-        ? { min: fallback, max: fallback }
+        ? {
+            min: fallback,
+            max: fallback,
+          }
         : null;
     }
 
@@ -473,13 +528,18 @@ export default function TurfDetailsScreen({
     };
   }, [activeCourts, turf]);
 
-  const todayName = DAYS[new Date().getDay()];
+  const todayName =
+    DAYS[new Date().getDay()];
 
   const todayHours = useMemo(
     () =>
       turf
         ? getHoursForDay(turf, todayName)
-        : { openingTime: '', closingTime: '', isClosed: false },
+        : {
+            openingTime: '',
+            closingTime: '',
+            isClosed: false,
+          },
     [turf, todayName],
   );
 
@@ -494,12 +554,120 @@ export default function TurfDetailsScreen({
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
+
     try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await new Promise((resolve) =>
+        setTimeout(resolve, 400),
+      );
     } finally {
       setRefreshing(false);
     }
   }, []);
+
+  /* =========================================================
+     OPEN TURF LOCATION IN MAP
+  ========================================================= */
+
+  const handleOpenMap = useCallback(async () => {
+    if (!turf) return;
+
+    const coordinates =
+      turf.location?.coordinates;
+
+    /*
+      MongoDB GeoJSON format:
+
+      coordinates: [
+        longitude,
+        latitude
+      ]
+    */
+
+    if (
+      Array.isArray(coordinates) &&
+      coordinates.length >= 2
+    ) {
+      const longitude = Number(
+        coordinates[0],
+      );
+
+      const latitude = Number(
+        coordinates[1],
+      );
+
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude)
+      ) {
+        const googleMapsUrl =
+          `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+        try {
+          const supported =
+            await Linking.canOpenURL(
+              googleMapsUrl,
+            );
+
+          if (supported) {
+            await Linking.openURL(
+              googleMapsUrl,
+            );
+            return;
+          }
+        } catch (error) {
+          console.log(
+            'Google Maps open error:',
+            error,
+          );
+        }
+      }
+    }
+
+    /*
+      Fallback:
+      If coordinates are unavailable,
+      search the turf address.
+    */
+
+    const address = [
+      turf.address,
+      turf.city,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!address) {
+      Alert.alert(
+        'Location unavailable',
+        'This turf does not have a valid location or address.',
+      );
+
+      return;
+    }
+
+    const searchUrl =
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        address,
+      )}`;
+
+    try {
+      await Linking.openURL(searchUrl);
+    } catch (error) {
+      console.log(
+        'Map search error:',
+        error,
+      );
+
+      Alert.alert(
+        'Unable to open map',
+        'Could not open the map on this device.',
+      );
+    }
+  }, [turf]);
+
+  /* =========================================================
+     BOOK TURF
+  ========================================================= */
 
   const handleBookTurf = useCallback(() => {
     if (!turf) {
@@ -507,6 +675,7 @@ export default function TurfDetailsScreen({
         'Turf unavailable',
         'Turf information could not be loaded.',
       );
+
       return;
     }
 
@@ -515,6 +684,7 @@ export default function TurfDetailsScreen({
         'Invalid turf',
         'This turf does not have a valid ID.',
       );
+
       return;
     }
 
@@ -523,47 +693,93 @@ export default function TurfDetailsScreen({
         'No courts available',
         'There are currently no active courts available for booking.',
       );
+
       return;
     }
 
     navigation.navigate('Slot', { turf });
-  }, [turf, turfId, activeCourts.length, navigation]);
+  }, [
+    turf,
+    turfId,
+    activeCourts.length,
+    navigation,
+  ]);
+
+  /* =========================================================
+     FONT LOADING
+  ========================================================= */
 
   if (!fontsLoaded && !fontError) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.fontLoadingContainer}>
+        <View
+          style={styles.fontLoadingContainer}
+        >
           <View style={styles.fontLoadingMark}>
-            <Text style={styles.fontLoadingMarkText}>T</Text>
+            <Text
+              style={styles.fontLoadingMarkText}
+            >
+              T
+            </Text>
           </View>
-          <ActivityIndicator size="small" color={COLORS.primaryDeep} />
-          <Text style={styles.fontLoadingText}>TurfBook</Text>
+
+          <ActivityIndicator
+            size="small"
+            color={COLORS.primaryDeep}
+          />
+
+          <Text style={styles.fontLoadingText}>
+            TurfBook
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  /* =========================================================
+     EMPTY STATE
+  ========================================================= */
 
   if (!turf) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>🏟️</Text>
-          <Text style={styles.emptyTitle}>Turf not found</Text>
-          <Text style={styles.emptySubtitle}>
-            We couldn't load this turf's information.
+          <Text style={styles.emptyIcon}>
+            🏟️
+          </Text>
+
+          <Text style={styles.emptyTitle}>
+            Turf not found
+          </Text>
+
+          <Text
+            style={styles.emptySubtitle}
+          >
+            We couldn't load this turf's
+            information.
           </Text>
 
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() =>
+              navigation.goBack()
+            }
             activeOpacity={0.85}
           >
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text
+              style={styles.backButtonText}
+            >
+              Go Back
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
+
+  /* =========================================================
+     SCREEN
+  ========================================================= */
 
   return (
     <SafeAreaView
@@ -581,15 +797,25 @@ export default function TurfDetailsScreen({
               colors={[COLORS.primary]}
             />
           }
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={
+            styles.scrollContent
+          }
         >
           <ImageGallery images={images} />
 
-          {/* FLOATING HEADER */}
-          <View style={styles.floatingHeader} pointerEvents="box-none">
+          {/* =================================================
+              FLOATING HEADER
+          ================================================= */}
+
+          <View
+            style={styles.floatingHeader}
+            pointerEvents="box-none"
+          >
             <TouchableOpacity
               style={styles.floatingButton}
-              onPress={() => navigation.goBack()}
+              onPress={() =>
+                navigation.goBack()
+              }
               activeOpacity={0.85}
             >
               <Ionicons
@@ -602,7 +828,10 @@ export default function TurfDetailsScreen({
             <TouchableOpacity
               style={styles.floatingButton}
               onPress={() =>
-                Alert.alert('Share', 'Sharing will be available soon.')
+                Alert.alert(
+                  'Share',
+                  'Sharing will be available soon.',
+                )
               }
               activeOpacity={0.85}
             >
@@ -614,24 +843,44 @@ export default function TurfDetailsScreen({
             </TouchableOpacity>
           </View>
 
-          {/* CONTENT */}
+          {/* =================================================
+              CONTENT
+          ================================================= */}
+
           <View style={styles.contentCard}>
-            {/* INFO CARD */}
+            {/* =================================================
+                INFO CARD
+            ================================================= */}
+
             <View style={styles.infoCard}>
               <View style={styles.titleRow}>
-                <View style={styles.titleContainer}>
-                  <Text style={styles.turfName} numberOfLines={2}>
-                    {turf.name || 'Unnamed Turf'}
+                <View
+                  style={styles.titleContainer}
+                >
+                  <Text
+                    style={styles.turfName}
+                    numberOfLines={2}
+                  >
+                    {turf.name ||
+                      'Unnamed Turf'}
                   </Text>
 
                   {!!turf.city && (
-                    <View style={styles.cityRow}>
+                    <View
+                      style={styles.cityRow}
+                    >
                       <Ionicons
                         name="location-outline"
                         size={13}
-                        color={COLORS.primaryDeep}
+                        color={
+                          COLORS.primaryDeep
+                        }
                       />
-                      <Text style={styles.cityText} numberOfLines={1}>
+
+                      <Text
+                        style={styles.cityText}
+                        numberOfLines={1}
+                      >
                         {turf.city}
                       </Text>
                     </View>
@@ -640,12 +889,23 @@ export default function TurfDetailsScreen({
 
                 {priceRange && (
                   <View style={styles.priceBox}>
-                    <Text style={styles.priceLabel}>From</Text>
-                    <Text style={styles.price}>
+                    <Text
+                      style={styles.priceLabel}
+                    >
+                      From
+                    </Text>
+
+                    <Text
+                      style={styles.price}
+                    >
                       ₹{priceRange.min}
                     </Text>
-                    <Text style={styles.priceUnit}>
-                      {priceRange.min === priceRange.max
+
+                    <Text
+                      style={styles.priceUnit}
+                    >
+                      {priceRange.min ===
+                      priceRange.max
                         ? '/hr'
                         : `– ₹${priceRange.max}`}
                     </Text>
@@ -653,19 +913,71 @@ export default function TurfDetailsScreen({
                 )}
               </View>
 
+              {/* =================================================
+                  CLICKABLE LOCATION
+              ================================================= */}
+
               {!!turf.address && (
-                <View style={styles.addressRow}>
-                  <Ionicons
-                    name="navigate-outline"
-                    size={14}
-                    color={COLORS.textMuted}
-                    style={styles.addressIcon}
-                  />
-                  <Text style={styles.addressText} numberOfLines={2}>
-                    {turf.address}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  style={styles.addressRow}
+                  onPress={handleOpenMap}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={
+                      styles.addressIconWrapper
+                    }
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={
+                        COLORS.primaryDarker
+                      }
+                    />
+                  </View>
+
+                  <View
+                    style={styles.addressContent}
+                  >
+                    <Text
+                      style={
+                        styles.addressText
+                      }
+                      numberOfLines={2}
+                    >
+                      {turf.address}
+                    </Text>
+
+                    {!!turf.city && (
+                      <Text
+                        style={
+                          styles.addressCity
+                        }
+                        numberOfLines={1}
+                      >
+                        {turf.city}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View
+                    style={styles.mapButton}
+                  >
+                    <Ionicons
+                      name="navigate-outline"
+                      size={17}
+                      color={
+                        COLORS.primaryDarker
+                      }
+                    />
+                  </View>
+                </TouchableOpacity>
               )}
+
+              {/* =================================================
+                  STATUS
+              ================================================= */}
 
               <View
                 style={[
@@ -683,6 +995,7 @@ export default function TurfDetailsScreen({
                       : styles.statusDotOpen,
                   ]}
                 />
+
                 <Text
                   style={[
                     styles.statusText,
@@ -698,172 +1011,376 @@ export default function TurfDetailsScreen({
               </View>
             </View>
 
-            {/* ABOUT */}
+            {/* =================================================
+                ABOUT
+            ================================================= */}
+
             <View style={styles.sectionCard}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionTitle}>About Turf</Text>
-                <View style={styles.sectionTitleAccent} />
+              <View
+                style={styles.sectionTitleRow}
+              >
+                <Text
+                  style={styles.sectionTitle}
+                >
+                  About Turf
+                </Text>
+
+                <View
+                  style={
+                    styles.sectionTitleAccent
+                  }
+                />
               </View>
 
-              <Text style={styles.description}>
+              <Text
+                style={styles.description}
+              >
                 {turf.description?.trim() ||
                   'Enjoy a great sports experience at this turf.'}
               </Text>
             </View>
 
-            {/* SPORTS */}
+            {/* =================================================
+                SPORTS
+            ================================================= */}
+
             {!!turf.sports?.length && (
               <View style={styles.sectionCard}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitle}>Sports</Text>
-                  <View style={styles.sectionTitleAccent} />
+                <View
+                  style={
+                    styles.sectionTitleRow
+                  }
+                >
+                  <Text
+                    style={styles.sectionTitle}
+                  >
+                    Sports
+                  </Text>
+
+                  <View
+                    style={
+                      styles.sectionTitleAccent
+                    }
+                  />
                 </View>
 
-                <View style={styles.chipContainer}>
-                  {turf.sports.map((sport, index) => (
-                    <View
-                      key={`${sport}-${index}`}
-                      style={styles.chip}
-                    >
-                      <Text style={styles.chipText}>{sport}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* AMENITIES */}
-            {!!turf.amenities?.length && (
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitle}>Amenities</Text>
-                  <View style={styles.sectionTitleAccent} />
-                </View>
-
-                <View style={styles.amenitiesGrid}>
-                  {turf.amenities.map((amenity, index) => (
-                    <View
-                      key={`${amenity}-${index}`}
-                      style={styles.amenityItem}
-                    >
-                      <View style={styles.amenityIcon}>
-                        <Text style={styles.amenityIconText}>
-                          {getAmenityIcon(amenity)}
+                <View
+                  style={styles.chipContainer}
+                >
+                  {turf.sports.map(
+                    (sport, index) => (
+                      <View
+                        key={`${sport}-${index}`}
+                        style={styles.chip}
+                      >
+                        <Text
+                          style={
+                            styles.chipText
+                          }
+                        >
+                          {sport}
                         </Text>
                       </View>
-
-                      <Text
-                        style={styles.amenityText}
-                        numberOfLines={1}
-                      >
-                        {amenity}
-                      </Text>
-                    </View>
-                  ))}
+                    ),
+                  )}
                 </View>
               </View>
             )}
 
-            {/* COURTS */}
+            {/* =================================================
+                AMENITIES
+            ================================================= */}
+
+            {!!turf.amenities?.length && (
+              <View style={styles.sectionCard}>
+                <View
+                  style={
+                    styles.sectionTitleRow
+                  }
+                >
+                  <Text
+                    style={styles.sectionTitle}
+                  >
+                    Amenities
+                  </Text>
+
+                  <View
+                    style={
+                      styles.sectionTitleAccent
+                    }
+                  />
+                </View>
+
+                <View
+                  style={styles.amenitiesGrid}
+                >
+                  {turf.amenities.map(
+                    (amenity, index) => (
+                      <View
+                        key={`${amenity}-${index}`}
+                        style={
+                          styles.amenityItem
+                        }
+                      >
+                        <View
+                          style={
+                            styles.amenityIcon
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.amenityIconText
+                            }
+                          >
+                            {getAmenityIcon(
+                              amenity,
+                            )}
+                          </Text>
+                        </View>
+
+                        <Text
+                          style={
+                            styles.amenityText
+                          }
+                          numberOfLines={1}
+                        >
+                          {amenity}
+                        </Text>
+                      </View>
+                    ),
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* =================================================
+                COURTS
+            ================================================= */}
+
             <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitle}>Courts</Text>
-                  <View style={styles.sectionTitleAccent} />
+              <View
+                style={styles.sectionHeaderRow}
+              >
+                <View
+                  style={
+                    styles.sectionTitleRow
+                  }
+                >
+                  <Text
+                    style={styles.sectionTitle}
+                  >
+                    Courts
+                  </Text>
+
+                  <View
+                    style={
+                      styles.sectionTitleAccent
+                    }
+                  />
                 </View>
 
                 {activeCourts.length > 0 && (
-                  <Text style={styles.sectionCount}>
+                  <Text
+                    style={styles.sectionCount}
+                  >
                     {activeCourts.length}{' '}
-                    {activeCourts.length === 1 ? 'court' : 'courts'}
+                    {activeCourts.length === 1
+                      ? 'court'
+                      : 'courts'}
                   </Text>
                 )}
               </View>
 
               {activeCourts.length === 0 ? (
-                <View style={styles.noCourts}>
-                  <Text style={styles.noCourtsIcon}>🚫</Text>
-                  <Text style={styles.noCourtsText}>
+                <View
+                  style={styles.noCourts}
+                >
+                  <Text
+                    style={styles.noCourtsIcon}
+                  >
+                    🚫
+                  </Text>
+
+                  <Text
+                    style={styles.noCourtsText}
+                  >
                     No active courts available.
                   </Text>
                 </View>
               ) : (
-                activeCourts.map((court, index) => {
-                  const price = getCourtPrice(court, turf);
-                  const sports = getCourtSports(court);
+                activeCourts.map(
+                  (court, index) => {
+                    const price =
+                      getCourtPrice(
+                        court,
+                        turf,
+                      );
 
-                  return (
-                    <View
-                      key={getCourtId(court) || `court-${index}`}
-                      style={styles.courtCard}
-                    >
-                      <View style={styles.courtLeft}>
-                        <Text
-                          style={styles.courtName}
-                          numberOfLines={1}
+                    const sports =
+                      getCourtSports(court);
+
+                    return (
+                      <View
+                        key={
+                          getCourtId(court) ||
+                          `court-${index}`
+                        }
+                        style={
+                          styles.courtCard
+                        }
+                      >
+                        <View
+                          style={
+                            styles.courtLeft
+                          }
                         >
-                          {getCourtName(court, index)}
-                        </Text>
-
-                        <View style={styles.courtMetaRow}>
-                          {sports.length > 0 && (
-                            <Text
-                              style={styles.courtSportsInline}
-                              numberOfLines={1}
-                            >
-                              {sports.slice(0, 2).join(' • ')}
-                            </Text>
-                          )}
-
-                          {court.hasNightPricing &&
-                            court.nightPricePerHour !== undefined && (
-                              <View style={styles.nightBadge}>
-                                <Text style={styles.nightBadgeText}>
-                                  🌙 ₹{court.nightPricePerHour}
-                                </Text>
-                              </View>
+                          <Text
+                            style={
+                              styles.courtName
+                            }
+                            numberOfLines={1}
+                          >
+                            {getCourtName(
+                              court,
+                              index,
                             )}
+                          </Text>
+
+                          <View
+                            style={
+                              styles.courtMetaRow
+                            }
+                          >
+                            {sports.length >
+                              0 && (
+                              <Text
+                                style={
+                                  styles.courtSportsInline
+                                }
+                                numberOfLines={
+                                  1
+                                }
+                              >
+                                {sports
+                                  .slice(
+                                    0,
+                                    2,
+                                  )
+                                  .join(
+                                    ' • ',
+                                  )}
+                              </Text>
+                            )}
+
+                            {court.hasNightPricing &&
+                              court.nightPricePerHour !==
+                                undefined && (
+                                <View
+                                  style={
+                                    styles.nightBadge
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.nightBadgeText
+                                    }
+                                  >
+                                    🌙 ₹
+                                    {
+                                      court.nightPricePerHour
+                                    }
+                                  </Text>
+                                </View>
+                              )}
+                          </View>
+                        </View>
+
+                        <View
+                          style={
+                            styles.courtRight
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.courtPrice
+                            }
+                          >
+                            ₹{price}
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.courtUnit
+                            }
+                          >
+                            /hr
+                          </Text>
                         </View>
                       </View>
-
-                      <View style={styles.courtRight}>
-                        <Text style={styles.courtPrice}>₹{price}</Text>
-                        <Text style={styles.courtUnit}>/hr</Text>
-                      </View>
-                    </View>
-                  );
-                })
+                    );
+                  },
+                )
               )}
             </View>
 
-            {/* OPENING HOURS */}
+            {/* =================================================
+                OPENING HOURS
+            ================================================= */}
+
             <View style={styles.sectionCard}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.sectionTitleRow}>
-                  <Text style={styles.sectionTitle}>Opening Hours</Text>
-                  <View style={styles.sectionTitleAccent} />
+              <View
+                style={styles.sectionHeaderRow}
+              >
+                <View
+                  style={
+                    styles.sectionTitleRow
+                  }
+                >
+                  <Text
+                    style={styles.sectionTitle}
+                  >
+                    Opening Hours
+                  </Text>
+
+                  <View
+                    style={
+                      styles.sectionTitleAccent
+                    }
+                  />
                 </View>
 
                 <TouchableOpacity
-                  onPress={() => setHoursExpanded((v) => !v)}
+                  onPress={() =>
+                    setHoursExpanded(
+                      (v) => !v,
+                    )
+                  }
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.linkText}>
-                    {hoursExpanded ? 'Hide' : 'Full week'}
+                  <Text
+                    style={styles.linkText}
+                  >
+                    {hoursExpanded
+                      ? 'Hide'
+                      : 'Full week'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.hoursCard}>
                 <View style={styles.hoursRow}>
-                  <Text style={styles.hoursDay}>
-                    Today ({todayName.slice(0, 3)})
+                  <Text
+                    style={styles.hoursDay}
+                  >
+                    Today (
+                    {todayName.slice(0, 3)})
                   </Text>
 
                   <Text
                     style={[
                       styles.hoursTime,
-                      todayHours.isClosed && styles.hoursTimeClosed,
+                      todayHours.isClosed &&
+                        styles.hoursTimeClosed,
                     ]}
                   >
                     {todayHours.isClosed
@@ -876,14 +1393,24 @@ export default function TurfDetailsScreen({
                   weekHours.map((h) => (
                     <View
                       key={h.day}
-                      style={[styles.hoursRow, styles.hoursRowDivided]}
+                      style={[
+                        styles.hoursRow,
+                        styles.hoursRowDivided,
+                      ]}
                     >
-                      <Text style={styles.hoursDaySmall}>{h.day}</Text>
+                      <Text
+                        style={
+                          styles.hoursDaySmall
+                        }
+                      >
+                        {h.day}
+                      </Text>
 
                       <Text
                         style={[
                           styles.hoursTimeSmall,
-                          h.isClosed && styles.hoursTimeClosed,
+                          h.isClosed &&
+                            styles.hoursTimeClosed,
                         ]}
                       >
                         {h.isClosed
@@ -899,26 +1426,50 @@ export default function TurfDetailsScreen({
           </View>
         </ScrollView>
 
-        {/* FLOATING BOTTOM BAR */}
-        <View style={styles.floatingBottomBar}>
+        {/* =================================================
+            FLOATING BOTTOM BAR
+        ================================================= */}
+
+        <View
+          style={styles.floatingBottomBar}
+        >
           <View style={styles.bottomInfo}>
-            <Text style={styles.bottomLabel}>Starting from</Text>
-            <Text style={styles.bottomValue}>
-              {priceRange ? `₹${priceRange.min}` : '—'}
-              <Text style={styles.bottomUnit}>/hour</Text>
+            <Text
+              style={styles.bottomLabel}
+            >
+              Starting from
+            </Text>
+
+            <Text
+              style={styles.bottomValue}
+            >
+              {priceRange
+                ? `₹${priceRange.min}`
+                : '—'}
+
+              <Text
+                style={styles.bottomUnit}
+              >
+                /hour
+              </Text>
             </Text>
           </View>
 
           <TouchableOpacity
             style={[
               styles.bookButton,
-              activeCourts.length === 0 && styles.bookButtonDisabled,
+              activeCourts.length === 0 &&
+                styles.bookButtonDisabled,
             ]}
             activeOpacity={0.85}
             disabled={activeCourts.length === 0}
             onPress={handleBookTurf}
           >
-            <Text style={styles.bookButtonText}>BOOK NOW</Text>
+            <Text
+              style={styles.bookButtonText}
+            >
+              BOOK NOW
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -945,7 +1496,9 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
 
-  /* FONT LOADING */
+  /* =======================================================
+     FONT LOADING
+  ======================================================= */
 
   fontLoadingContainer: {
     flex: 1,
@@ -963,7 +1516,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
     shadowColor: COLORS.dark,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 5,
@@ -984,7 +1540,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  /* HERO */
+  /* =======================================================
+     HERO
+  ======================================================= */
 
   heroImage: {
     width: '100%',
@@ -993,6 +1551,11 @@ const styles = StyleSheet.create({
   },
 
   heroLoader: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.border,
@@ -1024,7 +1587,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 100,
-    backgroundColor: 'rgba(11,18,32,0.35)',
   },
 
   dotsRow: {
@@ -1041,7 +1603,8 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor:
+      'rgba(255,255,255,0.55)',
   },
 
   dotActive: {
@@ -1049,7 +1612,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
 
-  /* FLOATING HEADER */
+  /* =======================================================
+     FLOATING HEADER
+  ======================================================= */
 
   floatingHeader: {
     position: 'absolute',
@@ -1067,19 +1632,26 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: 'rgba(11,18,32,0.55)',
+    backgroundColor:
+      'rgba(11,18,32,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.20)',
+    borderColor:
+      'rgba(255,255,255,0.20)',
     shadowColor: COLORS.dark,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 6,
   },
 
-  /* CONTENT WRAPPER */
+  /* =======================================================
+     CONTENT WRAPPER
+  ======================================================= */
 
   contentCard: {
     marginTop: -22,
@@ -1091,7 +1663,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
 
-  /* INFO CARD */
+  /* =======================================================
+     INFO CARD
+  ======================================================= */
 
   infoCard: {
     backgroundColor: COLORS.card,
@@ -1101,7 +1675,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.dark,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
@@ -1176,27 +1753,67 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
+  /* =======================================================
+     CLICKABLE LOCATION
+  ======================================================= */
+
   addressRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginTop: 12,
     paddingTop: 12,
+    paddingVertical: 4,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
   },
 
-  addressIcon: {
-    marginRight: 7,
-    marginTop: 2,
+  addressIconWrapper: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMuted,
+    marginRight: 9,
+  },
+
+  addressContent: {
+    flex: 1,
+    minWidth: 0,
   },
 
   addressText: {
-    flex: 1,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 17,
     color: COLORS.textSecondary,
-    fontFamily: 'Poppins_500Medium',
+    fontFamily: 'Poppins_600SemiBold',
   },
+
+  addressCity: {
+    fontSize: 10,
+    lineHeight: 15,
+    color: COLORS.textMuted,
+    fontFamily: 'Poppins_500Medium',
+    marginTop: 2,
+  },
+
+  mapButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primaryFaint,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMuted,
+    marginLeft: 8,
+  },
+
+  /* =======================================================
+     STATUS
+  ======================================================= */
 
   statusBadge: {
     flexDirection: 'row',
@@ -1248,7 +1865,9 @@ const styles = StyleSheet.create({
     color: COLORS.dangerText,
   },
 
-  /* SECTION CARD */
+  /* =======================================================
+     SECTION CARD
+  ======================================================= */
 
   sectionCard: {
     backgroundColor: COLORS.card,
@@ -1258,7 +1877,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.dark,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
@@ -1315,7 +1937,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_400Regular',
   },
 
-  /* CHIPS */
+  /* =======================================================
+     CHIPS
+  ======================================================= */
 
   chipContainer: {
     flexDirection: 'row',
@@ -1340,7 +1964,9 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
 
-  /* AMENITIES — 3 per row */
+  /* =======================================================
+     AMENITIES
+  ======================================================= */
 
   amenitiesGrid: {
     flexDirection: 'row',
@@ -1380,7 +2006,9 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
 
-  /* COURTS */
+  /* =======================================================
+     COURTS
+  ======================================================= */
 
   courtCard: {
     paddingHorizontal: 14,
@@ -1479,7 +2107,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
   },
 
-  /* HOURS */
+  /* =======================================================
+     HOURS
+  ======================================================= */
 
   hoursCard: {
     padding: 12,
@@ -1498,7 +2128,8 @@ const styles = StyleSheet.create({
   hoursRowDivided: {
     marginTop: 8,
     paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth:
+      StyleSheet.hairlineWidth,
     borderTopColor: COLORS.borderLight,
   },
 
@@ -1530,7 +2161,9 @@ const styles = StyleSheet.create({
     color: COLORS.dangerText,
   },
 
-  /* FLOATING BOTTOM BAR */
+  /* =======================================================
+     FLOATING BOTTOM BAR
+  ======================================================= */
 
   floatingBottomBar: {
     position: 'absolute',
@@ -1540,7 +2173,8 @@ const styles = StyleSheet.create({
     minHeight: 70,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor:
+      'rgba(255,255,255,0.98)',
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 22,
@@ -1548,7 +2182,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: COLORS.dark,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
     shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 14,
@@ -1588,7 +2225,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 18,
     shadowColor: COLORS.primaryDeep,
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 4,
@@ -1607,7 +2247,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
 
-  /* EMPTY STATE */
+  /* =======================================================
+     EMPTY STATE
+  ======================================================= */
 
   emptyContainer: {
     flex: 1,
@@ -1643,7 +2285,10 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: COLORS.primary,
     shadowColor: COLORS.primaryDeep,
-    shadowOffset: { width: 0, height: 5 },
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
     shadowOpacity: 0.22,
     shadowRadius: 10,
     elevation: 4,

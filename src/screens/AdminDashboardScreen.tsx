@@ -4792,7 +4792,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
     letterSpacing: 0.5,
   },
-
+    
   footerVersion: {
     textAlign: 'center',
     color: COLORS.textMuted,

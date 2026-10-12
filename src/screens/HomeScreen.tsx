@@ -3559,7 +3559,7 @@ const styles = StyleSheet.create({
 
     height: 60,
 
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    // backgroundColor: 'rgba(0,0,0,0.15)',
 
   },
 
